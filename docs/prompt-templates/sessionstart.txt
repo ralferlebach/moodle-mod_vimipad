@@ -1,0 +1,75 @@
+## SESSION-START: ViMi Pad — Visual Mind Pad – mod_vimipad
+
+Du arbeitest als erfahrener Moodle-Architekt und PHP-/React-Entwickler
+an einem laufenden Projekt. Lies zunächst alles, was ich dir gebe,
+bevor du antwortest.
+
+---
+
+### A) Lastenheft, Pflichtenheft und Blueprint
+
+Die aktuellen Dokumente liegen im Plugin-Repo:
+  docs/materials/pflicht_lastenheft_knowledgemap.md
+  docs/materials/technisches_blueprint_knowledgemap.md
+  docs/materials/roadmap_zusatzplugins_knowledgemap.md
+  docs/materials/knowledgemap_konzeption_businessmodel.pdf
+
+---
+
+### B) Kontext-Dokument der letzten Sitzung
+
+Das aktuelle Kontext-Dokument (sessionende der Vorsitzung) ist im Anhang
+zu finden. Ältere Kontext-Dokumente zwecks Referenz: docs/sessions/
+
+---
+
+### C) Aktueller Code
+
+Der aktuelle Plugin-Stand liegt als ZIP im Anhang, einzuspielen
+in die Moodle-Installation unter mod/vimipad/.
+
+PHP: >= 8.1 (Moodle 4.5) bzw. >= 8.3 (Moodle 5.2)
+Moodle: >= 4.5 (2024100700); Zielspanne 4.5–5.2 (+5.3 nach Release).
+KEINE Abwärtskompatibilität < 4.5.
+
+Haupt-Dependencies:
+  KEINE. KI läuft ausschließlich über das Moodle-AI-Subsystem und wird
+  zur Laufzeit erkannt/gegated (Capability + Provider-Verfügbarkeit).
+  Nicht in version.php deklariert.
+
+---
+
+### D) Schlüssel-Entwurfsentscheidungen (nicht ohne explizite Diskussion ändern)
+
+  1. Gemeinsames Domänenmodell (Nodes, Relations, Container, Memberships,
+     Revisionen, Snapshots, Annotationen, Grading, AI Drafts); Diagrammtypen
+     als Profile darüber.
+  2. Kein Zusatzserver: Operation Log + serverautorisierte Operationen +
+     AJAX/Webservices + Polling. Kein CRDT/WebSocket im MVP.
+  3. Snapshot ist unveränderliche Bewertungsbasis; Bewertung und KI-Feedback
+     referenzieren immer snapshotid.
+  4. KI nur als Assistenz für Lehrende (Teacher-in-the-loop); Entwurf wird
+     erst nach aktiver Übernahme zu Feedback. Nur Moodle-AI-API.
+  5. React/TypeScript-first: natives ESM/React-Mounting ab Moodle 5.2
+     (React-Mustache-Helper/Autoinit in Core seit 5.2); Legacy-AMD-Bundle
+     für 4.5–5.1 aus demselben Quellcode. Keine Build-Tools auf Produktion.
+  6. Listenansicht ist gleichberechtigte Editoroberfläche mit Drag-and-drop
+     und vollständiger Tastaturalternative.
+  7. Capability-, Context-, Group- und sesskey-Prüfung in allen External
+     Functions; keine PARAM_RAW ohne Schema-Validierung.
+  8. KEINE local-Architektur: Gemeinsamer Code kommt aus mod_vimipad
+     per Namespace. \mod_vimipad\api\* + \mod_vimipad\profile\* =
+     stabile öffentliche API für abhängige Plugins (qtype, datafield,
+     Review); \mod_vimipad\local\* = intern. Satelliten deklarieren
+     dependency auf mod_vimipad.
+  9. Alle READMEs folgen dem Template von Moodle an Hochschulen e.V.:
+     https://github.com/moodle-an-hochschulen/moodle-readmetemplate
+
+---
+
+### E) Ziel dieser Sitzung
+
+Wir knüpfen an die Arbeiten an, die im aktuellen Kontext-Dokument
+und in der angehängten Code-Base vorliegen, und gehen, wenn der letzte
+Arbeitsschritt als vollumfänglich erfüllt angesehen wird, zum nächsten
+vorgesehenen Schritt in der Umsetzung über.
