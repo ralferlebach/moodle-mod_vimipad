@@ -38,7 +38,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Rebuild bundle and verify it matches the commit
         run: |
@@ -143,8 +143,37 @@ jobs:
         run: npm install
         working-directory: ${{ github.workspace }}/moodle
 
-      - name: Grunt – AMD / ESLint / Stylelint
-        run: moodle-plugin-ci grunt --max-lint-warnings 0
+      - name: Verify editor bundle installed
+        run: |
+          test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js
+          test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js.map
+
+      # Do NOT use "moodle-plugin-ci grunt" for the AMD task: it intentionally
+      # DELETES amd/build/ before invoking Grunt (GruntCommand.php), which
+      # removes the prebuilt esbuild bundle editor_lazy.min.js. Grunt's amd task
+      # then starts with "ignorefiles", which stats every thirdpartylibs.xml
+      # path -> ENOENT; the subsequent Vendors check throws, mpc never restores
+      # the plugin backup, and every later step (phpdoc, ...) fails on the
+      # missing file. Running "npx grunt amd" directly performs no pre-deletion,
+      # and --files restricts the build to the real Moodle AMD source (init.js).
+      - name: Grunt – Moodle AMD module (init.js only)
+        working-directory: ${{ github.workspace }}/moodle/mod/vimipad/amd
+        run: |
+          npx grunt amd \
+            --files=mod/vimipad/amd/src/init.js \
+            --max-lint-warnings=0
+
+      - name: Verify editor bundle survived Moodle Grunt
+        run: |
+          test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js
+          test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js.map
+
+      - name: Grunt – Gherkin / Stylelint
+        run: |
+          moodle-plugin-ci grunt \
+            --tasks gherkinlint \
+            --tasks stylelint \
+            --max-lint-warnings 0
 
       - name: PHPDoc check
         run: moodle-plugin-ci phpdoc --max-warnings 0

@@ -383,3 +383,18 @@ Heartbeat, Presence-UI) + Jest; danach Behat. Ab jetzt nur noch Patch-ZIPs.
   überschreibt, und es als "läuft ja" abgetan. Die .map allein war der richtige
   Dev-Mode-Fix. Empirisch bestätigt: grunt amd lässt editor_lazy jetzt in Ruhe.
 - version 2026072625 / release 0.2.13.
+
+## Nachtrag 25 (Session 002): mpc-grunt-Löschverhalten = wahre Wurzel (0.2.14)
+
+- Experten-Analyse (Teil 2) verifiziert: mpc GruntCommand löscht amd/build vor
+  dem amd-Task; Vendors-Exception verhindert restorePlugin -> Bundle bleibt weg
+  -> phpdoc-Folgefehler. LOKAL EXAKT REPRODUZIERT (identisch zum CI-Log, inkl.
+  "Datei danach weg"). Erklärt die GESAMTE Fehlerhistorie seit 0.2.5.
+- FIX: lint-js nutzt npx grunt amd --files=init.js direkt (keine Vorlöschung);
+  mpc grunt nur noch --tasks gherkinlint/stylelint; test-f-Wächter davor/danach.
+  npm-ci-Fix: package-lock.json aus .gitignore (git add -f nötig). bundle-Job
+  auf Node 22. Alles end-to-end lokal grün.
+- LEHRE: Tools nicht nur "direkt" testen (npx grunt), sondern EXAKT den
+  CI-Wrapper (mpc grunt) — der Wrapper hatte eigenes Verhalten (Backup/Löschen/
+  Validate), das der direkte Aufruf nicht zeigt.
+- version 2026072626 / release 0.2.14.

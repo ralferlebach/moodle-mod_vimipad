@@ -687,3 +687,41 @@ Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
 - grunt amd fasst editor_lazy nicht mehr an; init.min.js reproduzierbar.
 - phpcs 0 Fehler (Vendors-Check grün), PHPUnit 68/885, Jest 67/67, tsc sauber,
   Define-Ladeprobe (mount vorhanden), Build reproduzierbar (npm ci == Commit).
+
+## 0.2.14 (2026072626) — CI: mpc-grunt-Löschverhalten umgangen + npm-ci-Lockfile
+
+### Fixed — die WAHRE Wurzel der gesamten CI-Fehlerhistorie
+- Im mpc-Quellcode (GruntCommand.php) nachgewiesen und lokal exakt reproduziert:
+  "moodle-plugin-ci grunt" LÖSCHT vor dem amd-Task absichtlich amd/build/
+  (um Reproduzierbarkeit aus amd/src zu prüfen). Damit verschwindet das
+  committete esbuild-Bundle editor_lazy.min.js. Grunts amd-Task beginnt mit
+  "ignorefiles", das jeden thirdpartylibs.xml-Pfad per fs.statSync prüft ->
+  ENOENT -> Abbruch. Die anschließende Vendors-Prüfung wirft eine Exception,
+  wodurch mpc sein Plugin-Backup NIE zurückspielt -> das Bundle bleibt gelöscht
+  -> phpdoc und alle Folgeschritte scheitern am "fehlenden" File, obwohl es
+  committet war. Ein Neu-Bauen VOR mpc grunt kann das prinzipbedingt nicht
+  lösen — mpc grunt löscht die Datei danach wieder.
+- FIX im Workflow (lint-js): der amd-Task läuft jetzt DIREKT über
+  "npx grunt amd --files=mod/vimipad/amd/src/init.js" (keine Vorlöschung,
+  beschränkt auf das echte Moodle-AMD-Modul init.js). gherkinlint/stylelint
+  laufen weiter über "moodle-plugin-ci grunt --tasks ..." (diese Tasks löschen
+  kein Build-Verzeichnis). Davor/danach "test -f"-Wächter, die sofort zeigen,
+  falls je wieder ein Schritt das Bundle entfernt.
+- Empirisch verifiziert: alte Sequenz reproduziert exakt den CI-Fehler
+  (ENOENT + Vendors + Datei weg); neue Sequenz läuft end-to-end grün und das
+  Bundle bleibt byte-identisch erhalten.
+
+### Fixed — npm ci (zweites, unabhängiges Problem)
+- package-lock.json stand in .gitignore und fehlte daher im CI-Checkout ->
+  "npm ci" bricht ab (EUSAGE). .gitignore-Eintrag entfernt; das Lockfile liegt
+  dem Paket bei. WICHTIG beim Committen: einmalig
+      git add -f package-lock.json
+  falls Git es wegen der alten Regel noch ignoriert. npm ci bleibt der richtige
+  Befehl (reproduzierbare Toolchain-Versionen).
+- Bundle-Reproduzierbarkeits-Job auf Node 22 (Node 20 ist deprecated).
+
+### Verified
+- Neue CI-Sequenz lokal end-to-end: bundle-installed-Check, npx grunt amd
+  (init.js gebaut, editor_lazy unangetastet), bundle-survived-Check, mpc grunt
+  gherkinlint/stylelint grün, phpdoc ohne Vendors-Fehler, npm ci + build ==
+  committeter Stand. Jest 67/67, PHPUnit 68/885, tsc sauber.
