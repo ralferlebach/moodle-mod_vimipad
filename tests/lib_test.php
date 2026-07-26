@@ -25,7 +25,6 @@ namespace mod_vimipad;
  * @covers     \mod_vimipad_generator
  */
 final class lib_test extends \advanced_testcase {
-
     /**
      * An instance can be created via the generator and appears in the course.
      *

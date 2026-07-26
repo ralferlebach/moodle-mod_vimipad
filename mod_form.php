@@ -34,7 +34,6 @@ require_once($CFG->dirroot . '/course/moodleform_mod.php');
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class mod_vimipad_mod_form extends moodleform_mod {
-
     /**
      * Define the form fields.
      *
@@ -80,7 +79,38 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->setDefault('aienabled', 0);
         $mform->addHelpButton('aienabled', 'aienabled', 'mod_vimipad');
 
+        $this->standard_grading_coursemodule_elements();
+
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();
+    }
+
+    /**
+     * Add the completion-on-submit rule to the completion section.
+     *
+     * @return string[] The names of the added rule elements.
+     */
+    public function add_completion_rules(): array {
+        $mform = $this->_form;
+
+        $mform->addElement(
+            'advcheckbox',
+            'completionsubmit',
+            get_string('completionsubmit', 'mod_vimipad'),
+            get_string('completionsubmit_label', 'mod_vimipad')
+        );
+        $mform->setDefault('completionsubmit', 0);
+
+        return ['completionsubmit'];
+    }
+
+    /**
+     * Whether any completion rule added by this form is enabled.
+     *
+     * @param array $data The submitted form data.
+     * @return bool
+     */
+    public function completion_rule_enabled($data): bool {
+        return !empty($data['completionsubmit']);
     }
 }

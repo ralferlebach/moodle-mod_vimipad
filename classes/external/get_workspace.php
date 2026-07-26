@@ -1,0 +1,151 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+namespace mod_vimipad\external;
+
+use core_external\external_api;
+use core_external\external_function_parameters;
+use core_external\external_single_structure;
+use core_external\external_multiple_structure;
+use core_external\external_value;
+use mod_vimipad\local\service\workspace_service;
+use mod_vimipad\local\service\layout_service;
+
+/**
+ * External function: resolve and return a user's workspace with its state.
+ *
+ * @package    mod_vimipad
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class get_workspace extends external_api {
+    /**
+     * Parameter definition.
+     *
+     * @return external_function_parameters
+     */
+    public static function execute_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'groupid' => new external_value(PARAM_INT, 'Group id (group mode), 0 to auto-select', VALUE_DEFAULT, 0),
+        ]);
+    }
+
+    /**
+     * Resolve the workspace for the current user and return its full state.
+     *
+     * @param int $cmid Course module id.
+     * @param int $groupid Requested group id (group mode).
+     * @return array
+     */
+    public static function execute(int $cmid, int $groupid = 0): array {
+        global $USER;
+
+        $params = self::validate_parameters(
+            self::execute_parameters(),
+            ['cmid' => $cmid, 'groupid' => $groupid]
+        );
+
+        [, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
+        $context = \context_module::instance($cm->id);
+        self::validate_context($context);
+        require_capability('mod/vimipad:view', $context);
+
+        global $DB;
+        $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
+
+        $service = new workspace_service();
+        $workspace = $service->get_or_create_for_user(
+            $instance,
+            $context,
+            (int) $USER->id,
+            $params['groupid'] ?: null
+        );
+        $state = $service->get_state((int) $workspace->id);
+
+        $layoutservice = new layout_service();
+        $layoutjson = $layoutservice->get_layout_json((int) $workspace->id, $instance->defaultprofile);
+
+        return [
+            'workspaceid' => (int) $workspace->id,
+            'revision' => (int) $workspace->currentrevision,
+            'locked' => (int) $workspace->locked,
+            'profile' => $instance->defaultprofile,
+            'layoutjson' => $layoutjson,
+            'nodes' => array_map([self::class, 'map_node'], $state['nodes']),
+            'relations' => array_map([self::class, 'map_relation'], $state['relations']),
+        ];
+    }
+
+    /**
+     * Map a node record to the external structure.
+     *
+     * @param \stdClass $node The node record.
+     * @return array
+     */
+    private static function map_node(\stdClass $node): array {
+        return [
+            'stableid' => $node->stableid,
+            'type' => $node->type,
+            'label' => (string) $node->label,
+        ];
+    }
+
+    /**
+     * Map a relation record to the external structure.
+     *
+     * @param \stdClass $relation The relation record.
+     * @return array
+     */
+    private static function map_relation(\stdClass $relation): array {
+        return [
+            'stableid' => $relation->stableid,
+            'sourceid' => $relation->sourceid,
+            'targetid' => $relation->targetid,
+            'type' => $relation->type,
+            'label' => (string) $relation->label,
+            'direction' => (int) $relation->direction,
+        ];
+    }
+
+    /**
+     * Return value definition.
+     *
+     * @return external_single_structure
+     */
+    public static function execute_returns(): external_single_structure {
+        return new external_single_structure([
+            'workspaceid' => new external_value(PARAM_INT, 'Workspace id'),
+            'revision' => new external_value(PARAM_INT, 'Current server revision'),
+            'locked' => new external_value(PARAM_INT, '1 if the workspace is locked'),
+            'profile' => new external_value(PARAM_ALPHANUMEXT, 'Active diagram profile'),
+            'layoutjson' => new external_value(PARAM_RAW, 'Stored layout JSON, empty if none'),
+            'nodes' => new external_multiple_structure(new external_single_structure([
+                'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable node id'),
+                'type' => new external_value(PARAM_ALPHANUMEXT, 'Node type'),
+                'label' => new external_value(PARAM_TEXT, 'Node label'),
+            ])),
+            'relations' => new external_multiple_structure(new external_single_structure([
+                'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable relation id'),
+                'sourceid' => new external_value(PARAM_ALPHANUMEXT, 'Source node stable id'),
+                'targetid' => new external_value(PARAM_ALPHANUMEXT, 'Target node stable id'),
+                'type' => new external_value(PARAM_ALPHANUMEXT, 'Relation type'),
+                'label' => new external_value(PARAM_TEXT, 'Relation label'),
+                'direction' => new external_value(PARAM_INT, 'Direction 0/1/2'),
+            ])),
+        ]);
+    }
+}

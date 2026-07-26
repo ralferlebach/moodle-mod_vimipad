@@ -1,0 +1,39 @@
+/* ViMi Pad editor styles. */
+
+.vimipad-editor .vimipad-canvas {
+    width: 100%;
+    height: auto;
+    color: #495057;
+    touch-action: none;
+    background: var(--vimipad-canvas-bg, #fff);
+}
+
+.vimipad-canvas-node text.vimipad-canvas-nodelabel {
+    font-size: 13px;
+    fill: #212529;
+    pointer-events: none;
+    user-select: none;
+}
+
+.vimipad-canvas-label {
+    font-size: 11px;
+    fill: #6c757d;
+}
+
+.vimipad-node-chips .badge {
+    cursor: grab;
+    font-size: 0.85rem;
+}
+
+.vimipad-relation-list td[draggable],
+.vimipad-relation-list td {
+    vertical-align: middle;
+}
+
+.vimipad-retarget-editor td {
+    background: var(--vimipad-editor-bg, #f8f9fa);
+}
+
+.vimipad-editor-placeholder {
+    min-height: 2rem;
+}

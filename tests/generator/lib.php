@@ -30,7 +30,6 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class mod_vimipad_generator extends testing_module_generator {
-
     /**
      * Create a vimipad instance with sensible defaults.
      *
@@ -54,5 +53,56 @@ class mod_vimipad_generator extends testing_module_generator {
         }
 
         return parent::create_instance($record, (array) $options);
+    }
+
+    /**
+     * Create a workspace with an optional set of nodes and a submitted snapshot.
+     *
+     * Used by Behat and integration tests to seed a gradable submission without
+     * driving the JavaScript editor.
+     *
+     * @param stdClass $instance The vimipad instance.
+     * @param int $userid The owning user id (individual mode).
+     * @param array $nodes List of ['stableid' => ..., 'label' => ...] node specs.
+     * @param bool $submit Whether to create and lock a submitted snapshot.
+     * @return stdClass The workspace record (with ->snapshotid if submitted).
+     */
+    public function create_workspace(stdClass $instance, int $userid, array $nodes = [], bool $submit = false): stdClass {
+        global $DB;
+
+        $now = time();
+        $workspace = (object) [
+            'vimipadid' => $instance->id,
+            'userid' => $userid,
+            'groupid' => null,
+            'currentrevision' => count($nodes),
+            'locked' => 0,
+            'timecreated' => $now,
+            'timemodified' => $now,
+        ];
+        $workspace->id = $DB->insert_record('vimipad_workspace', $workspace);
+
+        foreach ($nodes as $node) {
+            $DB->insert_record('vimipad_node', (object) [
+                'workspaceid' => $workspace->id,
+                'stableid' => $node['stableid'],
+                'type' => $node['type'] ?? 'concept',
+                'label' => $node['label'],
+                'contentformat' => FORMAT_HTML,
+                'createdby' => $userid,
+                'modifiedby' => $userid,
+                'timecreated' => $now,
+                'timemodified' => $now,
+                'deleted' => 0,
+            ]);
+        }
+
+        if ($submit) {
+            $service = new \mod_vimipad\local\service\snapshot_service();
+            $snapshot = $service->create_submission($workspace, $instance->defaultprofile, $userid);
+            $workspace->snapshotid = $snapshot->id;
+        }
+
+        return $workspace;
     }
 }

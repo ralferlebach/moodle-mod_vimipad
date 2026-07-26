@@ -19,6 +19,10 @@
 #   make fix-lint-php — phpcbf PHP code-style auto-fix
 #   make fix-phpdoc   — moodlecheck PHPDoc report
 #   make amd          — rebuild AMD minified files
+#   make build        — build BOTH the React bundle (esbuild) and AMD (grunt)
+#   make react        — bundle the React editor (esbuild → js/build/)
+#   make lint-react   — TypeScript type-check (tsc --noEmit)
+#   make test-react   — Jest unit tests for the React/TS sources
 #
 # Tests:
 #   make phpunit      — PHPUnit testsuite for this plugin
@@ -39,20 +43,22 @@ PHP           ?= $(shell which php 2>/dev/null || echo /usr/bin/php)
 PHPCS         ?= phpcs
 PHPCBF        ?= phpcbf
 NPX           ?= npx
+NPM           ?= npm
 
 .PHONY: all fix check clear \
         lint-php lint-phpdoc lint-js lint-mustache lint-cpd lint-md \
+        lint-react test-react react build \
         fix-lint-php fix-phpdoc amd phpunit
 
 all: clear fix check
 	@echo ""
 	@echo "=== All checks complete. Review output above for errors. ==="
 
-fix: clear fix-phpdoc fix-lint-php amd
+fix: clear fix-phpdoc fix-lint-php build
 	@echo ""
 	@echo "=== All fixes complete. ==="
 
-check: clear lint-php lint-phpdoc lint-mustache lint-cpd phpunit
+check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-react test-react phpunit
 	@echo ""
 	@echo "=== All checks complete. Review output above for errors. ==="
 
@@ -127,6 +133,41 @@ amd:
 		cd $(MOODLE_ROOT) && $(NPX) grunt amd --root=. --force --files="$$files"; \
 	else \
 		echo "No AMD source files — skipped."; \
+	fi
+
+react:
+	@echo ""
+	@echo "=== React bundle (esbuild → js/build/) ==="
+	@if [ -f $(PLUGIN_DIR)/build.mjs ]; then \
+		if [ ! -d $(PLUGIN_DIR)/node_modules ]; then \
+			echo "Installing frontend dev dependencies..."; \
+			cd $(PLUGIN_DIR) && $(NPM) install --no-audit --no-fund; \
+		fi; \
+		cd $(PLUGIN_DIR) && $(NPM) run build; \
+	else \
+		echo "No build.mjs — React bundle skipped."; \
+	fi
+
+build: react amd
+	@echo ""
+	@echo "=== Front-end build complete (React bundle + AMD). ==="
+
+lint-react:
+	@echo ""
+	@echo "=== TypeScript type-check (tsc --noEmit) ==="
+	@if [ -f $(PLUGIN_DIR)/tsconfig.json ]; then \
+		cd $(PLUGIN_DIR) && $(NPX) tsc --noEmit; \
+	else \
+		echo "No tsconfig.json — type-check skipped."; \
+	fi
+
+test-react:
+	@echo ""
+	@echo "=== Jest (React/TS unit tests) ==="
+	@if [ -d $(PLUGIN_DIR)/js/tests ]; then \
+		cd $(PLUGIN_DIR) && $(NPX) jest; \
+	else \
+		echo "No js/tests — Jest skipped."; \
 	fi
 
 phpunit:

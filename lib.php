@@ -22,8 +22,6 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Return the features supported by this activity module.
  *
@@ -47,8 +45,10 @@ function vimipad_supports($feature) {
             return true;
         case FEATURE_COMPLETION_TRACKS_VIEWS:
             return true;
+        case FEATURE_COMPLETION_HAS_RULES:
+            return true;
         case FEATURE_GRADE_HAS_GRADE:
-            return false; // Enabled with the snapshot grading service (MVP milestone M4).
+            return true;
         case FEATURE_MOD_PURPOSE:
             return MOD_PURPOSE_COLLABORATION;
         default:
@@ -69,7 +69,12 @@ function vimipad_add_instance(stdClass $data, ?mod_vimipad_mod_form $mform = nul
     $data->timecreated = time();
     $data->timemodified = $data->timecreated;
 
-    return $DB->insert_record('vimipad', $data);
+    $id = $DB->insert_record('vimipad', $data);
+
+    $data->id = $id;
+    vimipad_grade_item_update($data);
+
+    return $id;
 }
 
 /**
@@ -85,7 +90,11 @@ function vimipad_update_instance(stdClass $data, ?mod_vimipad_mod_form $mform = 
     $data->id = $data->instance;
     $data->timemodified = time();
 
-    return $DB->update_record('vimipad', $data);
+    $result = $DB->update_record('vimipad', $data);
+
+    vimipad_grade_item_update($data);
+
+    return $result;
 }
 
 /**
@@ -97,13 +106,119 @@ function vimipad_update_instance(stdClass $data, ?mod_vimipad_mod_form $mform = 
 function vimipad_delete_instance(int $id): bool {
     global $DB;
 
-    if (!$DB->record_exists('vimipad', ['id' => $id])) {
+    if (!$instance = $DB->get_record('vimipad', ['id' => $id])) {
         return false;
     }
 
-    // Dependent domain tables (workspaces, nodes, relations, snapshots, ...)
-    // will be cleaned up here as they are introduced.
+    $workspaceids = $DB->get_fieldset_select('vimipad_workspace', 'id', 'vimipadid = :vid', ['vid' => $id]);
+    \mod_vimipad\local\cleanup::delete_workspaces($workspaceids);
+
+    $DB->delete_records('vimipad_grade', ['vimipadid' => $id]);
+
+    // Remove the gradebook item.
+    vimipad_grade_item_delete($instance);
+
     $DB->delete_records('vimipad', ['id' => $id]);
 
     return true;
+}
+
+/**
+ * Create, update or delete the gradebook item for a vimipad instance.
+ *
+ * @param stdClass $instance The vimipad instance record (must include id, course, name, grade).
+ * @param array|null $grades Optional grades to push, keyed by user id, or 'reset'.
+ * @return int GRADE_UPDATE_OK or a failure constant.
+ */
+function vimipad_grade_item_update(stdClass $instance, $grades = null): int {
+    global $CFG;
+    require_once($CFG->libdir . '/gradelib.php');
+
+    $item = [
+        'itemname' => clean_param($instance->name, PARAM_NOTAGS),
+        'gradetype' => GRADE_TYPE_VALUE,
+    ];
+
+    $grade = isset($instance->grade) ? (int) $instance->grade : 100;
+    if ($grade > 0) {
+        $item['gradetype'] = GRADE_TYPE_VALUE;
+        $item['grademax'] = $grade;
+        $item['grademin'] = 0;
+    } else if ($grade < 0) {
+        $item['gradetype'] = GRADE_TYPE_SCALE;
+        $item['scaleid'] = -$grade;
+    } else {
+        $item['gradetype'] = GRADE_TYPE_NONE;
+    }
+
+    if ($grades === 'reset') {
+        $item['reset'] = true;
+        $grades = null;
+    }
+
+    return grade_update(
+        'mod/vimipad',
+        $instance->course,
+        'mod',
+        'vimipad',
+        $instance->id,
+        0,
+        $grades,
+        $item
+    );
+}
+
+/**
+ * Delete the gradebook item for a vimipad instance.
+ *
+ * @param stdClass $instance The vimipad instance record.
+ * @return int GRADE_UPDATE_OK or a failure constant.
+ */
+function vimipad_grade_item_delete(stdClass $instance): int {
+    global $CFG;
+    require_once($CFG->libdir . '/gradelib.php');
+
+    return grade_update(
+        'mod/vimipad',
+        $instance->course,
+        'mod',
+        'vimipad',
+        $instance->id,
+        0,
+        null,
+        ['deleted' => 1]
+    );
+}
+
+/**
+ * Return the stored grades for a vimipad instance in gradebook shape.
+ *
+ * @param stdClass $instance The vimipad instance record.
+ * @param int $userid A specific user id, or 0 for all users.
+ * @return array<int,stdClass> Grade objects keyed by user id.
+ */
+function vimipad_get_user_grades(stdClass $instance, int $userid = 0): array {
+    $service = new \mod_vimipad\local\service\grading_service();
+    return $service->get_user_grades($instance, $userid);
+}
+
+/**
+ * Update the gradebook from stored plugin grades.
+ *
+ * @param stdClass $instance The vimipad instance record.
+ * @param int $userid A specific user id, or 0 for all users.
+ * @param bool $nullifnone Whether to push a null grade if none is found for a user.
+ * @return void
+ */
+function vimipad_update_grades(stdClass $instance, int $userid = 0, bool $nullifnone = true): void {
+    $grades = vimipad_get_user_grades($instance, $userid);
+
+    if (!empty($grades)) {
+        vimipad_grade_item_update($instance, $grades);
+    } else if ($userid && $nullifnone) {
+        $null = (object) ['userid' => $userid, 'rawgrade' => null];
+        vimipad_grade_item_update($instance, [$userid => $null]);
+    } else {
+        vimipad_grade_item_update($instance);
+    }
 }

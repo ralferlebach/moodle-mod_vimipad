@@ -86,3 +86,145 @@ Moodle 4.5 / 5.0 / 5.2 × PHP 8.1–8.3 (versionsgerecht excluded) × MariaDB/Po
   Capabilities einzeln, Scheduled Tasks, How it works/Pitfalls, Theme
   support, Repositories, Bug reports, Feature proposals, Release support,
   Translating/AMOS, RTL, Maintainers, Copyright).
+
+## Nachtrag 3 (Session 002 start): phpcs-Fix und M1-Datenmodell
+
+- CI-phpcs-Report vollständig abgearbeitet; mit echtem moodlehq/moodle-cs
+  (Standard "moodle") lokal auf 0 Verstöße verifiziert (phpcbf-Autofix +
+  Wurzelbehebung MOODLE_INTERNAL).
+- M1 Schritt 1 geliefert: Domänenschema (11 neue Tabellen inkl. journalentry),
+  upgrade.php, Namespace-Architektur (\local intern, \api stabil),
+  stable_id-Utility + Tests. version 0.2.0.
+- Offen (M1 Fortsetzung): workspace_service + operation_service unter
+  \mod_vimipad\local\ (serverautorisierte Operationen, Revisionsvergabe);
+  External Functions (get_workspace, apply_operation) mit
+  Capability/Group/sesskey/Schema-Validierung; danach Voll-Privacy-Provider
+  (sobald erste Nutzerdaten geschrieben werden).
+
+## Nachtrag 4 (Session 002): Services, External Functions, Voll-Privacy
+
+- M1 Schritt 2 abgeschlossen: workspace_service + operation_service (\local),
+  operation_type mit Schemavalidierung, External Functions get_workspace/
+  apply_operation (db/services.php), Voll-Privacy-Provider. lib.php-Kaskade.
+  EN/DE-Strings. operation_service_test. version 0.3.0.
+- phcs/phpcbf mit echtem moodlehq/moodle-cs: 0 Fehler/0 Warnungen.
+- Bewusst noch offen (Folgeschritte):
+  * Prüfung/Anpassung: get_course_and_cm_from_cmid-Nutzung in External
+    Functions gegen 4.5-API bestätigen (CI).
+  * create_snapshot/get_snapshot + Grading-Anbindung (M4); dann
+    FEATURE_GRADE_HAS_GRADE aktivieren.
+  * Backup/Restore um Domänentabellen erweitern (aktuell nur Instanztabelle).
+  * Frontend (M2): Editor-Mount + Services gegen die zwei External Functions.
+
+## Nachtrag 5 (Session 002): Backup/Restore Domänenmodell
+
+- Backup/Restore auf alle Domänentabellen erweitert (größte verbliebene
+  Serverlücke geschlossen). ID-/User-/Gruppen-Mapping, submittedsnapshotid als
+  Vorwärtsreferenz in after_execute aufgelöst. Roundtrip-Test. version 0.4.0.
+- Serverkern damit konsistent (Datenmodell + Services + External Functions +
+  Privacy + Backup/Restore). Nächster großer Block: M2 Frontend
+  (Editor-Mount + Service-Layer gegen get_workspace/apply_operation).
+- Weiterhin offen: create_snapshot/get_snapshot + Grading (M4);
+  FEATURE_GRADE_HAS_GRADE dann aktivieren.
+
+## Nachtrag 6 (Session 002): M2 Frontend-Grundgerüst
+
+- React/TS-Editor mit mount()-Kontrakt + injizierbarem Transport; ApiClient
+  gegen get_workspace/apply_operation; optimistische UI + Konflikt-Rollback;
+  Listenansicht funktional, Canvas als Platzhalter. esbuild-Bundle real gebaut
+  (js/build/vimipad-editor.js, React gebündelt, ~150 KB). view.php lädt Bundle.
+  thirdpartylibs.xml. EN/DE-Editorstrings. Dev/Release-Trennung. version 0.5.0.
+- Bewusst offen / nächste Schritte:
+  * Grafischer Canvas (Knoten/Relationen zeichnen, Auto-Layout) — M2/M3.
+  * Drag-and-drop in der Listenansicht + Tastaturalternativen (M3).
+  * i18n: getString-Anbindung an Moodle-Strings statt Fallback-Map.
+  * Progressive Enhancement: nativer React-Autoinit (5.2+), Runtime (5.3).
+  * JS-Unit-Tests (reducer/api) via Jest — separater Dev-Schritt.
+  * Erst-CI bestätigt: get_course_and_cm_from_cmid in External Functions,
+    Backup/Restore-Roundtrip, Asset-Laden via requires->js.
+
+## Nachtrag 7 (Session 002): M3 Canvas + DnD-Listenansicht
+
+- Canvas (SVG, verschiebbare Knoten, Auto-Layout), Listenansicht-Retarget per
+  Dropdown UND DnD mit Tastaturalternative, View-Tabs. Layout als eigener
+  nicht-revisionierter Pfad: layout_service + save_layout + access-Helper;
+  get_workspace liefert profile/layoutjson. Privacy um layout ergänzt.
+  PHPUnit layout_service_test, Jest reducer.test (6/6). styles.css. version 0.6.0.
+- Designentscheidung fixiert: Layout ≠ Operation-Log (keine Revisionskonflikte
+  beim Verschieben). In Session-Doku als Architekturprinzip vermerken.
+- Offen / nächste Schritte:
+  * Node-Retarget/Reposition auch per Tastatur direkt am Canvas (aktuell
+    Canvas = Pointer; Tastaturpfad läuft über die Listenansicht).
+  * Auto-Layout-Strategien je Profil (radial/hierarchisch) — M3-Ausbau.
+  * i18n: getString gegen Moodle-Strings statt Fallback-Map.
+  * M4: Snapshot-Abgabe/Bewertung/Gradebook (dann FEATURE_GRADE_HAS_GRADE).
+
+## Nachtrag 8 (Session 002): M4 Abgabe/Bewertung/Gradebook/Completion
+
+- snapshot_service (unveränderliche Abgabe + Lock), grading_service
+  (vimipad_grade → Gradebook, Gruppennote an Mitglieder), create_snapshot
+  External, grade.php (Teacher Viewer + Annotation + Note, serverseitig),
+  view.php Lehrenden-Abgabenliste. Gradebook-Callbacks in lib.php,
+  FEATURE_GRADE_HAS_GRADE aktiv. Completion-on-submit (custom_completion +
+  mod_form). Schema: grade/completionsubmit + vimipad_grade + upgrade.
+  Privacy + Backup/Restore erweitert. Submit-Button im Editor. version 0.7.0.
+- PHPUnit snapshot_grading_test (Abgabe-Lock, Immutabilität, Gradebook-Push).
+- Offen / nächste Schritte:
+  * M5: KI-Feedbackentwurf über Moodle-AI-Subsystem (generate_text),
+    Teacher-in-the-loop, auf Snapshot+Rubric+Notizen; aifeedback-Tabelle steht.
+  * Rubric/Advanced grading statt einfacher Punktzahl (Roadmap 1.x).
+  * Annotationen an einzelne Knoten/Relationen (aktuell map-Ebene in grade.php).
+  * get_snapshot/save_annotation als External Functions für eine spätere
+    React-Grading-Oberfläche (aktuell serverseitig gelöst).
+
+## Nachtrag 9 (Session 002): M5 KI-Feedback — MVP komplett
+
+- ai_feedback_service (nur core_ai/generate_text, Teacher-in-the-loop,
+  datenminimierter Prompt, Halluzinationsverbot, Policy-Gate), grade.php
+  KI-Sektion (generieren/editieren/übernehmen, Feedback-Vorbelegung),
+  settings.php (enableai/storeprompts). PHPUnit ai_feedback_test
+  (Prompt-Datenminimierung, Store/Accept, Prompt-Speicher-Opt-in). version 0.8.0.
+- AI-API gegen offizielle 4.5-Doku verifiziert.
+- MVP-Kern vollständig (M1–M5). Offene/nächste Punkte:
+  * Rubric/Advanced Grading; Reference Model (Roadmap 1.1/Premium).
+  * get_snapshot/save_annotation als External Functions + React-Grading-UI.
+  * Annotationen an Knoten/Relationen (derzeit Map-Ebene).
+  * Erst-CI-Lauf bestätigt: get_course_and_cm_from_cmid in External Functions,
+    Backup/Restore-Roundtrip, core_ai-Response-Schlüssel (generatedcontent),
+    Behat-Kernworkflows.
+  * i18n des React-Editors an Moodle-Strings; progressive React-Autoinit (5.2+).
+
+## Nachtrag 10 (Session 002): Bugfix Editor-Loading
+
+- Ursache gefunden: $PAGE->requires->js(url, true) nach Header -> Head-Script
+  verworfen. Fix: vor Header, ohne inhead. Editor auch für Lehrende sichtbar.
+  Mount mit sichtbarer Fehlerausgabe. Fallback-Strings komplettiert +
+  Moodle-String-Anbindung (strings_for_js / M.str). version 0.8.1.
+- Mounten mit jsdom real verifiziert (Platzhalter ersetzt, Canvas/Tabs/Knoten,
+  DE-Lokalisierung). Damit ist die frühere "nur statisch geprüft"-Lücke beim
+  Frontend für den Mount-Pfad geschlossen.
+
+## Nachtrag 11 (Session 002): CI-Härtung — lokale Fails behoben
+
+- Vollständige Moodle-4.5-Testumgebung aufgebaut (PostgreSQL, PHPUnit,
+  moodle-plugin-ci 4.5.10, aktuelle moodle-cs). Erstmals ECHTE Verifikation.
+- 3 PHPUnit-Fails behoben: privacy_test (Voll-Provider + Typvergleich),
+  backup_restore_test x2 (Core-Muster restore_dbops::create_new_course).
+  -> 43 Tests / 791 Assertions grün.
+- phpcs severity=1: Lang-Ordering (SORT_STRING) + Test-Formatierung -> 0/0.
+- phpcpd-Klon via \mod_vimipad\local\cleanup entfernt.
+- phpmd: unused $revision / $course entfernt.
+- phpdoc/validate/savepoints/mustache: sauber. version 0.8.2.
+- Damit ist die früher offene "nur statisch geprüft"-Lücke geschlossen: die
+  gesamte Serverlogik ist jetzt real gegen ein laufendes Moodle getestet.
+
+## Nachtrag 12 (Session 002): Behat-Kernworkflows
+
+- Behat-Features grading.feature (non-JS) + editor.feature (@javascript);
+  Behat-Datengenerator (submissions) + generator->create_workspace();
+  PHPUnit generator_test. version 0.9.0.
+- Real verifiziert: Behat-Config gebaut, 6 Szenarien/58 Steps, keine undefinierten
+  Steps; Seed-Pfad per PHPUnit; 44 Tests grün; phpcs 0/0.
+- Offen: Live-Ausführung der @javascript-Szenarien (braucht Browser -> CI).
+  Nächste Produktschritte weiterhin: Rubric-Bewertung, Annotationen an
+  Knoten/Relationen, React-Grading-UI (get_snapshot/save_annotation External).

@@ -25,11 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component    = 'mod_vimipad';
-$plugin->version      = 2026072500;
+$plugin->version      = 2026072610;
 $plugin->requires     = 2024100700;   // Moodle 4.5.0 — hard minimum, per Lastenheft.
-$plugin->supported    = [405, 502];   // Tested target range: 4.5 LTS up to 5.2; raise to 503 once 5.3 is released and in CI.
+$plugin->supported    = [405, 503];   // Target range: 4.5 LTS up to 5.3. From 5.3 React ships in core (react_autoinit); 4.5-5.2 use the bundled editor asset.
 $plugin->maturity     = MATURITY_ALPHA;
-$plugin->release      = '0.1.0';
+$plugin->release      = '0.2.0';
 
 // No plugin dependencies. AI feedback uses the core AI subsystem (Moodle >= 4.5),
 // detected and gated at runtime — deliberately NOT declared as a dependency so the

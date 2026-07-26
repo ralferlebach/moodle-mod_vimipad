@@ -22,8 +22,6 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
-
 /**
  * Defines the restore structure of the ViMi Pad activity.
  *
@@ -32,6 +30,19 @@ defined('MOODLE_INTERNAL') || die();
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class restore_vimipad_activity_structure_step extends restore_activity_structure_step {
+    /**
+     * Maps new workspace id to the old submitted snapshot id for later remap.
+     *
+     * @var array<int,int>
+     */
+    private $pendingsubmitted = [];
+
+    /**
+     * Maps new grade record id to the old snapshot id for later remap.
+     *
+     * @var array<int,int>
+     */
+    private $pendinggradesnapshot = [];
 
     /**
      * Define the structure to be restored.
@@ -39,14 +50,63 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
      * @return array
      */
     protected function define_structure() {
+        $userinfo = $this->get_setting_value('userinfo');
+
         $paths = [];
         $paths[] = new restore_path_element('vimipad', '/activity/vimipad');
+
+        if ($userinfo) {
+            $paths[] = new restore_path_element(
+                'vimipad_workspace',
+                '/activity/vimipad/workspaces/workspace'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_node',
+                '/activity/vimipad/workspaces/workspace/nodes/node'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_relation',
+                '/activity/vimipad/workspaces/workspace/relations/relation'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_container',
+                '/activity/vimipad/workspaces/workspace/containers/container'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_membership',
+                '/activity/vimipad/workspaces/workspace/containers/container/memberships/membership'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_layout',
+                '/activity/vimipad/workspaces/workspace/layouts/layout'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_operation',
+                '/activity/vimipad/workspaces/workspace/operations/operation'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_snapshot',
+                '/activity/vimipad/workspaces/workspace/snapshots/snapshot'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_annotation',
+                '/activity/vimipad/workspaces/workspace/snapshots/snapshot/annotations/annotation'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_aifeedback',
+                '/activity/vimipad/workspaces/workspace/snapshots/snapshot/aifeedbacks/aifeedback'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_journalentry',
+                '/activity/vimipad/workspaces/workspace/journalentries/journalentry'
+            );
+        }
 
         return $this->prepare_activity_structure($paths);
     }
 
     /**
-     * Process a vimipad restore element.
+     * Restore the activity instance.
      *
      * @param array $data Parsed data.
      * @return void
@@ -62,11 +122,244 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
     }
 
     /**
-     * Post-execution: restore intro files.
+     * Restore a grade record.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_grade($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->vimipadid = $this->get_new_parentid('vimipad');
+        $data->userid = $this->get_mappingid('user', $data->userid) ?: 0;
+        $data->grader = $this->get_mappingid('user', $data->grader) ?: null;
+        $oldsnapshotid = !empty($data->snapshotid) ? (int) $data->snapshotid : 0;
+        // The snapshotid is remapped in after_execute() once snapshots exist.
+        $data->snapshotid = null;
+
+        $newid = $DB->insert_record('vimipad_grade', $data);
+        if ($oldsnapshotid) {
+            $this->pendinggradesnapshot[$newid] = $oldsnapshotid;
+        }
+    }
+
+    /**
+     * Restore a workspace. The submitted snapshot reference is a forward
+     * reference and is resolved in after_execute().
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_workspace($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $oldid = $data->id;
+        $oldsubmitted = !empty($data->submittedsnapshotid) ? (int) $data->submittedsnapshotid : 0;
+
+        $data->vimipadid = $this->get_new_parentid('vimipad');
+        $data->submittedsnapshotid = null;
+        $data->userid = $this->get_mappingid('user', $data->userid) ?: null;
+        if (!empty($data->groupid)) {
+            $data->groupid = $this->get_mappingid('group', $data->groupid) ?: null;
+        } else {
+            $data->groupid = null;
+        }
+
+        $newid = $DB->insert_record('vimipad_workspace', $data);
+        $this->set_mapping('vimipad_workspace', $oldid, $newid);
+
+        if ($oldsubmitted) {
+            $this->pendingsubmitted[$newid] = $oldsubmitted;
+        }
+    }
+
+    /**
+     * Restore a node.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_node($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->workspaceid = $this->get_new_parentid('vimipad_workspace');
+        $data->createdby = $this->get_mappingid('user', $data->createdby) ?: null;
+        $data->modifiedby = $this->get_mappingid('user', $data->modifiedby) ?: null;
+
+        $DB->insert_record('vimipad_node', $data);
+    }
+
+    /**
+     * Restore a relation. Endpoints reference stable ids and need no remap.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_relation($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->workspaceid = $this->get_new_parentid('vimipad_workspace');
+        $data->createdby = $this->get_mappingid('user', $data->createdby) ?: null;
+        $data->modifiedby = $this->get_mappingid('user', $data->modifiedby) ?: null;
+
+        $DB->insert_record('vimipad_relation', $data);
+    }
+
+    /**
+     * Restore a container.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_container($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $oldid = $data->id;
+        $data->workspaceid = $this->get_new_parentid('vimipad_workspace');
+
+        $newid = $DB->insert_record('vimipad_container', $data);
+        $this->set_mapping('vimipad_container', $oldid, $newid);
+    }
+
+    /**
+     * Restore a container membership.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_membership($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->containerid = $this->get_new_parentid('vimipad_container');
+
+        $DB->insert_record('vimipad_membership', $data);
+    }
+
+    /**
+     * Restore a layout.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_layout($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->workspaceid = $this->get_new_parentid('vimipad_workspace');
+        $data->modifiedby = $this->get_mappingid('user', $data->modifiedby) ?: null;
+
+        $DB->insert_record('vimipad_layout', $data);
+    }
+
+    /**
+     * Restore an operation log entry.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_operation($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->workspaceid = $this->get_new_parentid('vimipad_workspace');
+        $data->userid = $this->get_mappingid('user', $data->userid) ?: 0;
+
+        $DB->insert_record('vimipad_operation', $data);
+    }
+
+    /**
+     * Restore a snapshot.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_snapshot($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $oldid = $data->id;
+        $data->workspaceid = $this->get_new_parentid('vimipad_workspace');
+        $data->submittedby = $this->get_mappingid('user', $data->submittedby) ?: null;
+
+        $newid = $DB->insert_record('vimipad_snapshot', $data);
+        $this->set_mapping('vimipad_snapshot', $oldid, $newid);
+    }
+
+    /**
+     * Restore a snapshot annotation.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_annotation($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->snapshotid = $this->get_new_parentid('vimipad_snapshot');
+        $data->userid = $this->get_mappingid('user', $data->userid) ?: 0;
+
+        $DB->insert_record('vimipad_annotation', $data);
+    }
+
+    /**
+     * Restore an AI feedback record.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_aifeedback($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->snapshotid = $this->get_new_parentid('vimipad_snapshot');
+        $data->graderid = $this->get_mappingid('user', $data->graderid) ?: 0;
+
+        $DB->insert_record('vimipad_aifeedback', $data);
+    }
+
+    /**
+     * Restore a journal entry.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_journalentry($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->workspaceid = $this->get_new_parentid('vimipad_workspace');
+        $data->userid = $this->get_mappingid('user', $data->userid) ?: 0;
+
+        $DB->insert_record('vimipad_journalentry', $data);
+    }
+
+    /**
+     * Post-execution: resolve forward references and restore intro files.
      *
      * @return void
      */
     protected function after_execute(): void {
+        global $DB;
+
         $this->add_related_files('mod_vimipad', 'intro', null);
+
+        // Resolve workspace.submittedsnapshotid now that snapshots are mapped.
+        foreach ($this->pendingsubmitted as $newworkspaceid => $oldsnapshotid) {
+            $newsnapshotid = $this->get_mappingid('vimipad_snapshot', $oldsnapshotid);
+            if ($newsnapshotid) {
+                $DB->set_field(
+                    'vimipad_workspace',
+                    'submittedsnapshotid',
+                    $newsnapshotid,
+                    ['id' => $newworkspaceid]
+                );
+            }
+        }
     }
 }

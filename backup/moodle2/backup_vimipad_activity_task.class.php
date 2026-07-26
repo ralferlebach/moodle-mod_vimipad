@@ -34,7 +34,6 @@ require_once($CFG->dirroot . '/mod/vimipad/backup/moodle2/backup_vimipad_stepsli
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class backup_vimipad_activity_task extends backup_activity_task {
-
     /**
      * No specific settings for this activity.
      *

@@ -50,18 +50,83 @@ $PAGE->set_title(format_string($instance->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 
+$cangrade = has_capability('mod/vimipad:grade', $context);
+$canedit = has_capability('mod/vimipad:editown', $context)
+    || has_capability('mod/vimipad:editgroup', $context);
+
+// Load the editor through the idiomatic AMD entry point. The thin ES6 module
+// resolves strings (core/str) and an AJAX transport (core/ajax), then loads and
+// mounts the separately bundled React editor. Strings are still registered for
+// JS so the module can resolve them without extra round-trips.
+if ($canedit) {
+    $PAGE->requires->js_call_amd('mod_vimipad/init', 'init', [$cm->id]);
+}
+
 echo $OUTPUT->header();
 
 if (!empty($instance->intro)) {
     echo $OUTPUT->box(format_module_intro('vimipad', $instance, $cm->id), 'generalbox', 'intro');
 }
 
-// Editor placeholder: the React editor (canvas + list view) mounts here.
-// Moodle >= 5.2: React template helper / autoinit. Moodle 4.5-5.1: AMD legacy bundle.
-echo html_writer::div(
-    get_string('editorplaceholder', 'mod_vimipad'),
-    'vimipad-editor-placeholder alert alert-info',
-    ['id' => 'vimipad-editor-root', 'data-instanceid' => $instance->id]
-);
+// Teacher view: list submissions to grade.
+if ($cangrade) {
+    echo $OUTPUT->heading(get_string('submissions', 'mod_vimipad'), 3);
+
+    $sql = "SELECT s.id AS snapshotid, s.status, s.timecreated, ws.userid, ws.groupid
+              FROM {vimipad_snapshot} s
+              JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
+             WHERE ws.vimipadid = :vid AND s.id = ws.submittedsnapshotid
+          ORDER BY s.timecreated DESC";
+    $submissions = $DB->get_records_sql($sql, ['vid' => $instance->id]);
+
+    if (empty($submissions)) {
+        echo html_writer::tag('p', get_string('nosubmissions', 'mod_vimipad'), ['class' => 'text-muted']);
+    } else {
+        $table = new html_table();
+        $table->head = [
+            get_string('participant', 'mod_vimipad'),
+            get_string('status', 'mod_vimipad'),
+            get_string('actions', 'mod_vimipad'),
+        ];
+        foreach ($submissions as $sub) {
+            if (!empty($sub->userid)) {
+                $who = fullname($DB->get_record('user', ['id' => $sub->userid], '*', MUST_EXIST));
+            } else if (!empty($sub->groupid)) {
+                $who = groups_get_group_name($sub->groupid);
+            } else {
+                $who = get_string('mode_course', 'mod_vimipad');
+            }
+            $gradeurl = new moodle_url(
+                '/mod/vimipad/grade.php',
+                ['id' => $cm->id, 'snapshotid' => $sub->snapshotid]
+            );
+            $table->data[] = [
+                s($who),
+                get_string('snapshotstatus_' . (int) $sub->status, 'mod_vimipad'),
+                html_writer::link(
+                    $gradeurl,
+                    get_string('viewandgrade', 'mod_vimipad'),
+                    ['class' => 'btn btn-sm btn-primary']
+                ),
+            ];
+        }
+        echo html_writer::table($table);
+    }
+}
+
+// Editor: shown to anyone who can edit. Teachers see it below the submissions
+// list as a live preview; learners see it as their working surface.
+if ($canedit) {
+    if ($cangrade) {
+        echo $OUTPUT->heading(get_string('editorpreview', 'mod_vimipad'), 3);
+    }
+    echo html_writer::div(
+        get_string('editorloading', 'mod_vimipad'),
+        'vimipad-editor-placeholder',
+        ['id' => 'vimipad-editor-root', 'data-instanceid' => $instance->id, 'data-cmid' => $cm->id]
+    );
+} else if (!$cangrade) {
+    echo html_writer::tag('p', get_string('noaccess', 'mod_vimipad'), ['class' => 'text-muted']);
+}
 
 echo $OUTPUT->footer();
