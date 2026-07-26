@@ -28,8 +28,10 @@ zu finden. Ältere Kontext-Dokumente zwecks Referenz: docs/sessions/
 Der aktuelle Plugin-Stand liegt als ZIP im Anhang, einzuspielen
 in die Moodle-Installation unter mod/vimipad/.
 
-PHP: >= 8.1 (Moodle 4.5) bzw. >= 8.3 (Moodle 5.2)
-Moodle: >= 4.5 (2024100700); Zielspanne 4.5–5.2 (+5.3 nach Release).
+PHP: >= 8.1 (Moodle 4.5) bzw. >= 8.3 (Moodle 5.3)
+Moodle: >= 4.5 (2024100700); Zielspanne 4.5–5.3.
+Ab Moodle 5.3 bringt der Core die React-Runtime mit (react_autoinit);
+4.5–5.2 nutzen den mitgelieferten Editor-Bundle.
 KEINE Abwärtskompatibilität < 4.5.
 
 Haupt-Dependencies:
@@ -50,9 +52,13 @@ Haupt-Dependencies:
      referenzieren immer snapshotid.
   4. KI nur als Assistenz für Lehrende (Teacher-in-the-loop); Entwurf wird
      erst nach aktiver Übernahme zu Feedback. Nur Moodle-AI-API.
-  5. React/TypeScript-first: natives ESM/React-Mounting ab Moodle 5.2
-     (React-Mustache-Helper/Autoinit in Core seit 5.2); Legacy-AMD-Bundle
-     für 4.5–5.1 aus demselben Quellcode. Keine Build-Tools auf Produktion.
+  5. React/TypeScript-first: Ab Moodle 5.3 stellt der Core die React-Runtime
+     bereit (react_autoinit, core/import, core/component appendToDom/
+     prependToDom). Für 4.5–5.2 wird React separat per esbuild gebündelt
+     (js/build/) und über ein dünnes ES6/AMD-Modul (amd/src/init.js, geladen
+     via js_call_amd) geladen, das Strings via core/str und Transport via
+     core/ajax auflöst und den Bundle montiert. AMD für ALLE Nicht-React-Teile.
+     Keine Build-Tools auf Produktion (nur amd/build/ und js/build/ im Release).
   6. Listenansicht ist gleichberechtigte Editoroberfläche mit Drag-and-drop
      und vollständiger Tastaturalternative.
   7. Capability-, Context-, Group- und sesskey-Prüfung in allen External
@@ -67,7 +73,48 @@ Haupt-Dependencies:
 
 ---
 
-### E) Ziel dieser Sitzung
+### E) Verifikationsumgebung ZUERST aufsetzen (verpflichtend)
+
+Bevor du inhaltlich arbeitest, richtest du eine echte, lauffähige
+Moodle-4.5-Umgebung ein und verifizierst den mitgelieferten Code REAL
+(nicht nur statisch). Das ist Pflicht, weil mehrere Fehlerklassen
+(PHPUnit-Fails, AMD-Grunt-Diff, Editor-Loading, Backup/Restore) sich
+ausschließlich in einer laufenden Instanz zeigen.
+
+Folge dabei Schritt für Schritt der Anleitung im Repo:
+  docs/dev/moodle-test-environment-setup.md
+
+Kurzfassung des Ablaufs (Details in der Anleitung):
+  1. Systempakete (php-pgsql/mbstring/curl/intl/zip/gd/soap, postgresql, locales)
+  2. PHP konfigurieren (max_input_vars=5000, locale en_AU.UTF-8)
+  3. PostgreSQL starten + Moodle-DB/-User anlegen
+  4. Moodle klonen (git, MOODLE_405_STABLE) und Plugin nach mod/vimipad spiegeln
+  5. config.php mit PHPUnit- und Behat-Blöcken schreiben
+  6. PHPUnit-Env initialisieren -> vendor/bin/phpunit --filter mod_vimipad
+  7. moodle-cs (aktuell) via Composer -> phpcs --severity=1 (Ziel 0/0)
+  8. moodle-plugin-ci PHAR -> phplint/phpmd/phpcpd/phpdoc/validate/savepoints/mustache
+  9. Moodles Grunt-Toolchain (npm ci) -> npx grunt amd (AMD reproduzierbar bauen)
+ 10. Behat init + dry-run (Steps validieren; @javascript nur in CI)
+ 11. Frontend: ./node_modules/.bin/tsc --noEmit, node build.mjs, ./node_modules/.bin/jest
+
+WICHTIGE FALLSTRICKE (siehe Anleitung, Abschnitt 0):
+  - PostgreSQL schläft ein -> vor JEDEM DB-Kommando: service postgresql start; sleep 3
+  - Nach Plugin-Sync mit NEUEN Dateien: PHPUnit-Env re-initialisieren (init.php)
+  - NIE 'npx tsc' (zieht Fremdpaket tsc@2.0.4) -> immer ./node_modules/.bin/tsc
+  - php -S ist instabil -> @javascript-Behat nur in der Projekt-CI, nicht hier
+  - AMD-Build MUSS reproduzierbar sein (zweiter grunt-Lauf == erster), sonst CI rot
+
+Zielzustand vor Beginn der eigentlichen Arbeit:
+  PHPUnit grün, phpcs 0/0, AMD identisch, tsc/Jest grün,
+  phpdoc/validate/savepoints/mustache ohne Fehlerzeilen.
+
+Wenn ein Schritt in der Sandbox nicht stabil läuft (z. B. voller Site-Install
+wegen instabilem PostgreSQL), dokumentiere das ehrlich und stütze die
+Verifikation auf die stabile PHPUnit-Env, statt Erfolg vorzutäuschen.
+
+---
+
+### F) Ziel dieser Sitzung
 
 Wir knüpfen an die Arbeiten an, die im aktuellen Kontext-Dokument
 und in der angehängten Code-Base vorliegen, und gehen, wenn der letzte

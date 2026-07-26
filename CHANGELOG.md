@@ -386,3 +386,20 @@ Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
 - Frisches Auspacken ohne node_modules: `make lint-react` installiert die echten
   Dev-Abhängigkeiten und der Typecheck läuft grün; zweiter Lauf ohne Neuinstall.
 - PHPUnit 47/809 grün, phpcs 0/0, AMD reproduzierbar.
+
+## 0.2.2 (2026072613) — Entwickler-Doku: Verifikationsumgebung
+
+### Added
+- docs/dev/moodle-test-environment-setup.md: detaillierte, reproduzierbare
+  Schritt-für-Schritt-Anleitung zum Aufsetzen einer echten Moodle-4.5-
+  Verifikationsumgebung in der Sandbox (Systempakete, PHP/Locale-Konfig,
+  PostgreSQL, Moodle-Clone, config.php, PHPUnit-Env, moodle-cs,
+  moodle-plugin-ci, Grunt/AMD, Behat, Frontend) inkl. Fallstricke und
+  Schnell-Referenz. Anleitung real durchgespielt und verifiziert.
+
+### Changed
+- docs/prompt-templates/sessionstart.txt: neuer verpflichtender Abschnitt E
+  „Verifikationsumgebung ZUERST aufsetzen" (verweist auf die Anleitung); frühere
+  Abschnitte umbenannt (Ziel = jetzt F). Zielspanne/Entwurfsentscheidung 5 auf
+  den aktuellen Stand gebracht (4.5–5.3; React ab 5.3 im Core; AMD für alle
+  Nicht-React-Teile).
