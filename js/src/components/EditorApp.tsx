@@ -187,6 +187,25 @@ export function EditorApp(props: Props): React.ReactElement {
             () => dispatch({kind: 'deleteRelation', stableid}));
     }, [runOperation]);
 
+    const deleteNode = useCallback(async (stableid: string) => {
+        await runOperation('node_delete', {stableid},
+            () => dispatch({kind: 'deleteNode', stableid}));
+    }, [runOperation]);
+
+    const renameNode = useCallback(async (stableid: string, label: string) => {
+        const trimmed = label.trim();
+        if (!trimmed) {
+            return;
+        }
+        await runOperation('node_update', {stableid, label: trimmed},
+            () => dispatch({kind: 'updateNode', stableid, label: trimmed}));
+    }, [runOperation]);
+
+    const renameRelation = useCallback(async (stableid: string, label: string) => {
+        await runOperation('relation_update', {stableid, label: label.trim()},
+            () => dispatch({kind: 'updateRelation', stableid, label: label.trim()}));
+    }, [runOperation]);
+
     const retarget = useCallback(async (stableid: string, change: {sourceid?: string; targetid?: string}) => {
         const payload: Record<string, unknown> = {stableid};
         if (change.sourceid) {
@@ -323,6 +342,10 @@ export function EditorApp(props: Props): React.ReactElement {
                     layout={layout}
                     disabled={disabled}
                     onNodeMoved={onNodeMoved}
+                    onDeleteNode={deleteNode}
+                    onDeleteRelation={deleteRelation}
+                    onRenameNode={renameNode}
+                    onRenameRelation={renameRelation}
                     t={t}
                     isLockedByOther={collab.isLockedByOther}
                     beginEdit={collab.beginEdit}

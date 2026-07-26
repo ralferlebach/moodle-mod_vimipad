@@ -37,3 +37,20 @@
 .vimipad-editor-placeholder {
     min-height: 2rem;
 }
+
+.vimipad-canvas:focus {
+    outline: 2px solid var(--vimipad-selected, #2563eb);
+    outline-offset: 2px;
+}
+
+.vimipad-canvas-node text.vimipad-canvas-nodelabel {
+    user-select: none;
+}
+
+.vimipad-canvas-edit {
+    font: inherit;
+    color: inherit;
+    outline: none;
+    padding: 0;
+    box-sizing: border-box;
+}

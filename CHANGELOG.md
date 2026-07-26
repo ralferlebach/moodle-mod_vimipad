@@ -611,3 +611,79 @@ Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
 ### Hinweis
 - amd/src/editor_lazy.js, amd/build/editor_lazy.min.js und
   amd/build/editor_lazy.min.js.map gehören zusammen — bitte alle drei einchecken.
+
+## 0.2.11 (2026072623) — elang-Vorlagenreste bereinigen + Versionsnummer
+
+### Fixed
+- Das Plugin wurde ursprünglich aus dem elang-Plugin ("Hör-Garten") als Vorlage
+  erstellt. Im Zielverzeichnis blieben elang-Reste liegen, die die reinen
+  Patch-Auslieferungen (cp, nur Überschreiben) NICHT entfernen konnten:
+    - version.php mit @package mod_elang und elang-Versionsnummer 2026072531
+    - lang/de/elang.php, lang/en/elang.php (mit @package mod_elang)
+  Diese lösten die phpcs-Fehler aus und die falsche/rückläufige Versionsnummer
+  ("Höhere Version bereits installiert", da 2026072531 < installiertem
+  2026072619).
+- Der ViMi-Pad-Code selbst ist und war sauber: alle @package-Tags mod_vimipad,
+  keine elang-Referenzen, nur lang/*/vimipad.php. Verifiziert mit exakt dem
+  gemeldeten Kommando: phpcs --standard=moodle --severity=1 --ignore=tools/ .
+  -> 0 Fehler.
+- version auf 2026072623 (0.2.11) angehoben, > installiertem 2026072619, damit
+  Moodle sauber aktualisiert.
+
+### Auslieferung
+- Diesmal VOLLSTÄNDIGES, sauberes Paket (kein Patch), damit ein Clean-Replace
+  alle elang-Reste beseitigt. Wichtig: altes Verzeichnis vorher entfernen (siehe
+  README), sonst bleiben Reste wie bei einem Patch liegen.
+
+## 0.2.12 (2026072624) — Canvas-Interaktion: Auswahl, Tastatur, Inline-Edit
+
+### Added (Interaktions-Anforderungen, erste Ausbaustufe)
+- Interaktions-Zustandsmodell (canvas/interaction.ts, 12 Tests): Auswahl von
+  Node/Connection, ESC demarkiert, Entf löscht Markiertes (nie im Edit-Modus),
+  Doppelklick öffnet Inline-Edit.
+- Connection-Geometrie (canvas/connection_geometry.ts, 13 Tests): getrennte
+  Offsets für parallele Connections, Rand-Anker (rectBorderPoint), Label-Position
+  am Kurvenscheitel, Marker-Wahl (Pfeil gerichtet / Knubbel ungerichtet).
+- CanvasView verdrahtet: Klick markiert (Node/Connection), ESC/Entf per Tastatur,
+  Doppelklick auf Node-Text -> Inline-Edit (Enter bestätigt, Shift+Enter neue
+  Zeile), Auswahl-Hervorhebung, Connection-Beschriftung mit weißer Outline.
+- EditorApp: node_delete, node_update (Umbenennen), relation_update verdrahtet.
+- Reducer: updateNode/updateRelation (bereits vorhanden) genutzt.
+
+### Verified
+- Jest 67/67 (inkl. 25 neue), tsc sauber, stylelint sauber, Mount-Rauchtest ok.
+- HINWEIS: Optik/Look&Feel der Interaktion im Browser zu bestätigen; Logik hart
+  getestet.
+
+## 0.2.13 (2026072625) — CI/Build-Architektur bereinigt (Grunt-Konflikt behoben)
+
+### Fixed (Ursache der wiederkehrenden CI-Fehler)
+- amd/src/editor_lazy.js ENTFERNT. amd/src ist Moodles eigenes AMD-Quell-
+  Verzeichnis; Moodles "grunt amd" (rollup/babel) verarbeitet ALLES darin.
+  thirdpartylibs.xml steuert nur die Lint-Ignores, entfernt die Datei aber NICHT
+  aus der Rollup-Eingabemenge. Das dort platzierte esbuild-Bundle wurde daher von
+  Grunt erneut verarbeitet und amd/build/editor_lazy.min.js überschrieben — der
+  eigentliche Auslöser der CI-Fehlerkette (Grunt-Fehler, durch continue-on-error
+  verdeckt, danach "Bundle fehlt" bei PHPDoc).
+  Empirisch bestätigt: nach dem Entfernen lässt "grunt amd" editor_lazy.min.js
+  unverändert und baut nur init.min.js aus init.js.
+- build.mjs erzeugt nur noch amd/build/editor_lazy.min.js (+ .map); der zweite
+  (dev-)Build nach amd/src ist entfernt. Kommentare korrigiert.
+- thirdpartylibs.xml deklariert nur noch amd/build/editor_lazy.min.js.
+- Developer-Mode funktioniert weiterhin über die .map: lib/requirejs.php liefert
+  die Build-Datei direkt aus, wenn die .map daneben liegt — amd/src/editor_lazy.js
+  ist dafür nicht nötig (und war der Konfliktverursacher).
+
+### CI
+- Grunt-Step: continue-on-error entfernt — echte Fehler brechen die CI jetzt ab,
+  statt verdeckt zu werden.
+- Redundante "Build front-end bundle"-Steps aus allen Jobs entfernt (das Bundle
+  ist committet und wird von Grunt nicht mehr angefasst).
+- Neuer Job "Bundle reproducibility": npm ci + node build.mjs +
+  git diff --exit-code stellt sicher, dass das committete Bundle exakt dem
+  aktuellen esbuild-Output entspricht. Build ist deterministisch (verifiziert).
+
+### Verified
+- grunt amd fasst editor_lazy nicht mehr an; init.min.js reproduzierbar.
+- phpcs 0 Fehler (Vendors-Check grün), PHPUnit 68/885, Jest 67/67, tsc sauber,
+  Define-Ladeprobe (mount vorhanden), Build reproduzierbar (npm ci == Commit).

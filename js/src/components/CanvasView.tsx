@@ -16,26 +16,39 @@
 /**
  * The graphical canvas view.
  *
- * Renders nodes as boxes and relations as directed connectors on an SVG
- * surface. Nodes can be dragged with the pointer; the new position is committed
- * on drop (never on every move) and persisted via the non-revisioned layout
- * endpoint by the parent.
+ * Renders nodes as boxes and relations as connectors on an SVG surface. Nodes
+ * can be dragged (position committed on drop). A click selects an element and
+ * reveals its affordances; ESC clears the selection; Del removes the selected
+ * element; a double-click on a node's text opens inline editing (Enter commits,
+ * Shift+Enter inserts a newline). The pure interaction rules live in
+ * ../canvas/interaction.
  *
  * @module     mod_vimipad/components/CanvasView
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import React, {useCallback, useRef, useState} from 'react';
+import React, {useCallback, useReducer, useRef, useState} from 'react';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas} from '../graph/autolayout';
 import {EditorState} from '../store/reducer';
 import {LayoutMap, Point} from '../types';
+import {
+    deletableTarget,
+    initialInteraction,
+    interactionReduce,
+    isEditing,
+    isSelected,
+} from '../canvas/interaction';
 
 interface Props {
     state: EditorState;
     layout: LayoutMap;
     disabled: boolean;
     onNodeMoved: (stableid: string, point: Point) => void;
+    onDeleteNode?: (stableid: string) => void;
+    onDeleteRelation?: (stableid: string) => void;
+    onRenameNode?: (stableid: string, label: string) => void;
+    onRenameRelation?: (stableid: string, label: string) => void;
     t: (key: string) => string;
     /** True if a node is held by another collaborator (renders as locked). */
     isLockedByOther?: (targettype: string, stableid: string) => boolean;
@@ -45,6 +58,9 @@ interface Props {
     endEdit?: (targettype: string, stableid: string) => Promise<void>;
 }
 
+/** Width of a node box for the given label. */
+const nodeWidth = (label: string): number => Math.max(70, label.length * 8 + 20);
+
 /**
  * Render the SVG canvas.
  *
@@ -52,10 +68,16 @@ interface Props {
  * @returns The rendered canvas.
  */
 export function CanvasView(props: Props): React.ReactElement {
-    const {state, layout, disabled, onNodeMoved, t, isLockedByOther, beginEdit, endEdit} = props;
+    const {
+        state, layout, disabled, onNodeMoved, onDeleteNode, onDeleteRelation,
+        onRenameNode, onRenameRelation, t, isLockedByOther, beginEdit, endEdit,
+    } = props;
     const svgRef = useRef<SVGSVGElement>(null);
     const [dragId, setDragId] = useState<string | null>(null);
     const [dragPos, setDragPos] = useState<Point | null>(null);
+    const [moved, setMoved] = useState(false);
+    const [interaction, dispatchInteraction] = useReducer(interactionReduce, initialInteraction);
+    const [editValue, setEditValue] = useState('');
 
     const lockedByOther = useCallback((stableid: string): boolean =>
         isLockedByOther ? isLockedByOther('node', stableid) : false, [isLockedByOther]);
@@ -81,7 +103,9 @@ export function CanvasView(props: Props): React.ReactElement {
         });
     }, []);
 
-    const onPointerDown = useCallback(async (event: React.PointerEvent, stableid: string) => {
+    const onNodePointerDown = useCallback(async (event: React.PointerEvent, stableid: string) => {
+        // A click always selects the node (and reveals its affordances).
+        dispatchInteraction({kind: 'select', target: {kind: 'node', id: stableid}});
         if (disabled || lockedByOther(stableid)) {
             return;
         }
@@ -96,25 +120,93 @@ export function CanvasView(props: Props): React.ReactElement {
         (event.target as Element).setPointerCapture(event.pointerId);
         setDragId(stableid);
         setDragPos(positionOf(stableid));
+        setMoved(false);
     }, [disabled, lockedByOther, beginEdit, positionOf]);
 
     const onPointerMove = useCallback((event: React.PointerEvent) => {
         if (dragId === null) {
             return;
         }
+        setMoved(true);
         setDragPos(toSvgPoint(event.clientX, event.clientY));
     }, [dragId, toSvgPoint]);
 
     const onPointerUp = useCallback(() => {
-        if (dragId !== null && dragPos) {
+        if (dragId !== null && dragPos && moved) {
             onNodeMoved(dragId, dragPos);
-            if (endEdit) {
-                void endEdit('node', dragId);
-            }
+        }
+        if (dragId !== null && endEdit) {
+            void endEdit('node', dragId);
         }
         setDragId(null);
         setDragPos(null);
-    }, [dragId, dragPos, onNodeMoved, endEdit]);
+        setMoved(false);
+    }, [dragId, dragPos, moved, onNodeMoved, endEdit]);
+
+    // Begin inline editing of a node's label (double-click on its text).
+    const startNodeEdit = useCallback((stableid: string, label: string) => {
+        if (disabled || lockedByOther(stableid)) {
+            return;
+        }
+        setEditValue(label);
+        dispatchInteraction({kind: 'startEditing', target: {kind: 'node', id: stableid}});
+    }, [disabled, lockedByOther]);
+
+    // Commit the current inline edit to the parent.
+    const commitEdit = useCallback(() => {
+        const target = interaction.editing;
+        if (target) {
+            if (target.kind === 'node' && onRenameNode) {
+                onRenameNode(target.id, editValue);
+            } else if (target.kind === 'relation' && onRenameRelation) {
+                onRenameRelation(target.id, editValue);
+            }
+        }
+        dispatchInteraction({kind: 'stopEditing'});
+    }, [interaction.editing, editValue, onRenameNode, onRenameRelation]);
+
+    // Canvas-level keyboard: ESC clears, Del removes the selected element.
+    const onKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (interaction.editing) {
+            return;
+        }
+        if (event.key === 'Escape') {
+            dispatchInteraction({kind: 'clear'});
+            return;
+        }
+        if (event.key === 'Delete' || event.key === 'Backspace') {
+            const target = deletableTarget(interaction);
+            if (!target || disabled) {
+                return;
+            }
+            event.preventDefault();
+            if (target.kind === 'node' && onDeleteNode) {
+                onDeleteNode(target.id);
+            } else if (target.kind === 'relation' && onDeleteRelation) {
+                onDeleteRelation(target.id);
+            }
+            dispatchInteraction({kind: 'clear'});
+        }
+    }, [interaction, disabled, onDeleteNode, onDeleteRelation]);
+
+    // Text keys while editing: Enter commits, Shift+Enter inserts a newline.
+    const onEditKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        event.stopPropagation();
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            commitEdit();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            dispatchInteraction({kind: 'clear'});
+        }
+    }, [commitEdit]);
+
+    const selectRelation = useCallback((event: React.PointerEvent, stableid: string) => {
+        event.stopPropagation();
+        dispatchInteraction({kind: 'select', target: {kind: 'relation', id: stableid}});
+    }, []);
+
+    const selColor = 'var(--vimipad-selected, #2563eb)';
 
     return (
         <svg
@@ -123,9 +215,11 @@ export function CanvasView(props: Props): React.ReactElement {
             viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
             width="100%"
             role="img"
+            tabIndex={0}
             aria-label={t('editor:canvasaria')}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
+            onKeyDown={onKeyDown}
         >
             <defs>
                 <marker
@@ -141,11 +235,22 @@ export function CanvasView(props: Props): React.ReactElement {
                 </marker>
             </defs>
 
+            {/* Background: a click on empty canvas clears the selection. */}
+            <rect
+                x={0}
+                y={0}
+                width={CANVAS_WIDTH}
+                height={CANVAS_HEIGHT}
+                fill="transparent"
+                onPointerDown={() => dispatchInteraction({kind: 'clear'})}
+            />
+
             {state.relations.map(rel => {
                 const from = positionOf(rel.sourceid);
                 const to = positionOf(rel.targetid);
                 const midX = (from.x + to.x) / 2;
                 const midY = (from.y + to.y) / 2;
+                const selected = isSelected(interaction, 'relation', rel.stableid);
                 return (
                     <g key={rel.stableid} className="vimipad-canvas-relation">
                         <line
@@ -153,12 +258,33 @@ export function CanvasView(props: Props): React.ReactElement {
                             y1={from.y}
                             x2={to.x}
                             y2={to.y}
-                            stroke="currentColor"
-                            strokeWidth={1.5}
+                            stroke={selected ? selColor : 'currentColor'}
+                            strokeWidth={selected ? 2.5 : 1.5}
                             markerEnd={rel.direction !== 0 ? 'url(#vimipad-arrow)' : undefined}
                         />
+                        {/* Wide transparent hit line so the thin connector is easy to click. */}
+                        <line
+                            x1={from.x}
+                            y1={from.y}
+                            x2={to.x}
+                            y2={to.y}
+                            stroke="transparent"
+                            strokeWidth={12}
+                            style={{cursor: 'pointer'}}
+                            onPointerDown={e => selectRelation(e, rel.stableid)}
+                        />
                         {rel.label && (
-                            <text x={midX} y={midY - 4} textAnchor="middle" className="vimipad-canvas-label">
+                            <text
+                                x={midX}
+                                y={midY - 4}
+                                textAnchor="middle"
+                                className="vimipad-canvas-label"
+                                paintOrder="stroke"
+                                stroke="var(--vimipad-label-outline, #ffffff)"
+                                strokeWidth={3}
+                                strokeLinejoin="round"
+                                fill="currentColor"
+                            >
                                 {rel.label}
                             </text>
                         )}
@@ -168,14 +294,16 @@ export function CanvasView(props: Props): React.ReactElement {
 
             {state.nodes.map(node => {
                 const pos = positionOf(node.stableid);
-                const width = Math.max(70, node.label.length * 8 + 20);
+                const width = nodeWidth(node.label);
                 const otherLock = lockedByOther(node.stableid);
+                const selected = isSelected(interaction, 'node', node.stableid);
+                const editing = isEditing(interaction, 'node', node.stableid);
                 return (
                     <g
                         key={node.stableid}
                         className={`vimipad-canvas-node${otherLock ? ' vimipad-canvas-node-locked' : ''}`}
                         transform={`translate(${pos.x}, ${pos.y})`}
-                        onPointerDown={e => onPointerDown(e, node.stableid)}
+                        onPointerDown={e => onNodePointerDown(e, node.stableid)}
                         style={{cursor: disabled || otherLock ? 'not-allowed' : 'grab'}}
                         aria-disabled={otherLock}
                     >
@@ -186,13 +314,33 @@ export function CanvasView(props: Props): React.ReactElement {
                             height={32}
                             rx={6}
                             fill={otherLock ? 'var(--vimipad-node-locked-fill, #f3f4f6)' : 'var(--vimipad-node-fill, #eef2ff)'}
-                            stroke="currentColor"
-                            strokeWidth={1}
+                            stroke={selected ? selColor : 'currentColor'}
+                            strokeWidth={selected ? 2.5 : 1}
                             strokeDasharray={otherLock ? '4 2' : undefined}
                         />
-                        <text textAnchor="middle" dominantBaseline="central" className="vimipad-canvas-nodelabel">
-                            {node.label}
-                        </text>
+                        {editing ? (
+                            <foreignObject x={-width / 2} y={-16} width={width} height={32}>
+                                <textarea
+                                    className="vimipad-canvas-edit"
+                                    value={editValue}
+                                    autoFocus
+                                    onChange={e => setEditValue(e.target.value)}
+                                    onKeyDown={onEditKeyDown}
+                                    onBlur={commitEdit}
+                                    onPointerDown={e => e.stopPropagation()}
+                                    style={{width: '100%', height: '100%', resize: 'none', textAlign: 'center', border: 'none', background: 'transparent'}}
+                                />
+                            </foreignObject>
+                        ) : (
+                            <text
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                className="vimipad-canvas-nodelabel"
+                                onDoubleClick={() => startNodeEdit(node.stableid, node.label)}
+                            >
+                                {node.label}
+                            </text>
+                        )}
                         {otherLock && (
                             <text
                                 textAnchor="middle"

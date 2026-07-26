@@ -359,3 +359,27 @@ Heartbeat, Presence-UI) + Jest; danach Behat. Ab jetzt nur noch Patch-ZIPs.
   das Ergebnis lädt korrekt (define+mount). Kein Bruch. node build.mjs bleibt
   maßgeblich. phpcs 56/56, PHPUnit 68/885, Jest 42/42, tsc sauber.
 - version 2026072622 / release 0.2.10.
+
+## Nachtrag 23 (Session 002): elang-Reste + Versionsnummer (0.2.11)
+
+- Nutzer meldet phpcs-Fehler (@package mod_elang in version.php, lang/de/elang.php,
+  lang/en/elang.php) und falsche Versionsnummer (Disk 2026072531 < DB 2026072619).
+- Ursache: elang-Vorlagenreste im Zielverzeichnis, die Patch-cp nie löschen kann.
+  MEIN Code ist sauber (phpcs mit Nutzer-Kommando: 0 Fehler; keine elang-Refs).
+- FIX: vollständiges Clean-Paket (kein Patch) + Anleitung "altes Verzeichnis weg,
+  dann extrahieren". version 2026072623 (>DB). LEHRE: Patch-cp kann keine Reste
+  entfernen -> bei Vorlagen-Bootstrap Clean-Install anbieten.
+
+## Nachtrag 24 (Session 002): CI/Build-Architektur bereinigt (0.2.13)
+
+- Externe Experten-Analyse bestätigt + umgesetzt: amd/src/editor_lazy.js war der
+  Fehler. amd/src wird von Moodles grunt (rollup) IMMER verarbeitet; thirdpartylibs
+  entfernt es NICHT aus der Rollup-Eingabe -> Grunt überschrieb editor_lazy.min.js
+  -> CI-Fehlerkette (durch continue-on-error verdeckt).
+- FIX: amd/src/editor_lazy.js entfernt; build.mjs nur amd/build (+.map);
+  thirdpartylibs nur amd/build; CI: continue-on-error weg, Build-Steps raus,
+  neuer Reproduzierbarkeits-Job (npm ci + build + git diff). Dev-Mode via .map ok.
+- LEHRE (eigener Fehler): ich hatte gesehen, dass grunt die Build-Datei
+  überschreibt, und es als "läuft ja" abgetan. Die .map allein war der richtige
+  Dev-Mode-Fix. Empirisch bestätigt: grunt amd lässt editor_lazy jetzt in Ruhe.
+- version 2026072625 / release 0.2.13.
