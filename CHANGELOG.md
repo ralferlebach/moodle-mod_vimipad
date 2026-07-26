@@ -559,3 +559,55 @@ Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
 - HINWEIS: Das visuelle Zwei-Browser-Zusammenspiel (Presence/Locking im Look&Feel)
   ist in der Sandbox nicht verifizierbar; die Logik ist hart getestet, die Optik
   bestätigst du im Browser.
+
+## 0.2.9 (2026072621) — Fix: "No define call" im Debug-Modus (editor_lazy.min.js.map)
+
+### Fixed (Laufzeitfehler in der Moodle-Instanz)
+- Fehler "No define call for mod_vimipad/editor_lazy" beim Öffnen des Editors
+  im Entwickler-/Debug-Modus (jsrev = -1, cachejs aus). Ursache: Moodles
+  lib/requirejs.php liefert die minifizierte amd/build/*.min.js im Debug-Modus
+  nur dann direkt aus, wenn eine ".map"-Datei daneben liegt. Fehlt sie, rewritet
+  Moodle den Pfad auf amd/src/editor_lazy.js (existiert nicht, da React nicht
+  über Grunt gebaut wird) -> leere Antwort -> RequireJS meldet "No define call".
+- FIX: build.mjs erzeugt jetzt eine echte Sourcemap (editor_lazy.min.js.map).
+  Damit bleibt Moodle im Debug- UND Produktionsmodus auf dem Build-Datei-Zweig
+  und lädt das Modul korrekt. Die define-Hülle wird über esbuild banner/footer
+  gesetzt, sodass die Sourcemap zum gewrappten Output passt.
+- Verifiziert: benanntes define('mod_vimipad/editor_lazy') vorhanden;
+  Moodle-Auslieferungslogik nachgestellt (map vorhanden -> Build-Datei);
+  requirejs_fix_define lässt das benannte define unangetastet; jsdom-Ladeprobe
+  registriert das Modul und findet mount().
+
+### Added (Dokumentation)
+- docs/dev/visual-maps-requirements.md: geplante Map-Typen (Familienbaum,
+  Evolutionsbäume, Organigramme, Strukturgleichungsmodelle, IT-Architektur-
+  Modelle, Programmablaufpläne) und Interaktions-Anforderungen (Verbinden,
+  Connection-Darstellung/-Beschriftung, Hover/Auswahl/Menüs, Tastatur,
+  Text-Edit). Arbeitsdokument, wird ergänzt.
+
+## 0.2.10 (2026072622) — amd/src/editor_lazy.js mitgeliefert (Debug-Modus, robust)
+
+### Added / Fixed
+- amd/src/editor_lazy.js wird jetzt ausgeliefert. Moodle serviert im
+  Entwickler-Modus (jsrev = -1) je nach Punktrelease entweder die Build-Datei
+  (wenn .map vorhanden) ODER amd/src/editor_lazy.js. Mit BEIDEN Dateien plus
+  der .map ist jeder Ladeweg abgedeckt -> "No define call" tritt in keinem
+  Szenario mehr auf.
+- build.mjs erzeugt nun drei Artefakte: amd/build/editor_lazy.min.js (+ .map,
+  minifiziert, Produktion) und amd/src/editor_lazy.js (unminifiziert, lesbar
+  im Debug-Modus). Beide tragen die benannte define("mod_vimipad/editor_lazy").
+- thirdpartylibs.xml deklariert nun beide Dateien, damit ESLint/phpcs sie
+  überspringen.
+
+### Verifiziert
+- jsdom-Ladeprobe für amd/src/editor_lazy.js: define korrekt, mount() vorhanden.
+- Empirisch geprüft: "grunt amd" baut aus amd/src/editor_lazy.js eine
+  FUNKTIONIERENDE amd/build/editor_lazy.min.js (define + mount ok) — falls du
+  doch mit Moodles Grunt baust, bricht nichts. Mit "node build.mjs" bleibt die
+  esbuild-Version maßgeblich.
+- phpcs 56/56 (Vendors-Check mit beiden thirdparty-Pfaden grün), PHPUnit 68/885,
+  tsc sauber, Jest 42/42.
+
+### Hinweis
+- amd/src/editor_lazy.js, amd/build/editor_lazy.min.js und
+  amd/build/editor_lazy.min.js.map gehören zusammen — bitte alle drei einchecken.

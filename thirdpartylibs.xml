@@ -8,4 +8,12 @@
         <license>MIT</license>
         <licenseversion></licenseversion>
     </library>
+    <library>
+        <location>amd/src/editor_lazy.js</location>
+        <name>React</name>
+        <description>Developer-mode copy of the prebuilt editor bundle. Moodle serves amd/src/editor_lazy.js when JS caching is off (jsrev = -1); it is the same esbuild artefact as amd/build/editor_lazy.min.js and is NOT processed by Moodle's Grunt/Babel pipeline. Built from source in js/src via the development-only toolchain.</description>
+        <version>18.3.1</version>
+        <license>MIT</license>
+        <licenseversion></licenseversion>
+    </library>
 </libraries>

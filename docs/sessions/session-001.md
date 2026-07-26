@@ -337,3 +337,25 @@ Heartbeat, Presence-UI) + Jest; danach Behat. Ab jetzt nur noch Patch-ZIPs.
   apply_remote/use_collaboration + EditorApp/CanvasView + get_workspace collab).
   Jest 42/42, tsc sauber, phpcs 0/0, PHPUnit 68/885, ESLint 0/0, AMD reproduzierbar.
 - version 2026072620 / release 0.2.8.
+
+## Nachtrag 21 (Session 002): "No define call"-Fix + Anforderungen (0.2.9)
+
+- Laufzeitfehler in Moodle (Debug-Modus): "No define call for mod_vimipad/
+  editor_lazy". Ursache in lib/requirejs.php gefunden: ohne .map neben der
+  Build-Datei rewritet Moodle auf amd/src/editor_lazy.js (fehlt) -> leer.
+  FIX: build.mjs erzeugt editor_lazy.min.js.map (define via banner/footer).
+  Verifiziert per Moodle-Logiksimulation + jsdom-Ladeprobe (mount vorhanden).
+- Anforderungen/Roadmap aufgenommen: docs/dev/visual-maps-requirements.md
+  (Map-Typen + Interaktions-Anforderungen, Arbeitsdokument).
+- version 2026072621 / release 0.2.9.
+
+## Nachtrag 22 (Session 002): amd/src/editor_lazy.js ausgeliefert (0.2.10)
+
+- Nutzer benötigt amd/src/editor_lazy.js (Debug-Modus lädt je nach Moodle-
+  Punktrelease src ODER build). Jetzt liefert build.mjs BEIDE: amd/build/
+  editor_lazy.min.js (+.map, minifiziert) und amd/src/editor_lazy.js
+  (unminifiziert). Beide mit benanntem define. thirdpartylibs deklariert beide.
+- Empirisch geprüft: grunt amd überschreibt zwar amd/build aus amd/src, ABER
+  das Ergebnis lädt korrekt (define+mount). Kein Bruch. node build.mjs bleibt
+  maßgeblich. phpcs 56/56, PHPUnit 68/885, Jest 42/42, tsc sauber.
+- version 2026072622 / release 0.2.10.
