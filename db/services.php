@@ -49,6 +49,42 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/vimipad:editown, mod/vimipad:editgroup',
     ],
+
+    'mod_vimipad_poll_changes' => [
+        'classname' => 'mod_vimipad\external\poll_changes',
+        'methodname' => 'execute',
+        'description' => 'Poll for operations since a revision, the current layout and active element leases.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:editown, mod/vimipad:editgroup',
+    ],
+
+    'mod_vimipad_acquire_lock' => [
+        'classname' => 'mod_vimipad\external\acquire_lock',
+        'methodname' => 'execute',
+        'description' => 'Acquire a short-lived editing lease on a node or relation.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:editown, mod/vimipad:editgroup',
+    ],
+
+    'mod_vimipad_renew_lock' => [
+        'classname' => 'mod_vimipad\external\renew_lock',
+        'methodname' => 'execute',
+        'description' => 'Renew (heartbeat) an editing lease held by the caller.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:editown, mod/vimipad:editgroup',
+    ],
+
+    'mod_vimipad_release_lock' => [
+        'classname' => 'mod_vimipad\external\release_lock',
+        'methodname' => 'execute',
+        'description' => 'Release an editing lease held by the caller.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:editown, mod/vimipad:editgroup',
+    ],
     'mod_vimipad_create_snapshot' => [
         'classname' => 'mod_vimipad\external\create_snapshot',
         'methodname' => 'execute',

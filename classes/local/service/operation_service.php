@@ -93,6 +93,29 @@ class operation_service {
     }
 
     /**
+     * Return operations applied after the given revision, oldest first.
+     *
+     * Used by poll_changes so a client can fetch only the delta since the
+     * revision it last saw. Returned as a 0-indexed list in revision order.
+     *
+     * @param int $workspaceid The workspace id.
+     * @param int $sincerevision The revision the client already has.
+     * @return \stdClass[] Operation records (id, revision, operationtype, payloadjson, userid, timecreated).
+     */
+    public function get_operations_since(int $workspaceid, int $sincerevision): array {
+        global $DB;
+
+        $records = $DB->get_records_select(
+            'vimipad_operation',
+            'workspaceid = :wid AND revision > :rev',
+            ['wid' => $workspaceid, 'rev' => $sincerevision],
+            'revision ASC'
+        );
+
+        return array_values($records);
+    }
+
+    /**
      * Perform the concrete table mutation for an operation.
      *
      * @param int $workspaceid The workspace id.

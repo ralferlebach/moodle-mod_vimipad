@@ -285,5 +285,25 @@
         <INDEX NAME="workspaceid-userid" UNIQUE="false" FIELDS="workspaceid, userid"/>
       </INDEXES>
     </TABLE>
+
+    <TABLE NAME="vimipad_lock" COMMENT="Short-lived per-element editing leases for collaborative locking and presence">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="targettype" TYPE="char" LENGTH="16" NOTNULL="true" SEQUENCE="false" COMMENT="node or relation"/>
+        <FIELD NAME="targetstableid" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="stable id of the locked element"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="lease holder"/>
+        <FIELD NAME="timeacquired" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timeexpires" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="server-enforced lease expiry; renewed by heartbeat"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-target" UNIQUE="true" FIELDS="workspaceid, targettype, targetstableid"/>
+        <INDEX NAME="timeexpires" UNIQUE="false" FIELDS="timeexpires"/>
+      </INDEXES>
+    </TABLE>
   </TABLES>
 </XMLDB>

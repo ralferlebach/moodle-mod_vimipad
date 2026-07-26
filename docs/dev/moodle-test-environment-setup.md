@@ -355,3 +355,25 @@ cd /home/claude/vimipad
 
 Zielzustand: PHPUnit grün, phpcs 0/0, AMD identisch, tsc/Jest grün,
 phpdoc/validate/savepoints/mustache ohne Fehlerzeilen.
+
+---
+
+## 13. CI-Fallstrick: Build-Artefakte müssen eingecheckt sein
+
+Die Projekt-CI (moodle-plugin-ci) validiert das Plugin **aus dem Git-Repository**
+und baut React **nicht** selbst. Deshalb gilt:
+
+- `amd/build/` darf NICHT in `.gitignore` stehen. Die gebauten Laufzeit-Artefakte
+  `amd/build/init.min.js` und `amd/build/editor_lazy.min.js` (der esbuild-React-
+  Bundle) müssen eingecheckt sein.
+- `thirdpartylibs.xml` verweist auf `amd/build/editor_lazy.min.js`. `grunt
+  ignorefiles` und der moodle-cs-Vendors-Check verlangen, dass jeder dort
+  genannte Pfad existiert. Fehlt die Datei (weil ignoriert), brechen
+  `install`/`grunt ignorefiles` mit ENOENT und `phpcs` mit „non-existent path" ab.
+- phpcs der CI läuft OHNE `--ignore=tools/`. Alle Dateien unter `tools/` müssen
+  daher ebenfalls sauber sein (u. a. korrekter `@package mod_vimipad`-Tag).
+
+Prüfen, ob Git die Artefakte trackt:
+```bash
+git check-ignore amd/build/editor_lazy.min.js   # darf NICHTS ausgeben
+```

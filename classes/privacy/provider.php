@@ -107,6 +107,10 @@ class provider implements
             'grader' => 'privacy:metadata:vimipad_grade:grader',
         ], 'privacy:metadata:vimipad_grade');
 
+        $collection->add_database_table('vimipad_lock', [
+            'userid' => 'privacy:metadata:vimipad_lock:userid',
+        ], 'privacy:metadata:vimipad_lock');
+
         $collection->add_subsystem_link(
             'core_ai',
             [],

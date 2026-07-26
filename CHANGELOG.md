@@ -430,3 +430,51 @@ Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
 - PHPUnit 47/809, phpcs 0/0, tsc/Jest grün.
 - HINWEIS: Der eigentliche @javascript-Browserlauf ist nur in der CI möglich
   (kein Browser in der Sandbox; Chromium nur als Snap-Wrapper vorhanden).
+
+## 0.2.4 (2026072616) — Kollaboration Schicht 2: External Functions
+
+### Added
+- operation_service::get_operations_since(workspaceid, sincerevision): liefert
+  Operationen nach einer Revision (aufsteigend) — Delta-Basis fürs Polling.
+- External Functions (db/services.php):
+  * mod_vimipad_poll_changes (read): Operationen seit Revision N + aktuelles
+    Layout + aktive Leases (Presence) in einem Round-Trip.
+  * mod_vimipad_acquire_lock / renew_lock / release_lock (write): Element-Leases.
+- classes/external/helper.php: gemeinsame Workspace-/Edit-Access-Validierung und
+  Lease-TTL-Lookup (hält die External Functions schlank, vermeidet Duplikate).
+
+### Tested (real, Moodle 4.5 + PostgreSQL)
+- collaboration_external_test: 6 Tests — inkl. Kernszenario (B abgewiesen, sieht
+  Halter A), Renew nur durch Halter, Release gibt frei, poll liefert Delta+Layout+
+  Presence, abgelaufene Leases werden ausgefiltert, Zugriffskontrolle greift.
+- operation_service_test um get_operations_since erweitert.
+- Gesamt: 68 Tests / 885 Assertions grün. phpcs severity=1: 0/0. validate sauber.
+
+### Offen (nächste Schichten)
+- Client (js/src): adaptive Poll-Schleife, Positions-Tweening, Lock-on-drag +
+  Heartbeat, visuelle Sperr-/Presence-Anzeige; Jest-Tests.
+- Behat: Kollaborations-Workflow (server-prüfbare Teile).
+
+## 0.2.5 (2026072617) — CI-Fix: fehlendes Build-Artefakt + falsche @package-Tags
+
+### Fixed
+- CI brach in zwei Schritten ab (install/grunt ignorefiles und phpcs), weil
+  .gitignore `amd/build/` komplett ausschloss. Dadurch war das eingebundene
+  React-Bundle amd/build/editor_lazy.min.js NICHT im Repository, während
+  thirdpartylibs.xml darauf verweist. grunt ignorefiles und der moodle-cs-
+  Vendors-Check verlangen aber, dass jeder thirdpartylibs-Pfad existiert
+  -> ENOENT / "non-existent path".
+  Fix: amd/build/ wird nicht mehr ignoriert; die gebauten Laufzeit-Artefakte
+  (init.min.js + editor_lazy.min.js) gehören eingecheckt (der Produktivserver
+  hat keine Build-Tools; die CI validiert aus dem Repo).
+- tools/fix_phpdoc.php und tools/mustache_check.php trugen noch den @package-Tag
+  local_instantcoursecompletion (Copy-Paste-Rest der Vorlage). phpcs plugin
+  (ohne tools/-Ausschluss) meldete das als Fehler. Auf mod_vimipad korrigiert.
+
+### Verified
+- moodle-plugin-ci phpcs --max-warnings 0: 56 Dateien, 0/0 (thirdpartylibs-
+  Pfad existiert, @package korrekt).
+- grunt ignorefiles/eslint/amd: exit 0, kein ENOENT.
+- git check-ignore bestätigt: amd/build-Artefakte werden getrackt, node_modules/
+  package-lock.json bleiben ignoriert.
+- Regression: PHPUnit 68/885 grün, phpcs severity=1 0/0, validate sauber.

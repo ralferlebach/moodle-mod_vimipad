@@ -38,4 +38,65 @@ if ($ADMIN->fulltree) {
         get_string('setting:storeprompts_desc', 'mod_vimipad'),
         0
     ));
+
+    // Collaboration: polling, adaptive intervals, element leases and optional push.
+    $settings->add(new admin_setting_heading(
+        'mod_vimipad/collabheading',
+        get_string('setting:collabheading', 'mod_vimipad'),
+        get_string('setting:collabheading_desc', 'mod_vimipad')
+    ));
+
+    $settings->add(new admin_setting_configduration(
+        'mod_vimipad/pollinterval',
+        get_string('setting:pollinterval', 'mod_vimipad'),
+        get_string('setting:pollinterval_desc', 'mod_vimipad'),
+        1,
+        1
+    ));
+
+    $settings->add(new admin_setting_configcheckbox(
+        'mod_vimipad/polladaptive',
+        get_string('setting:polladaptive', 'mod_vimipad'),
+        get_string('setting:polladaptive_desc', 'mod_vimipad'),
+        1
+    ));
+
+    $settings->add(new admin_setting_configduration(
+        'mod_vimipad/pollmin',
+        get_string('setting:pollmin', 'mod_vimipad'),
+        get_string('setting:pollmin_desc', 'mod_vimipad'),
+        1,
+        1
+    ));
+
+    $settings->add(new admin_setting_configduration(
+        'mod_vimipad/pollmax',
+        get_string('setting:pollmax', 'mod_vimipad'),
+        get_string('setting:pollmax_desc', 'mod_vimipad'),
+        10,
+        1
+    ));
+
+    $settings->add(new admin_setting_configduration(
+        'mod_vimipad/leasetimeout',
+        get_string('setting:leasetimeout', 'mod_vimipad'),
+        get_string('setting:leasetimeout_desc', 'mod_vimipad'),
+        15,
+        1
+    ));
+
+    $settings->add(new admin_setting_configcheckbox(
+        'mod_vimipad/pushenabled',
+        get_string('setting:pushenabled', 'mod_vimipad'),
+        get_string('setting:pushenabled_desc', 'mod_vimipad'),
+        0
+    ));
+
+    $settings->add(new admin_setting_configtext(
+        'mod_vimipad/pushendpoint',
+        get_string('setting:pushendpoint', 'mod_vimipad'),
+        get_string('setting:pushendpoint_desc', 'mod_vimipad'),
+        '',
+        PARAM_URL
+    ));
 }

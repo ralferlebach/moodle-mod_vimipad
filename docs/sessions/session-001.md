@@ -248,3 +248,59 @@ Moodle 4.5 / 5.0 / 5.2 × PHP 8.1–8.3 (versionsgerecht excluded) × MariaDB/Po
   lint-mustache überspringt ohne templates/. version 2026072612 / release 0.2.1.
 - Verifiziert: frisches make lint-react ohne node_modules -> installiert + grün;
   PHPUnit 47/809, phpcs 0/0, AMD reproduzierbar.
+
+## Nachtrag 15 (Session 002): Kollaboration Schicht 1 — Server-Grundlage
+
+Design bestätigt (Nutzer): Layout an Element-Locking gekoppelt (nur Lease-Halter
+verschiebt); Lock bei drag-START (nicht -end) + Presence, damit B sofort sieht,
+dass A hält; adaptives Polling clientseitig gemessen, Min/Max als Settings;
+vollständige Umsetzung mit Unit+Behat (TDD/BDD) für Nutzer-Abnahme.
+
+[FERTIG + real getestet]
+- Schema: vimipad_lock (workspaceid, targettype, targetstableid, userid,
+  timeacquired, timeexpires); Unique-Index (workspaceid,targettype,targetstableid)
+  = genau ein Lease pro Element. install.xml + upgrade 2026072615. version 2026072615.
+- Settings (settings.php + Strings EN/DE): pollinterval(1s), polladaptive(1),
+  pollmin(1s), pollmax(10s), leasetimeout(15s), pushenabled(0), pushendpoint('').
+- lock_service.php: acquire (frei/eigen/abgelaufen -> ok; fremd+gültig -> refuse
+  + Halter melden), renew (nur Halter, Heartbeat), release (nur Halter),
+  get_active_leases (Presence), purge_expired. Race-sicher via Unique-Index.
+- Privacy: vimipad_lock (userid) deklariert + Strings; cleanup-Kaskade erweitert.
+- lock_service_test.php: 10 Tests/19 Assert. GRÜN (inkl. Szenario "B refused,
+  sieht Halter", Timeout-Übernahme, Renew, Presence, purge).
+- Regression: Gesamt 57 Tests/835 Assert. GRÜN.
+
+[NÄCHSTE SCHICHTEN — offen]
+- External Functions: acquire_lock/renew_lock/release_lock/poll_changes
+  (poll liefert Operationen seit Revision + Layout-Deltas + aktive Leases).
+- Client js/src: adaptive Poll-Schleife (RTT/leer-basiert, min/max), Positions-
+  Tweening (A->B ueber ~1 Poll-Periode), Lock-on-drag-start + Heartbeat, visuelle
+  Sperr-/Presence-Anzeige. Reducer-Erweiterung.
+- Jest: adaptives Intervall, Tweening-Mathematik, Reducer.
+- Behat: Kollaborations-Workflow (server-pruefbare Teile; @javascript in CI).
+- Push-Client: spaeterer eigener Meilenstein (Settings sind vorbereitet).
+
+## Nachtrag 16 (Session 002): Kollaboration Schicht 2 — External Functions
+
+[FERTIG + real getestet]
+- operation_service::get_operations_since (Delta seit Revision, aufsteigend).
+- External: poll_changes (read: Ops+Layout+Presence), acquire/renew/release_lock
+  (write). helper.php (gemeinsame Validierung + Lease-TTL). services.php + version
+  2026072616.
+- collaboration_external_test: 6 Tests (Kernszenario B->Halter, Renew/Release,
+  poll Delta+Presence, expired ausgefiltert, Access). Gesamt 68/885 grün, phpcs 0/0.
+
+[NÄCHSTE SCHICHT] Client js/src (adaptives Polling, Tweening, Lock-on-drag +
+Heartbeat, Presence-UI) + Jest; danach Behat. Ab jetzt nur noch Patch-ZIPs.
+
+## Nachtrag 17 (Session 002): CI-Fix (0.2.5)
+
+- Ursache CI-Fail: .gitignore schloss amd/build/ aus -> editor_lazy.min.js nicht
+  im Repo, aber in thirdpartylibs.xml referenziert -> grunt ignorefiles + phpcs
+  ENOENT. Fix: amd/build/ nicht mehr ignorieren (Build-Artefakte einchecken).
+- tools/fix_phpdoc.php + tools/mustache_check.php: @package von
+  local_instantcoursecompletion (Vorlagen-Rest) auf mod_vimipad korrigiert.
+- Verifiziert: mpc phpcs --max-warnings 0 = 0/0; grunt ignorefiles exit 0;
+  git check-ignore ok; PHPUnit 68/885 grün. version 2026072617 / release 0.2.5.
+- WICHTIG fuer kuenftige Instanzen: amd/build/ MUSS eingecheckt sein; die CI
+  validiert das Plugin aus dem Repo und baut React nicht selbst.

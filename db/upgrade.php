@@ -78,5 +78,15 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072605, 'vimipad');
     }
 
+    if ($oldversion < 2026072615) {
+        // Collaboration: short-lived per-element editing leases (locking + presence).
+        $locktable = new xmldb_table('vimipad_lock');
+        if (!$dbman->table_exists($locktable)) {
+            $dbman->install_one_table_from_xmldb_file(__DIR__ . '/install.xml', 'vimipad_lock');
+        }
+
+        upgrade_mod_savepoint(true, 2026072615, 'vimipad');
+    }
+
     return true;
 }

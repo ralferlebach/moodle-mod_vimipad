@@ -244,4 +244,43 @@ final class operation_service_test extends \advanced_testcase {
         $this->expectException(\invalid_parameter_exception::class);
         $service->apply($this->workspaceid, 0, 'bogus_op', ['x' => 1], $this->userid);
     }
+    /**
+     * get_operations_since returns only operations after the given revision,
+     * in ascending revision order.
+     *
+     * @return void
+     */
+    public function test_get_operations_since_returns_deltas(): void {
+        $service = new operation_service();
+
+        $r1 = $service->apply(
+            $this->workspaceid,
+            0,
+            operation_type::NODE_CREATE,
+            ['type' => 'concept', 'label' => 'A'],
+            $this->userid
+        );
+        $r2 = $service->apply(
+            $this->workspaceid,
+            $r1['revision'],
+            operation_type::NODE_CREATE,
+            ['type' => 'concept', 'label' => 'B'],
+            $this->userid
+        );
+
+        // Everything since revision 0.
+        $all = $service->get_operations_since($this->workspaceid, 0);
+        $this->assertCount(2, $all);
+        $this->assertSame(1, (int) $all[0]->revision);
+        $this->assertSame(2, (int) $all[1]->revision);
+
+        // Only the delta since revision 1.
+        $delta = $service->get_operations_since($this->workspaceid, $r1['revision']);
+        $this->assertCount(1, $delta);
+        $this->assertSame($r2['revision'], (int) $delta[0]->revision);
+
+        // Nothing new since the latest revision.
+        $none = $service->get_operations_since($this->workspaceid, $r2['revision']);
+        $this->assertCount(0, $none);
+    }
 }
