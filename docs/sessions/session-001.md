@@ -398,3 +398,49 @@ Heartbeat, Presence-UI) + Jest; danach Behat. Ab jetzt nur noch Patch-ZIPs.
   CI-Wrapper (mpc grunt) — der Wrapper hatte eigenes Verhalten (Backup/Löschen/
   Validate), das der direkte Aufruf nicht zeigt.
 - version 2026072626 / release 0.2.14.
+
+## Nachtrag 26 (Session 002): Behat-Feature-Bug + Poll-Guard (0.2.15) — SESSION-ENDE
+
+### Behat
+- ECHTER Bug in editor.feature: Warte-Schritt auf nicht existierenden Button
+  "Add concept" (ist Fieldset-Legende; Button = "Add"). Lief nie auf, weil Behat
+  bis 0.2.14 nie startete (CI-Abbruch am Bundle). Fix: Warte auf
+  "Add concept" "fieldset". Poll-Schleife unter Behat gegated
+  (M.cfg.behatsiterunning).
+- grading.feature statisch vollständig gegen die UI verifiziert (alle Strings,
+  Feld-for/id-Verknüpfungen, grade-Default 100, snapshotstatus_1=Submitted).
+- @javascript-Editor-Szenarien nur in echtem Chrome/CI prüfbar (Sandbox hat
+  keinen Browser).
+
+### Stand am Session-Ende (Release 0.2.15 / version 2026072627)
+FERTIG & getestet:
+- MVP-Kern (M1-M5): Domänenmodell, Editor (React/AMD), Snapshot/Grading,
+  KI-Feedback (Teacher-in-the-loop), Backup/Restore, Privacy.
+- Schicht 1-3 Kollaboration: Server-Locks + External Functions + Client
+  (adaptives Polling, Tweening, Lock/Poll-Client, React-Integration).
+- Canvas-Interaktion (erste Stufe): Auswahl, ESC, Entf, Node-Inline-Edit,
+  Connection-Label mit weißer Outline, Connection-Geometrie-Modul.
+- CI-Architektur bereinigt (der lange Kampf): amd/src/editor_lazy.js entfernt,
+  build.mjs nur amd/build+.map, thirdpartylibs korrekt, mpc-grunt-Löschverhalten
+  umgangen (npx grunt amd --files=init.js), package-lock committet, Node 22,
+  Reproduzierbarkeits-Job. Behat-Feature-Bug behoben.
+- Tests: Jest 67/67, PHPUnit 68/885 (12 Dateien, isoliert grün), phpcs 0,
+  Behat-Dry-Run 6/59/0-undefiniert.
+
+OFFEN (nächste Sessions):
+- Behat @javascript-Editor-Szenarien im echten CI-Lauf bestätigen.
+- Schicht 4 (weitere Behat-Kollaborations-Workflows).
+- Interaktions-Anforderungen: Connection-Erzeugung (Zusammenschieben/Connect-
+  Zone), Rendering mehrerer getrennter Connections (Geometrie liegt bereit),
+  Inline-Edit für Connection-Labels, Hover-/Auswahl-Menüsymbole.
+- Roadmap-Map-Typen: Familienbaum, Evolutionsbäume, Organigramme,
+  Strukturgleichungsmodelle, IT-Architektur, Programmablaufpläne.
+- Weiter Richtung 1.0 (voll getestet, nutzerfreundlich, stabil).
+
+### Auslieferungs-Lehren (wichtig für künftige Sessions)
+- Patch-cp kann keine Dateien löschen -> bei Vorlagen-Bootstrap-Resten
+  Clean-Install (volles Paket) anbieten.
+- Referenz-Snapshots dürfen keine Dateien enthalten, die die Zielcodebase nie
+  bekam (sonst Diff-Blindheit).
+- CI-Tools EXAKT über ihren Wrapper testen (mpc grunt != npx grunt), nicht nur
+  den direkten Aufruf.

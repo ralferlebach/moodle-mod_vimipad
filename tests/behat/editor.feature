@@ -20,14 +20,14 @@ Feature: Learners build knowledge maps with the ViMi Pad editor
 
   Scenario: The editor mounts and replaces the loading placeholder
     When I am on the "Energy map" "vimipad activity" page logged in as student1
-    And I wait until "Add concept" "button" exists
+    And I wait until "Add concept" "fieldset" exists
     Then I should not see "Loading the ViMi Pad editor"
     And I should see "Canvas"
     And I should see "List"
 
   Scenario: A student adds a concept to the map
     Given I am on the "Energy map" "vimipad activity" page logged in as student1
-    And I wait until "Add concept" "button" exists
+    And I wait until "Add concept" "fieldset" exists
     When I set the field "Concept label" to "Energy"
     And I click on "Add" "button" in the "Add concept" "fieldset"
     And I click on "List" "button"

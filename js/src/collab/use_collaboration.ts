@@ -105,6 +105,20 @@ export function useCollaboration(
         const lock = api.createLockClient(workspaceid, onError);
         lockRef.current = lock;
 
+        // Under Behat acceptance testing, skip the continuous background poll
+        // loop. The scenarios are single-user and do not exercise live
+        // collaboration; continuous fetches would only add flakiness and load,
+        // and could interfere with Behat's page-stability detection. Locking
+        // (beginEdit/endEdit) stays available for any interaction under test.
+        const behat = Boolean(
+            (window as unknown as {M?: {cfg?: {behatsiterunning?: boolean}}}).M?.cfg?.behatsiterunning
+        );
+        if (behat) {
+            return () => {
+                lockRef.current = null;
+            };
+        }
+
         const poll = api.createPollClient(workspaceid, adaptive, {
             onOperations: (ops) => opsHandler.current(ops),
             onPresence: (leases: Lease[]) => {

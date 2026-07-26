@@ -725,3 +725,30 @@ Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
   (init.js gebaut, editor_lazy unangetastet), bundle-survived-Check, mpc grunt
   gherkinlint/stylelint grün, phpdoc ohne Vendors-Fehler, npm ci + build ==
   committeter Stand. Jest 67/67, PHPUnit 68/885, tsc sauber.
+
+## 0.2.15 (2026072627) — Behat: echter Feature-Bug behoben + Poll-Guard
+
+### Fixed
+- editor.feature wartete mit `I wait until "Add concept" "button" exists` auf
+  einen Button, den es NIE gab: "Add concept" ist die Fieldset-Legende, der
+  Button heißt "Add". Der Schritt lief in einen Timeout -> Behat-Fehlschlag.
+  Das fiel bisher nie auf, weil der Behat-Job via needs:[lint-php,lint-js] bis
+  0.2.14 nie startete (CI brach vorher am Bundle-Problem ab). Jetzt läuft Behat
+  erstmals. Fix: Warte auf die existierende `"Add concept" "fieldset"` (beide
+  Szenarien). "fieldset" ist ein gültiger Moodle-Behat-Partial-Selektor.
+- Kollaborations-Poll-Schleife startet unter Behat nicht mehr
+  (M.cfg.behatsiterunning). Die Szenarien sind Einzelnutzer-Tests; dauerhafte
+  Hintergrund-fetch-Aufrufe wären reine Flakiness-/Last-Quelle und könnten die
+  Seiten-Stabilitätserkennung stören. Locking (beginEdit/endEdit) bleibt aktiv.
+
+### Verified (statisch, da @javascript nur in CI/Chrome läuft)
+- Behat-Init erfolgreich (Moodle-Install ok), Dry-Run 6 Szenarien/59 Steps/0
+  undefiniert. grading.feature vollständig gegen die UI geprüft: "Submissions",
+  "Sam Student", "Submitted" (snapshotstatus_1), "View and grade",
+  "View and grade snapshot", Feld "Grade (out of 100)" (grade-Default 100),
+  "Feedback", "Save grade", "Grade saved.", Feld "Annotation" (for/id-verknüpft),
+  "Add", "Annotation added." — alle Strings/Verknüpfungen stimmen.
+- Jest 67/67, tsc sauber, Bundle reproduzierbar.
+- HINWEIS: Die @javascript-Editor-Szenarien laufen nur in echtem Chrome (CI);
+  Logik/Strings sind statisch verifiziert, das visuelle Verhalten bestätigt der
+  CI-Lauf bzw. der Browser.
