@@ -500,3 +500,28 @@ Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
 ### Prozess-Lehre
 - Ab jetzt jede Testdatei auch ISOLIERT laufen lassen (nicht nur --filter),
   um Autoload-Reihenfolge-Abhängigkeiten aufzudecken.
+
+## 0.2.7 (2026072619) — CI: Frontend-Build-Schritt + JS-Lint-Fix
+
+### Fixed
+- CI-Blocker (phpdoc/phpcs "Vendors.php: non-existent path ... editor_lazy.min.js"):
+  Die thirdpartylibs.xml verweist auf das gebaute React-Bundle amd/build/
+  editor_lazy.min.js. Fehlt es im ausgecheckten Repo, bricht JEDER Check ab, der
+  die Vendors-Validierung durchläuft — und blockiert damit auch Behat.
+  Robuster Fix: Der CI-Workflow baut das Bundle jetzt selbst. In allen vier Jobs
+  (lint-php, lint-js, phpunit, behat) läuft direkt nach dem Checkout ein Schritt
+  "Build front-end bundle (esbuild → amd/build)" (npm install + node build.mjs)
+  im plugin/-Verzeichnis, BEVOR moodle-plugin-ci das Plugin kopiert/prüft. Damit
+  ist die Pipeline unabhängig davon, ob das Artefakt eingecheckt ist.
+- JS-Lint (ESLint, --max-lint-warnings 0): überflüssige
+  "eslint-disable-next-line no-undef" vor require() in amd/src/init.js entfernt
+  (require ist in Moodles ESLint-Config bereits als Globale bekannt; die
+  ungenutzte Direktive war eine Warnung = Fehler bei max-warnings 0). init.min.js
+  neu gebaut.
+
+### Verified
+- Bewiesen: OHNE Bundle -> "Vendors.php line 67" (der CI-Fehler); nach dem
+  Build-Schritt -> phpdoc/phpcs laufen durch. Build in sauberer Umgebung
+  (ohne node_modules) real ausgeführt: Bundle wird erzeugt.
+- ESLint auf init.js: 0/0. AMD reproduzierbar. phpcs 56/56. PHPUnit 68/885 grün.
+- Behat-Dry-run läuft an (6 Szenarien, keine undefinierten Steps).

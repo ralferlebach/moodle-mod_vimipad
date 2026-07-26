@@ -81,7 +81,6 @@ const buildTransport = () => (methodname, args) => {
  * @returns {Promise<{mount: function(HTMLElement, Object): void}>} The editor API.
  */
 const loadEditor = () => new Promise((resolve, reject) => {
-    // eslint-disable-next-line no-undef
     require(['mod_vimipad/editor_lazy'], (module) => {
         const editor = module && module.default ? module.default : module;
         if (editor && typeof editor.mount === 'function') {

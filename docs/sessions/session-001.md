@@ -315,3 +315,14 @@ Heartbeat, Presence-UI) + Jest; danach Behat. Ab jetzt nur noch Patch-ZIPs.
   release delegieren. No clones found.
 - Alle 12 Testdateien isoliert grün; 68/885 gesamt; phpcs 0/0. version 2026072618/
   release 0.2.6.
+
+## Nachtrag 19 (Session 002): CI Frontend-Build + JS-Lint (0.2.7)
+
+- Ursache CI-Fail (phpdoc/phpcs Vendors non-existent path): editor_lazy.min.js
+  fehlte im ausgecheckten Repo (Branch development). ROBUSTER Fix statt "bitte
+  einchecken": CI baut das Bundle selbst -> Build-Schritt (npm install + node
+  build.mjs) in ALLEN 4 Jobs nach checkout, vor moodle-plugin-ci install/checks.
+- JS-Lint: eslint-disable no-undef vor require() in init.js entfernt (require ist
+  bekannte Globale) -> ESLint 0/0. init.min.js neu.
+- Bewiesen: ohne Bundle Vendors-Fehler, mit Build-Schritt läuft durch. 68/885,
+  phpcs 56/56, Behat dry-run an. version 2026072619 / release 0.2.7.
