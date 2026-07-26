@@ -17,20 +17,35 @@
 namespace mod_vimipad\external;
 
 use core_external\external_api;
+use core_external\external_function_parameters;
+use core_external\external_value;
 use mod_vimipad\local\access;
 
 /**
  * Shared helpers for collaboration external functions.
  *
- * Keeps the repeated cmid → context → workspace → edit-access dance and the
- * settings lookups in one place, so each external function stays small and the
- * behaviour is consistent.
+ * Keeps the repeated cmid → context → workspace → edit-access dance, the shared
+ * element-lock parameter definition and the settings lookups in one place, so
+ * each external function stays small and the behaviour is consistent.
  *
  * @package    mod_vimipad
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class helper {
+    /**
+     * The parameter definition shared by all element-lock functions.
+     *
+     * @return external_function_parameters
+     */
+    public static function lock_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'workspaceid' => new external_value(PARAM_INT, 'Workspace id'),
+            'targettype' => new external_value(PARAM_ALPHA, 'Element type: node or relation'),
+            'targetstableid' => new external_value(PARAM_ALPHANUMEXT, 'Element stable id'),
+        ]);
+    }
     /**
      * Resolve and validate a workspace for editing by the current user.
      *

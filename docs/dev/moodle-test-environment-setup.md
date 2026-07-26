@@ -377,3 +377,21 @@ Prüfen, ob Git die Artefakte trackt:
 ```bash
 git check-ignore amd/build/editor_lazy.min.js   # darf NICHTS ausgeben
 ```
+
+---
+
+## 14. Tests IMMER auch isoliert laufen lassen
+
+`vendor/bin/phpunit --filter mod_vimipad` kann Fehler verbergen: Lädt eine frühe
+Testdatei eine nicht-autoloadbare Basisklasse (z. B.
+`externallib_advanced_testcase` aus `webservice/tests/helpers.php`), profitieren
+spätere Dateien davon — bis die CI sie EINZELN lädt und es knallt.
+
+Deshalb vor jeder Auslieferung jede Testdatei einzeln prüfen:
+```bash
+for t in mod/vimipad/tests/*.php; do
+  vendor/bin/phpunit "$t" 2>&1 | grep -E "OK \(|FAILURES|ERRORS|not found"
+done
+```
+External-Function-Tests MÜSSEN `require_once($CFG->dirroot.'/webservice/tests/helpers.php')`
+enthalten und `externallib_advanced_testcase` aus dem globalen Namespace nutzen.

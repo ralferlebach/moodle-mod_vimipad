@@ -36,12 +36,7 @@ class renew_lock extends external_api {
      * @return external_function_parameters
      */
     public static function execute_parameters(): external_function_parameters {
-        return new external_function_parameters([
-            'cmid' => new external_value(PARAM_INT, 'Course module id'),
-            'workspaceid' => new external_value(PARAM_INT, 'Workspace id'),
-            'targettype' => new external_value(PARAM_ALPHA, 'Element type: node or relation'),
-            'targetstableid' => new external_value(PARAM_ALPHANUMEXT, 'Element stable id'),
-        ]);
+        return helper::lock_parameters();
     }
 
     /**

@@ -478,3 +478,25 @@ Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
 - git check-ignore bestätigt: amd/build-Artefakte werden getrackt, node_modules/
   package-lock.json bleiben ignoriert.
 - Regression: PHPUnit 68/885 grün, phpcs severity=1 0/0, validate sauber.
+
+## 0.2.6 (2026072618) — Fix: External-Test-Basisklasse + phpcpd-Klon
+
+### Fixed
+- collaboration_external_test brach mit "Class externallib_advanced_testcase not
+  found" ab: Diese Basisklasse liegt in webservice/tests/helpers.php und wird
+  NICHT autogeladen. Fix nach Core-Muster: require_once(webservice/tests/
+  helpers.php) + use externallib_advanced_testcase (globaler Namespace).
+  (Der Fehler blieb bei gefiltertem Lauf verborgen, weil eine andere Testdatei
+  die helpers zuvor lud — isolierte Läufe decken das auf.)
+- phpcpd-Klon (37 Zeilen) zwischen renew_lock.php und release_lock.php beseitigt:
+  die gemeinsame Element-Lock-Parameterdefinition liegt jetzt in
+  helper::lock_parameters(); acquire/renew/release_lock delegieren dorthin.
+
+### Verified
+- ALLE 12 Testdateien EINZELN (isoliert, wie die CI) grün. Gesamt 68/885 grün.
+- phpcpd: No clones found. phpcs severity=1 + moodle-plugin-ci phpcs
+  --max-warnings 0: 0/0.
+
+### Prozess-Lehre
+- Ab jetzt jede Testdatei auch ISOLIERT laufen lassen (nicht nur --filter),
+  um Autoload-Reihenfolge-Abhängigkeiten aufzudecken.

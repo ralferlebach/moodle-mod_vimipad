@@ -304,3 +304,14 @@ Heartbeat, Presence-UI) + Jest; danach Behat. Ab jetzt nur noch Patch-ZIPs.
   git check-ignore ok; PHPUnit 68/885 grün. version 2026072617 / release 0.2.5.
 - WICHTIG fuer kuenftige Instanzen: amd/build/ MUSS eingecheckt sein; die CI
   validiert das Plugin aus dem Repo und baut React nicht selbst.
+
+## Nachtrag 18 (Session 002): Fix External-Test-Basisklasse + phpcpd (0.2.6)
+
+- collaboration_external_test: externallib_advanced_testcase not found ->
+  require_once($CFG->dirroot.'/webservice/tests/helpers.php') + use (global ns),
+  extends ohne Backslash. Fehler war bei --filter verdeckt (andere Datei lud
+  helpers). LEHRE: Testdateien ISOLIERT laufen lassen.
+- phpcpd-Klon renew/release_lock -> helper::lock_parameters(); acquire/renew/
+  release delegieren. No clones found.
+- Alle 12 Testdateien isoliert grün; 68/885 gesamt; phpcs 0/0. version 2026072618/
+  release 0.2.6.

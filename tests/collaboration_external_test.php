@@ -16,12 +16,19 @@
 
 namespace mod_vimipad;
 
+use externallib_advanced_testcase;
 use mod_vimipad\external\acquire_lock;
 use mod_vimipad\external\renew_lock;
 use mod_vimipad\external\release_lock;
 use mod_vimipad\external\poll_changes;
 use mod_vimipad\local\service\operation_service;
 use mod_vimipad\local\operation\operation_type;
+
+defined('MOODLE_INTERNAL') || die();
+
+global $CFG;
+
+require_once($CFG->dirroot . '/webservice/tests/helpers.php');
 
 /**
  * Tests for the collaboration external functions.
@@ -35,7 +42,7 @@ use mod_vimipad\local\operation\operation_type;
  * @covers     \mod_vimipad\external\poll_changes
  * @covers     \mod_vimipad\external\helper
  */
-final class collaboration_external_test extends \externallib_advanced_testcase {
+final class collaboration_external_test extends externallib_advanced_testcase {
     /** @var \stdClass The vimipad instance. */
     private \stdClass $instance;
 
