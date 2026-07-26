@@ -228,3 +228,23 @@ Moodle 4.5 / 5.0 / 5.2 × PHP 8.1–8.3 (versionsgerecht excluded) × MariaDB/Po
 - Offen: Live-Ausführung der @javascript-Szenarien (braucht Browser -> CI).
   Nächste Produktschritte weiterhin: Rubric-Bewertung, Annotationen an
   Knoten/Relationen, React-Grading-UI (get_snapshot/save_annotation External).
+
+## Nachtrag 13 (Session 002): Version 0.2.0 (MVP) + MVP-Restarbeiten
+
+- Nominal-Version auf 0.2.0 gesetzt (MVP; 1.0 = fertig/stabil). version-Integer
+  monoton weiter (2026072611).
+- MVP-Vollständigkeit geprüft: README (Hochschulen-Template, inhaltlich aktuell),
+  LICENSE, CHANGELOG, alle Pflichtdateien/-Strings, monologo, index.php, alle
+  lib.php-Callbacks, MOD_PURPOSE, Completion (custom_completion) — vollständig.
+  Keine fehlenden Strings/Profile, keine TODO/knowledgemap-Reste im Code.
+- MVP-Integrationstest ergänzt (Install-Artefakte, Aktivitätsanlage+Gradebook,
+  Löschung). CLI-Site-Install lief erfolgreich (PG in Sandbox danach instabil).
+- Voll verifiziert: PHPUnit 47/809, phpcs 0/0, AMD reproduzierbar, tsc+Jest.
+
+## Nachtrag 14 (Session 002): Linting- + Build-Fixes (0.2.1)
+
+- version.php Zeile 30 umgebrochen (<=132). makefile lint-react/test-react nutzen
+  jetzt lokale Binaries mit node_modules-Guard (kein npx-Fremdpaket tsc@2.0.4).
+  lint-mustache überspringt ohne templates/. version 2026072612 / release 0.2.1.
+- Verifiziert: frisches make lint-react ohne node_modules -> installiert + grün;
+  PHPUnit 47/809, phpcs 0/0, AMD reproduzierbar.

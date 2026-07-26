@@ -99,8 +99,12 @@ fix-phpdoc:
 lint-mustache:
 	@echo ""
 	@echo "=== Mustache syntax check ==="
-	-$(PHP) $(PLUGIN_DIR)/tools/mustache_check.php \
-		$(PLUGIN_DIR)/templates 2>&1 | grep -v '^OK:' || true
+	@if [ -d $(PLUGIN_DIR)/templates ]; then \
+		$(PHP) $(PLUGIN_DIR)/tools/mustache_check.php \
+			$(PLUGIN_DIR)/templates 2>&1 | grep -v '^OK:' || true; \
+	else \
+		echo "No templates/ directory — Mustache check skipped."; \
+	fi
 
 lint-cpd:
 	@echo ""
@@ -156,7 +160,11 @@ lint-react:
 	@echo ""
 	@echo "=== TypeScript type-check (tsc --noEmit) ==="
 	@if [ -f $(PLUGIN_DIR)/tsconfig.json ]; then \
-		cd $(PLUGIN_DIR) && $(NPX) tsc --noEmit; \
+		if [ ! -x $(PLUGIN_DIR)/node_modules/.bin/tsc ]; then \
+			echo "Installing frontend dev dependencies..."; \
+			cd $(PLUGIN_DIR) && $(NPM) install --no-audit --no-fund; \
+		fi; \
+		cd $(PLUGIN_DIR) && ./node_modules/.bin/tsc --noEmit; \
 	else \
 		echo "No tsconfig.json — type-check skipped."; \
 	fi
@@ -165,7 +173,11 @@ test-react:
 	@echo ""
 	@echo "=== Jest (React/TS unit tests) ==="
 	@if [ -d $(PLUGIN_DIR)/js/tests ]; then \
-		cd $(PLUGIN_DIR) && $(NPX) jest; \
+		if [ ! -x $(PLUGIN_DIR)/node_modules/.bin/jest ]; then \
+			echo "Installing frontend dev dependencies..."; \
+			cd $(PLUGIN_DIR) && $(NPM) install --no-audit --no-fund; \
+		fi; \
+		cd $(PLUGIN_DIR) && ./node_modules/.bin/jest; \
 	else \
 		echo "No js/tests — Jest skipped."; \
 	fi

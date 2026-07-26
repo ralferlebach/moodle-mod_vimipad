@@ -339,3 +339,50 @@ Live-Behat-Ausführung halten — die Ausführung erfolgt in der Projekt-CI.
   kein Auto-Mount ohne AMD-Aufruf.
 - PHPUnit 44 Tests / 796 Assertions grün; phpcs severity=1: 0/0.
 - makefile-Targets react/amd/build/lint-react/test-react real ausgeführt.
+
+## 0.2.0 (2026072611) — MVP
+
+Nominal-Version auf die MVP-Stufe gesetzt. Versionslogik: 0.2 = MVP (vollständiger
+Kernworkflow), 1.0 = fertig getestetes, nutzerfreundliches, stabiles Produkt.
+Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
+
+### Added
+- MVP-Integrationstest (tests/mvp_integration_test.php): verifiziert reproduzierbar,
+  dass Capabilities und External Functions installiert werden, eine Aktivität
+  inkl. Gradebook-Item angelegt wird, die MVP-Feature-Flags greifen und das
+  Löschen sauber aufräumt.
+
+### MVP-Stand (vollständig, auf echter Moodle-4.5-Umgebung verifiziert)
+- Editor (Canvas + Listenansicht, DnD + Tastaturalternative), idiomatisch über
+  AMD (mod_vimipad/init) geladen, React separat gebündelt.
+- Abgabe als unveränderlicher Snapshot; Lehrenden-Bewertung (Note, Feedback,
+  Annotationen) mit Gradebook- und Completion-Anbindung.
+- Teacher-in-the-loop KI-Feedback über das Moodle-AI-Subsystem.
+- Vollständige Integration: Gruppen, Gradebook, Completion, Privacy, Backup/Restore.
+- Tests: PHPUnit 47/809 grün, Jest 6/6, phpcs severity=1 0/0, AMD reproduzierbar,
+  phpdoc/validate/savepoints/mustache sauber, Behat-Kernworkflows (Steps validiert).
+- CLI-Site-Install lief erfolgreich durch (Plugin installiert sich sauber).
+
+### Bekannte Grenzen bis 1.0
+- @javascript-Behat-Editorszenarien laufen in der CI (Browser erforderlich).
+- Roadmap 1.x: Rubric-Bewertung, Annotationen an Knoten/Relationen, React-Grading-UI
+  (get_snapshot/save_annotation als External Functions), Canvas-Tastaturmodus,
+  profil-spezifische Auto-Layouts, Peer-Review.
+
+## 0.2.1 (2026072612) — Linting- und Build-Fixes
+
+### Fixed
+- version.php: zu lange Kommentarzeile (158 > 132 Zeichen) umgebrochen; phpcs
+  severity=1 jetzt 0/0.
+- makefile lint-react/test-react: riefen `npx tsc`/`npx jest` ohne node_modules-
+  Prüfung auf. Ohne vorheriges `npm install` zog npx das falsche Fremdpaket
+  (tsc@2.0.4) statt des lokalen TypeScript. Jetzt: node_modules wird bei Bedarf
+  installiert und die lokalen Binaries (node_modules/.bin/tsc, .../jest) werden
+  direkt aufgerufen — nie wieder ein Fremdpaket-Download.
+- makefile lint-mustache: überspringt sauber, wenn kein templates/-Verzeichnis
+  existiert (statt "directory not found"-Rauschen).
+
+### Verified
+- Frisches Auspacken ohne node_modules: `make lint-react` installiert die echten
+  Dev-Abhängigkeiten und der Typecheck läuft grün; zweiter Lauf ohne Neuinstall.
+- PHPUnit 47/809 grün, phpcs 0/0, AMD reproduzierbar.
