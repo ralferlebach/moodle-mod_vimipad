@@ -23,8 +23,8 @@ makefile       export-ignore
 .phpcsignore   export-ignore
 
 # Development-only frontend tooling: exclude from release archive.
-# The prebuilt js/build/ (React bundle) and amd/build/ (Grunt output) ARE
-# shipped; sources and toolchain are not required on a production server.
+# The prebuilt amd/build/ (init module + bundled React editor_lazy) IS shipped;
+# sources and toolchain are not required on a production server.
 /node_modules      export-ignore
 /package.json       export-ignore
 /package-lock.json  export-ignore

@@ -92,7 +92,7 @@ export function mount(element: HTMLElement, config: MountConfig): void {
     root.render(<EditorApp api={api} t={t} />);
 }
 
-// Expose a global for the AMD bootstrap (mod_vimipad/init), which loads this
-// bundle and calls mount() with an injected transport and string resolver. On
-// Moodle 5.3+ this can be replaced by mounting through the core React runtime.
-(window as unknown as {mod_vimipad_editor?: unknown}).mod_vimipad_editor = {mount};
+// The bundle is emitted as the AMD module mod_vimipad/editor_lazy. The init
+// module require()s it and calls mount() with an injected transport and string
+// resolver. On Moodle 5.3+ this can be replaced by the core React runtime.
+export default {mount};

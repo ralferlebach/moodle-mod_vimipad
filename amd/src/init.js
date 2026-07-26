@@ -34,7 +34,6 @@
 
 import {get_strings as getStrings} from 'core/str';
 import {call as fetchMany} from 'core/ajax';
-import Config from 'core/config';
 import Notification from 'core/notification';
 
 /** @type {string[]} Editor string keys, kept in sync with lang/en/vimipad.php. */
@@ -74,28 +73,23 @@ const buildTransport = () => (methodname, args) => {
 };
 
 /**
- * Load the separately bundled React editor asset exactly once.
+ * Load the prebuilt React editor AMD module.
+ *
+ * Using the module loader (rather than injecting a <script> tag) keeps the load
+ * inside Moodle's JS tracking, so Behat's wait_for_pending_js resolves cleanly.
  *
  * @returns {Promise<{mount: function(HTMLElement, Object): void}>} The editor API.
  */
-const loadEditorBundle = () => new Promise((resolve, reject) => {
-    if (window.mod_vimipad_editor) {
-        resolve(window.mod_vimipad_editor);
-        return;
-    }
-    const script = document.createElement('script');
-    script.src = `${Config.wwwroot}/mod/vimipad/js/build/vimipad-editor.js`;
-    script.async = true;
-    script.onload = () => {
-        if (window.mod_vimipad_editor) {
-            resolve(window.mod_vimipad_editor);
+const loadEditor = () => new Promise((resolve, reject) => {
+    // eslint-disable-next-line no-undef
+    require(['mod_vimipad/editor_lazy'], (module) => {
+        const editor = module && module.default ? module.default : module;
+        if (editor && typeof editor.mount === 'function') {
+            resolve(editor);
         } else {
-            reject(new Error('ViMi Pad editor bundle loaded but did not register.'));
+            reject(new Error('ViMi Pad editor module did not expose mount().'));
         }
-    };
-    script.onload = script.onload.bind(script);
-    script.onerror = () => reject(new Error('Failed to load the ViMi Pad editor bundle.'));
-    document.head.appendChild(script);
+    }, reject);
 });
 
 /**
@@ -112,7 +106,7 @@ export const init = async(cmid, selector = 'vimipad-editor-root') => {
     }
 
     try {
-        const [strings, editor] = await Promise.all([loadStrings(), loadEditorBundle()]);
+        const [strings, editor] = await Promise.all([loadStrings(), loadEditor()]);
         editor.mount(element, {
             cmid,
             callService: buildTransport(),

@@ -403,3 +403,30 @@ Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
   Abschnitte umbenannt (Ziel = jetzt F). Zielspanne/Entwurfsentscheidung 5 auf
   den aktuellen Stand gebracht (4.5–5.3; React ab 5.3 im Core; AMD für alle
   Nicht-React-Teile).
+
+## 0.2.3 (2026072614) — Bugfix: Behat @javascript (Editor lud nicht im Browser)
+
+### Fixed
+- CI-Behat-Fail "Javascript code and/or AJAX requests are not ready after 10
+  seconds (mod_vimipad/init)": Ursache war das dynamische Nachladen des React-
+  Bundles per injiziertem <script>-Tag. Das lief AUSSERHALB von Moodles JS-
+  Tracking, sodass wait_for_pending_js nie auflöste. Zusätzlich ein toter
+  onload-Selbstbezug (script.onload = script.onload.bind(...)).
+- Fix: Das React-Bundle wird jetzt als benanntes AMD-Modul
+  (mod_vimipad/editor_lazy) unter amd/build/ ausgeliefert und im init-Modul per
+  require(['mod_vimipad/editor_lazy']) über Moodles Loader geladen — vollständig
+  im JS-Tracking. mount.tsx exportiert sauber (default export) statt window-Global.
+- build.mjs: baut das Bundle als AMD-Modul (esbuild-IIFE + define-Wrapper) nach
+  amd/build/editor_lazy.min.js (kein js/build/ mehr). thirdpartylibs.xml und
+  .gitattributes entsprechend angepasst.
+- editor.feature: explizite Wartebedingungen ("I wait until 'Add concept'
+  'button' exists") für robustes Warten auf den React-Mount.
+
+### Verified
+- AMD-Ladepfad (require editor_lazy -> mount) via jsdom: Modul registriert,
+  mount() verfügbar, Editor montiert, Strings/Knoten gerendert.
+- Grunt: init.min.js reproduzierbar, editor_lazy.min.js (third-party) unangetastet,
+  voller grunt-Lauf exit 0. Behat dry-run: 6 Szenarien/59 Steps, keine undefinierten.
+- PHPUnit 47/809, phpcs 0/0, tsc/Jest grün.
+- HINWEIS: Der eigentliche @javascript-Browserlauf ist nur in der CI möglich
+  (kein Browser in der Sandbox; Chromium nur als Snap-Wrapper vorhanden).

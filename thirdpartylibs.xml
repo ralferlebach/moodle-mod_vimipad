@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <libraries>
     <library>
-        <location>js/build/vimipad-editor.js</location>
+        <location>amd/build/editor_lazy.min.js</location>
         <name>React</name>
-        <description>React and ReactDOM are bundled into the prebuilt editor asset (js/build/vimipad-editor.js) for Moodle versions without native React runtime support. Built from source in js/src via the development-only toolchain.</description>
+        <description>React and ReactDOM are bundled into the prebuilt editor AMD module (amd/build/editor_lazy.min.js) for Moodle versions without native React runtime support. Built from source in js/src via the development-only toolchain.</description>
         <version>18.3.1</version>
         <license>MIT</license>
         <licenseversion></licenseversion>
