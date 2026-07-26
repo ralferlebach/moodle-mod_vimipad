@@ -84,4 +84,28 @@ class helper {
         $ttl = (int) get_config('mod_vimipad', 'leasetimeout');
         return $ttl > 0 ? $ttl : 15;
     }
+
+    /**
+     * The collaboration client configuration derived from plugin settings.
+     *
+     * All poll intervals are returned in milliseconds for the client. Falls back
+     * to sensible defaults when settings are unset.
+     *
+     * @return array The collaboration settings bundle (all poll values in ms).
+     */
+    public static function collab_config(): array {
+        $get = static function (string $name, int $default): int {
+            $value = (int) get_config('mod_vimipad', $name);
+            return $value > 0 ? $value : $default;
+        };
+        return [
+            'pollinterval' => $get('pollinterval', 1) * 1000,
+            'polladaptive' => (int) get_config('mod_vimipad', 'polladaptive'),
+            'pollmin' => $get('pollmin', 1) * 1000,
+            'pollmax' => $get('pollmax', 10) * 1000,
+            'leasetimeout' => self::lease_ttl(),
+            'pushenabled' => (int) get_config('mod_vimipad', 'pushenabled'),
+            'pushendpoint' => (string) get_config('mod_vimipad', 'pushendpoint'),
+        ];
+    }
 }

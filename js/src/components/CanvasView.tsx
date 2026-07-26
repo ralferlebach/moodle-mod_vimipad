@@ -37,6 +37,12 @@ interface Props {
     disabled: boolean;
     onNodeMoved: (stableid: string, point: Point) => void;
     t: (key: string) => string;
+    /** True if a node is held by another collaborator (renders as locked). */
+    isLockedByOther?: (targettype: string, stableid: string) => boolean;
+    /** Take an editing lock on drag-start; resolves to whether we may drag. */
+    beginEdit?: (targettype: string, stableid: string) => Promise<boolean>;
+    /** Release the editing lock on drag-end. */
+    endEdit?: (targettype: string, stableid: string) => Promise<void>;
 }
 
 /**
@@ -46,10 +52,13 @@ interface Props {
  * @returns The rendered canvas.
  */
 export function CanvasView(props: Props): React.ReactElement {
-    const {state, layout, disabled, onNodeMoved, t} = props;
+    const {state, layout, disabled, onNodeMoved, t, isLockedByOther, beginEdit, endEdit} = props;
     const svgRef = useRef<SVGSVGElement>(null);
     const [dragId, setDragId] = useState<string | null>(null);
     const [dragPos, setDragPos] = useState<Point | null>(null);
+
+    const lockedByOther = useCallback((stableid: string): boolean =>
+        isLockedByOther ? isLockedByOther('node', stableid) : false, [isLockedByOther]);
 
     const positionOf = useCallback((stableid: string): Point => {
         if (dragId === stableid && dragPos) {
@@ -72,15 +81,22 @@ export function CanvasView(props: Props): React.ReactElement {
         });
     }, []);
 
-    const onPointerDown = useCallback((event: React.PointerEvent, stableid: string) => {
-        if (disabled) {
+    const onPointerDown = useCallback(async (event: React.PointerEvent, stableid: string) => {
+        if (disabled || lockedByOther(stableid)) {
             return;
+        }
+        // Lock on drag-start: only proceed if we secure the lease.
+        if (beginEdit) {
+            const granted = await beginEdit('node', stableid);
+            if (!granted) {
+                return;
+            }
         }
         event.preventDefault();
         (event.target as Element).setPointerCapture(event.pointerId);
         setDragId(stableid);
         setDragPos(positionOf(stableid));
-    }, [disabled, positionOf]);
+    }, [disabled, lockedByOther, beginEdit, positionOf]);
 
     const onPointerMove = useCallback((event: React.PointerEvent) => {
         if (dragId === null) {
@@ -92,10 +108,13 @@ export function CanvasView(props: Props): React.ReactElement {
     const onPointerUp = useCallback(() => {
         if (dragId !== null && dragPos) {
             onNodeMoved(dragId, dragPos);
+            if (endEdit) {
+                void endEdit('node', dragId);
+            }
         }
         setDragId(null);
         setDragPos(null);
-    }, [dragId, dragPos, onNodeMoved]);
+    }, [dragId, dragPos, onNodeMoved, endEdit]);
 
     return (
         <svg
@@ -150,13 +169,15 @@ export function CanvasView(props: Props): React.ReactElement {
             {state.nodes.map(node => {
                 const pos = positionOf(node.stableid);
                 const width = Math.max(70, node.label.length * 8 + 20);
+                const otherLock = lockedByOther(node.stableid);
                 return (
                     <g
                         key={node.stableid}
-                        className="vimipad-canvas-node"
+                        className={`vimipad-canvas-node${otherLock ? ' vimipad-canvas-node-locked' : ''}`}
                         transform={`translate(${pos.x}, ${pos.y})`}
                         onPointerDown={e => onPointerDown(e, node.stableid)}
-                        style={{cursor: disabled ? 'default' : 'grab'}}
+                        style={{cursor: disabled || otherLock ? 'not-allowed' : 'grab'}}
+                        aria-disabled={otherLock}
                     >
                         <rect
                             x={-width / 2}
@@ -164,13 +185,24 @@ export function CanvasView(props: Props): React.ReactElement {
                             width={width}
                             height={32}
                             rx={6}
-                            fill="var(--vimipad-node-fill, #eef2ff)"
+                            fill={otherLock ? 'var(--vimipad-node-locked-fill, #f3f4f6)' : 'var(--vimipad-node-fill, #eef2ff)'}
                             stroke="currentColor"
                             strokeWidth={1}
+                            strokeDasharray={otherLock ? '4 2' : undefined}
                         />
                         <text textAnchor="middle" dominantBaseline="central" className="vimipad-canvas-nodelabel">
                             {node.label}
                         </text>
+                        {otherLock && (
+                            <text
+                                textAnchor="middle"
+                                y={28}
+                                className="vimipad-canvas-lockhint"
+                                fill="var(--vimipad-lock-hint, #6b7280)"
+                            >
+                                {t('editor:beingedited')}
+                            </text>
+                        )}
                     </g>
                 );
             })}

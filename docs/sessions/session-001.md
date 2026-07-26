@@ -326,3 +326,14 @@ Heartbeat, Presence-UI) + Jest; danach Behat. Ab jetzt nur noch Patch-ZIPs.
   bekannte Globale) -> ESLint 0/0. init.min.js neu.
 - Bewiesen: ohne Bundle Vendors-Fehler, mit Build-Schritt läuft durch. 68/885,
   phpcs 56/56, Behat dry-run an. version 2026072619 / release 0.2.7.
+
+## Nachtrag 20 (Session 002): editor_lazy.min.js-Lücke geschlossen + Schicht 3 (0.2.8)
+
+- WAHRE URSACHE des CI-Dauerfehlers gefunden (Nutzer-Diagnose): editor_lazy.min.js
+  lag in den lokalen Snapshots -> Patch-Diff schloss es immer als "unverändert" aus
+  -> Zielcodebase bekam es nie. FIX: force-include in dieser Auslieferung + Quellen
+  zum Selberbauen (build.mjs, package.json, package-lock.json, tsconfig.json, js/src).
+- Schicht 3 Kollaborations-Client fertig integriert (adaptive/tween/poll/lock/
+  apply_remote/use_collaboration + EditorApp/CanvasView + get_workspace collab).
+  Jest 42/42, tsc sauber, phpcs 0/0, PHPUnit 68/885, ESLint 0/0, AMD reproduzierbar.
+- version 2026072620 / release 0.2.8.

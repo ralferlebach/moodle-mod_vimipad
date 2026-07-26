@@ -26,7 +26,10 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {ServiceTransport, WorkspaceState} from '../types';
+import {Lease, PolledOperation, ServiceTransport, WorkspaceState} from '../types';
+import {AdaptiveConfig} from '../collab/adaptive';
+import {PollClient} from '../collab/poll_client';
+import {LockClient} from '../collab/lock_client';
 
 export interface ApplyResult {
     revision: number;
@@ -111,6 +114,57 @@ export class ApiClient {
             workspaceid,
         });
         return result as {snapshotid: number; status: number};
+    }
+
+    /**
+     * The course module id this client is bound to.
+     *
+     * @returns The cmid.
+     */
+    getCmid(): number {
+        return this.cmid;
+    }
+
+    /**
+     * Create a poll client bound to this client's transport and cmid.
+     *
+     * @param workspaceid The workspace id.
+     * @param adaptive The adaptive interval configuration.
+     * @param handlers Operation/presence/error callbacks.
+     * @returns A configured PollClient.
+     */
+    createPollClient(
+        workspaceid: number,
+        adaptive: AdaptiveConfig,
+        handlers: {
+            onOperations?: (operations: PolledOperation[]) => void;
+            onPresence?: (leases: Lease[]) => void;
+            onError?: (error: Error) => void;
+        }
+    ): PollClient {
+        return new PollClient({
+            cmid: this.cmid,
+            workspaceid,
+            transport: this.transport,
+            adaptive,
+            ...handlers,
+        });
+    }
+
+    /**
+     * Create a lock client bound to this client's transport and cmid.
+     *
+     * @param workspaceid The workspace id.
+     * @param onError Optional error callback.
+     * @returns A configured LockClient.
+     */
+    createLockClient(workspaceid: number, onError?: (error: Error) => void): LockClient {
+        return new LockClient({
+            cmid: this.cmid,
+            workspaceid,
+            transport: this.transport,
+            onError,
+        });
     }
 }
 

@@ -33,8 +33,10 @@ export type EditorAction =
     | {kind: 'load'; state: WorkspaceState}
     | {kind: 'setRevision'; revision: number}
     | {kind: 'addNode'; node: VimiNode}
+    | {kind: 'updateNode'; stableid: string; label?: string; type?: string}
     | {kind: 'deleteNode'; stableid: string}
     | {kind: 'addRelation'; relation: VimiRelation}
+    | {kind: 'updateRelation'; stableid: string; label?: string; type?: string}
     | {kind: 'deleteRelation'; stableid: string}
     | {kind: 'retargetRelation'; stableid: string; sourceid?: string; targetid?: string};
 
@@ -58,6 +60,13 @@ export function reduce(state: EditorState, action: EditorState | EditorAction): 
             return {...state, revision: act.revision};
         case 'addNode':
             return {...state, nodes: [...state.nodes, act.node]};
+        case 'updateNode':
+            return {
+                ...state,
+                nodes: state.nodes.map(n => n.stableid === act.stableid
+                    ? {...n, label: act.label ?? n.label, type: act.type ?? n.type}
+                    : n),
+            };
         case 'deleteNode':
             return {
                 ...state,
@@ -68,6 +77,13 @@ export function reduce(state: EditorState, action: EditorState | EditorAction): 
             };
         case 'addRelation':
             return {...state, relations: [...state.relations, act.relation]};
+        case 'updateRelation':
+            return {
+                ...state,
+                relations: state.relations.map(r => r.stableid === act.stableid
+                    ? {...r, label: act.label ?? r.label, type: act.type ?? r.type}
+                    : r),
+            };
         case 'deleteRelation':
             return {
                 ...state,

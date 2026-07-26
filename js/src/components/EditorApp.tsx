@@ -32,7 +32,9 @@ import {computeLayout} from '../graph/autolayout';
 import {EditorState, reduce} from '../store/reducer';
 import {CanvasView} from './CanvasView';
 import {RelationListView} from './RelationListView';
-import {LayoutMap, Point} from '../types';
+import {LayoutMap, Point, PolledOperation} from '../types';
+import {useCollaboration} from '../collab/use_collaboration';
+import {operationToAction} from '../collab/apply_remote';
 
 interface Props {
     api: ApiClient;
@@ -99,6 +101,31 @@ export function EditorApp(props: Props): React.ReactElement {
     useEffect(() => {
         load();
     }, [load]);
+
+    // Feed operations polled from collaborators into the local state. Layout
+    // changes travel on the separate layout channel and are reconciled below.
+    const applyRemoteOperations = useCallback((operations: PolledOperation[]) => {
+        operations.forEach((op) => {
+            const action = operationToAction(op);
+            if (action) {
+                dispatch(action);
+            }
+        });
+    }, []);
+
+    const currentUserId = useMemo(() => {
+        const cfg = (window as unknown as {M?: {cfg?: {userId?: number}}}).M?.cfg;
+        return cfg?.userId ?? 0;
+    }, []);
+
+    const collab = useCollaboration(
+        api,
+        state.workspaceid,
+        currentUserId,
+        state.collab,
+        applyRemoteOperations,
+        (e) => setError(e.message)
+    );
 
     const layout = useMemo(() => computeLayout(state.nodes, stored), [state.nodes, stored]);
     const disabled = busy || loading || state.locked === 1;
@@ -297,6 +324,9 @@ export function EditorApp(props: Props): React.ReactElement {
                     disabled={disabled}
                     onNodeMoved={onNodeMoved}
                     t={t}
+                    isLockedByOther={collab.isLockedByOther}
+                    beginEdit={collab.beginEdit}
+                    endEdit={collab.endEdit}
                 />
             ) : (
                 <RelationListView

@@ -525,3 +525,37 @@ Der interne $plugin->version-Integer steigt weiter monoton (saubere Upgrades).
   (ohne node_modules) real ausgeführt: Bundle wird erzeugt.
 - ESLint auf init.js: 0/0. AMD reproduzierbar. phpcs 56/56. PHPUnit 68/885 grün.
 - Behat-Dry-run läuft an (6 Szenarien, keine undefinierten Steps).
+
+## 0.2.8 (2026072620) — editor_lazy.min.js in Auslieferung + Kollaborations-Client (Schicht 3)
+
+### Fixed (CI-Dauerproblem an der Wurzel)
+- URSACHE des wiederkehrenden "Vendors.php: non-existent path editor_lazy.min.js":
+  Das gebaute Bundle amd/build/editor_lazy.min.js lag in den lokalen
+  Referenz-Snapshots, weshalb der Patch-Diff es bei JEDER Auslieferung als
+  "bereits vorhanden" wertete und ausschloss — es hat die Zielcodebase nie
+  erreicht. Diese Auslieferung enthält editor_lazy.min.js daher EXPLIZIT
+  (force-include), zusätzlich zum ohnehin vorhandenen CI-Build-Schritt.
+- Mitgeliefert werden auch die Quellen zum Selberbauen: build.mjs, package.json,
+  package-lock.json, tsconfig.json und der komplette js/src-Baum. Build:
+  "npm install && node build.mjs" erzeugt amd/build/editor_lazy.min.js.
+
+### Added (Schicht 3 — Kollaborations-Client, Logik Jest-getestet)
+- collab/adaptive.ts    — adaptives Poll-Intervall (RTT/Aktivität), 8 Tests.
+- collab/tween.ts       — weiches Positions-Tweening A→B, 6 Tests.
+- collab/poll_client.ts — Poll-Schleife, Deltas, Presence, Heartbeat, 7 Tests.
+- collab/lock_client.ts — acquire/renew/release + Heartbeat, 8 Tests.
+- collab/apply_remote.ts— gepollte Server-Op → Reducer-Action, 7 Tests.
+- collab/use_collaboration.ts — React-Hook, verdrahtet Poll/Lock in den Editor.
+- Reducer: updateNode/updateRelation ergänzt (ferne Label-Änderungen).
+- EditorApp/CanvasView: Poll-Schleife, Lock-on-drag-start, Presence-Anzeige
+  ("wird bearbeitet", fremd-gesperrte Knoten visuell markiert).
+- get_workspace liefert collab-Settings (Poll-Intervalle in ms, Lease-Timeout,
+  Push-Flags); helper::collab_config() bündelt sie.
+- Neuer String editor:beingedited (EN/DE).
+
+### Verified
+- Jest 42/42 grün, tsc sauber. phpcs (geänderte PHP) 0/0. PHPUnit 68/885 grün.
+  ESLint auf init.js 0/0. init.min.js reproduzierbar. Bundle frisch gebaut.
+- HINWEIS: Das visuelle Zwei-Browser-Zusammenspiel (Presence/Locking im Look&Feel)
+  ist in der Sandbox nicht verifizierbar; die Logik ist hart getestet, die Optik
+  bestätigst du im Browser.

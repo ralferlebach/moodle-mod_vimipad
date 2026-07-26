@@ -87,6 +87,7 @@ class get_workspace extends external_api {
             'layoutjson' => $layoutjson,
             'nodes' => array_map([self::class, 'map_node'], $state['nodes']),
             'relations' => array_map([self::class, 'map_relation'], $state['relations']),
+            'collab' => helper::collab_config(),
         ];
     }
 
@@ -146,6 +147,15 @@ class get_workspace extends external_api {
                 'label' => new external_value(PARAM_TEXT, 'Relation label'),
                 'direction' => new external_value(PARAM_INT, 'Direction 0/1/2'),
             ])),
+            'collab' => new external_single_structure([
+                'pollinterval' => new external_value(PARAM_INT, 'Default poll interval (ms)'),
+                'polladaptive' => new external_value(PARAM_INT, '1 if adaptive polling is enabled'),
+                'pollmin' => new external_value(PARAM_INT, 'Minimum poll interval (ms)'),
+                'pollmax' => new external_value(PARAM_INT, 'Maximum poll interval (ms)'),
+                'leasetimeout' => new external_value(PARAM_INT, 'Lease timeout (s)'),
+                'pushenabled' => new external_value(PARAM_INT, '1 if push is enabled'),
+                'pushendpoint' => new external_value(PARAM_RAW, 'Push endpoint URL'),
+            ]),
         ]);
     }
 }

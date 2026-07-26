@@ -60,6 +60,7 @@ $string['editor:actions'] = 'Actions';
 $string['editor:add'] = 'Add';
 $string['editor:addnode'] = 'Add concept';
 $string['editor:addrelation'] = 'Add relation';
+$string['editor:beingedited'] = 'Being edited';
 $string['editor:canvasaria'] = 'Map canvas with draggable concepts';
 $string['editor:canvasplaceholder'] = 'The graphical canvas will appear here in a later version.';
 $string['editor:canvasview'] = 'Canvas';

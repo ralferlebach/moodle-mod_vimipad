@@ -36,6 +36,17 @@ export interface VimiRelation {
     direction: number;
 }
 
+/** Collaboration client configuration, sourced from plugin settings. */
+export interface CollabConfig {
+    pollinterval: number;
+    polladaptive: number;
+    pollmin: number;
+    pollmax: number;
+    leasetimeout: number;
+    pushenabled: number;
+    pushendpoint: string;
+}
+
 export interface WorkspaceState {
     workspaceid: number;
     revision: number;
@@ -44,6 +55,7 @@ export interface WorkspaceState {
     layoutjson: string;
     nodes: VimiNode[];
     relations: VimiRelation[];
+    collab?: CollabConfig;
 }
 
 /** A 2D position for a node on the canvas. */
@@ -54,6 +66,30 @@ export interface Point {
 
 /** Map of node stable id to its stored canvas position. */
 export type LayoutMap = Record<string, Point>;
+
+/** An active editing lease held by a collaborator (presence). */
+export interface Lease {
+    targettype: string;
+    targetstableid: string;
+    userid: number;
+    timeexpires: number;
+}
+
+/** A single operation returned by poll_changes. */
+export interface PolledOperation {
+    revision: number;
+    operationtype: string;
+    payloadjson: string;
+    userid: number;
+}
+
+/** The payload returned by the poll_changes external function. */
+export interface PollResult {
+    revision: number;
+    operations: PolledOperation[];
+    layoutjson: string;
+    leases: Lease[];
+}
 
 /** A transport that dispatches a single Moodle external function call. */
 export type ServiceTransport = (methodname: string, args: Record<string, unknown>) => Promise<unknown>;
