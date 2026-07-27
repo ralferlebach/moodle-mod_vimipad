@@ -37,7 +37,7 @@ export type EditorAction =
         content?: string; metadatajson?: string}
     | {kind: 'deleteNode'; stableid: string}
     | {kind: 'addRelation'; relation: VimiRelation}
-    | {kind: 'updateRelation'; stableid: string; label?: string; type?: string}
+    | {kind: 'updateRelation'; stableid: string; label?: string; type?: string; direction?: number}
     | {kind: 'deleteRelation'; stableid: string}
     | {kind: 'retargetRelation'; stableid: string; sourceid?: string; targetid?: string};
 
@@ -88,7 +88,8 @@ export function reduce(state: EditorState, action: EditorState | EditorAction): 
             return {
                 ...state,
                 relations: state.relations.map(r => r.stableid === act.stableid
-                    ? {...r, label: act.label ?? r.label, type: act.type ?? r.type}
+                    ? {...r, label: act.label ?? r.label, type: act.type ?? r.type,
+                        direction: act.direction ?? r.direction}
                     : r),
             };
         case 'deleteRelation':

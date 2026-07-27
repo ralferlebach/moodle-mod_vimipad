@@ -226,6 +226,11 @@ export function EditorApp(props: Props): React.ReactElement {
             () => dispatch({kind: 'updateRelation', stableid, label: label.trim()}));
     }, [runOperation]);
 
+    const changeDirection = useCallback(async (stableid: string, direction: number) => {
+        await runOperation('relation_update', {stableid, direction},
+            () => dispatch({kind: 'updateRelation', stableid, direction}));
+    }, [runOperation]);
+
     const retarget = useCallback(async (stableid: string, change: {sourceid?: string; targetid?: string}) => {
         const payload: Record<string, unknown> = {stableid};
         if (change.sourceid) {
@@ -425,6 +430,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         onChangeStyle={changeNodeStyle}
                         onDuplicateNode={duplicateNode}
                         onCreateRelation={createRelation}
+                        onChangeDirection={changeDirection}
                         onDeleteNode={deleteNode}
                         onDeleteRelation={deleteRelation}
                         onRenameNode={renameNode}

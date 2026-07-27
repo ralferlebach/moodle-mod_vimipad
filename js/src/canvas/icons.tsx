@@ -51,6 +51,12 @@ export const FA = {
     delete: 'fa-solid fa-trash',
     move: 'fa-solid fa-up-down-left-right',
     resize: 'fa-solid fa-up-right-and-down-left-from-center',
+    dirNone: 'fa-solid fa-minus',
+    dirLeft: 'fa-solid fa-arrow-left',
+    dirRight: 'fa-solid fa-arrow-right',
+    dirBoth: 'fa-solid fa-left-right',
+    reverse: 'fa-solid fa-right-left',
+    edit: 'fa-solid fa-pen-to-square',
 } as const;
 
 /**

@@ -39,6 +39,7 @@ import {LayoutMap, Point, Size, SizeMap} from '../types';
 import {clampShape, NodeShape} from '../canvas/shape_catalog';
 import {parseNodeStyle, TextStyle} from '../canvas/node_style';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
+import {FA, Icon} from '../canvas/icons';
 import {
     deletableTarget,
     initialInteraction,
@@ -47,6 +48,21 @@ import {
     isSelected,
     Target,
 } from '../canvas/interaction';
+
+/**
+ * Lightweight diagnostic logger. Enable in the browser console with
+ * `window.VIMIPAD_DEBUG = true` (disable with `= false`). Logs the edit/selection
+ * lifecycle so interaction bugs can be traced without a debugger.
+ *
+ * @param args Values to log.
+ */
+function vdbg(...args: unknown[]): void {
+    const w = typeof window !== 'undefined' ? (window as unknown as {VIMIPAD_DEBUG?: boolean}) : undefined;
+    if (w && w.VIMIPAD_DEBUG) {
+        // eslint-disable-next-line no-console
+        console.log('[vimipad]', new Date().toISOString().slice(11, 23), ...args);
+    }
+}
 
 interface Props {
     state: EditorState;
@@ -71,6 +87,8 @@ interface Props {
     onDuplicateNode?: (stableid: string) => void;
     /** Create a relation by dragging from a connector dock to another node. */
     onCreateRelation?: (sourceid: string, targetid: string) => void;
+    /** Set a relation's arrow direction (0 none, 1 forward, -1 reverse, 2 both). */
+    onChangeDirection?: (stableid: string, direction: number) => void;
     t: (key: string) => string;
     /** True if a node is held by another collaborator (renders as locked). */
     isLockedByOther?: (targettype: string, stableid: string) => boolean;
@@ -178,7 +196,7 @@ export function CanvasView(props: Props): React.ReactElement {
         state, layout, profile, sizes, disabled, onNodeMoved, onNodeResized,
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
-        onCreateRelation,
+        onCreateRelation, onChangeDirection,
     } = props;
     const svgRef = useRef<SVGSVGElement>(null);
     // Manual double-click detection: pointer capture on nodes swallows native dblclick.
@@ -255,11 +273,14 @@ export function CanvasView(props: Props): React.ReactElement {
     const onNodePointerDown = useCallback(async (event: React.PointerEvent, stableid: string, label: string) => {
         // Manual double-click: two quick clicks on the same node open the text editor.
         const now = Date.now();
-        const isDouble = lastNodeClick.current.id === stableid && now - lastNodeClick.current.t < 350;
+        const prev = lastNodeClick.current;
+        const isDouble = prev.id === stableid && now - prev.t < 350;
         lastNodeClick.current = {id: stableid, t: now};
+        vdbg('node-pointerdown', stableid, 'isDouble=' + isDouble, 'dt=' + (now - prev.t));
         if (isDouble && !disabled) {
             lastNodeClick.current = {id: '', t: 0};
             event.stopPropagation();
+            vdbg('node-startEditing', stableid);
             setDragId(null);
             setDragPos(null);
             setMoved(false);
@@ -479,6 +500,7 @@ export function CanvasView(props: Props): React.ReactElement {
     // Commit the current inline edit to the parent.
     const commitEdit = useCallback(() => {
         const target = interaction.editing;
+        vdbg('commitEdit', target, JSON.stringify(editValue));
         if (target) {
             if (target.kind === 'node' && onRenameNode) {
                 onRenameNode(target.id, editValue);
@@ -488,6 +510,26 @@ export function CanvasView(props: Props): React.ReactElement {
         }
         dispatchInteraction({kind: 'stopEditing'});
     }, [interaction.editing, editValue, onRenameNode, onRenameRelation]);
+
+    // Commit the inline editor when the user clicks outside it (safety zone: the
+    // field itself and the dock are excluded). Replaces onBlur, which was racing
+    // with the browser focusing the SVG on click and closing the editor instantly.
+    useEffect(() => {
+        if (!interaction.editing) {
+            return undefined;
+        }
+        vdbg('editing-active', interaction.editing);
+        const onDocDown = (event: PointerEvent): void => {
+            const el = event.target as Element | null;
+            if (el && el.closest && el.closest('.vimipad-canvas-edit, .vimipad-canvas-relation-edit, .vimipad-node-dock')) {
+                return;
+            }
+            vdbg('outside-pointerdown -> commit');
+            commitEdit();
+        };
+        document.addEventListener('pointerdown', onDocDown, true);
+        return () => document.removeEventListener('pointerdown', onDocDown, true);
+    }, [interaction.editing, commitEdit]);
 
     // Canvas-level keyboard: ESC clears, Del removes the selected element.
     const onKeyDown = useCallback((event: React.KeyboardEvent) => {
@@ -571,15 +613,14 @@ export function CanvasView(props: Props): React.ReactElement {
                 onPointerDown={onBackgroundPointerDown}
             />
 
+            {/* Layer 1 (bottom): connector lines and their hit targets. */}
             {state.relations.map(rel => {
                 const from = positionOf(rel.sourceid);
                 const to = positionOf(rel.targetid);
-                const midX = (from.x + to.x) / 2;
-                const midY = (from.y + to.y) / 2;
                 const selected = isSelected(interaction, 'relation', rel.stableid);
-                const editing = isEditing(interaction, 'relation', rel.stableid);
+                const d = rel.direction ?? 0;
                 return (
-                    <g key={rel.stableid} className="vimipad-canvas-relation">
+                    <g key={`line-${rel.stableid}`} className="vimipad-canvas-relation">
                         <line
                             x1={from.x}
                             y1={from.y}
@@ -587,9 +628,9 @@ export function CanvasView(props: Props): React.ReactElement {
                             y2={to.y}
                             stroke={selected ? selColor : 'currentColor'}
                             strokeWidth={selected ? 2.5 : 1.5}
-                            markerEnd={rel.direction !== 0 ? 'url(#vimipad-arrow)' : undefined}
+                            markerStart={d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined}
+                            markerEnd={d === 1 || d === 2 ? 'url(#vimipad-arrow)' : undefined}
                         />
-                        {/* Wide transparent hit line so the thin connector is easy to click. */}
                         <line
                             x1={from.x}
                             y1={from.y}
@@ -600,6 +641,21 @@ export function CanvasView(props: Props): React.ReactElement {
                             style={{cursor: 'pointer'}}
                             onPointerDown={e => selectRelation(e, rel.stableid)}
                         />
+                    </g>
+                );
+            })}
+
+            {/* Layer 2 (middle): connector labels, inline editors and the direction dock. */}
+            {state.relations.map(rel => {
+                const from = positionOf(rel.sourceid);
+                const to = positionOf(rel.targetid);
+                const midX = (from.x + to.x) / 2;
+                const midY = (from.y + to.y) / 2;
+                const selected = isSelected(interaction, 'relation', rel.stableid);
+                const editing = isEditing(interaction, 'relation', rel.stableid);
+                const d = rel.direction ?? 0;
+                return (
+                    <g key={`lbl-${rel.stableid}`} className="vimipad-canvas-relation">
                         {editing ? (
                             <foreignObject x={midX - 80} y={midY - 18} width={160} height={34}>
                                 <input
@@ -608,7 +664,8 @@ export function CanvasView(props: Props): React.ReactElement {
                                     autoFocus
                                     onChange={e => setEditValue(e.target.value)}
                                     onKeyDown={onEditKeyDown}
-                                    onBlur={commitEdit}
+                                    onFocus={() => vdbg('relation-input focus', rel.stableid)}
+                                    onBlur={() => vdbg('relation-input blur', rel.stableid)}
                                     onPointerDown={e => e.stopPropagation()}
                                 />
                             </foreignObject>
@@ -628,25 +685,60 @@ export function CanvasView(props: Props): React.ReactElement {
                                 {rel.label}
                             </text>
                         ))}
-                        {selected && !disabled && !editing && onDeleteRelation && (
+                        {selected && !disabled && !editing && onChangeDirection && (
                             <foreignObject
                                 x={midX - 150}
                                 y={midY + 10}
                                 width={300}
-                                height={90}
+                                height={70}
                                 style={{overflow: 'visible'}}
                             >
                                 <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
-                                    <NodeFormatToolbar
-                                        kind="relation"
-                                        target={rel}
-                                        profile={profile}
-                                        disabled={disabled}
-                                        onChangeStyle={() => undefined}
-                                        onDelete={() => onDeleteRelation(rel.stableid)}
-                                        onEditText={() => startRelationEdit(rel.stableid, rel.label)}
-                                        t={t}
-                                    />
+                                    <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:relation')}>
+                                        <div className="vimipad-node-dock-row">
+                                            <button
+                                                type="button"
+                                                className={`vimipad-dock-btn${d === 0 ? ' active' : ''}`}
+                                                aria-pressed={d === 0}
+                                                title={t('editor:dir_none')}
+                                                aria-label={t('editor:dir_none')}
+                                                onClick={() => onChangeDirection(rel.stableid, 0)}
+                                            ><Icon name={FA.dirNone} /></button>
+                                            <button
+                                                type="button"
+                                                className={`vimipad-dock-btn${d === -1 ? ' active' : ''}`}
+                                                aria-pressed={d === -1}
+                                                title={t('editor:dir_left')}
+                                                aria-label={t('editor:dir_left')}
+                                                onClick={() => onChangeDirection(rel.stableid, -1)}
+                                            ><Icon name={FA.dirLeft} /></button>
+                                            <button
+                                                type="button"
+                                                className={`vimipad-dock-btn${d === 1 ? ' active' : ''}`}
+                                                aria-pressed={d === 1}
+                                                title={t('editor:dir_right')}
+                                                aria-label={t('editor:dir_right')}
+                                                onClick={() => onChangeDirection(rel.stableid, 1)}
+                                            ><Icon name={FA.dirRight} /></button>
+                                            <button
+                                                type="button"
+                                                className={`vimipad-dock-btn${d === 2 ? ' active' : ''}`}
+                                                aria-pressed={d === 2}
+                                                title={t('editor:dir_both')}
+                                                aria-label={t('editor:dir_both')}
+                                                onClick={() => onChangeDirection(rel.stableid, 2)}
+                                            ><Icon name={FA.dirBoth} /></button>
+                                            {onDeleteRelation && (
+                                                <button
+                                                    type="button"
+                                                    className="vimipad-dock-btn vimipad-dock-danger"
+                                                    title={t('editor:fmt_delete')}
+                                                    aria-label={t('editor:fmt_delete')}
+                                                    onClick={() => onDeleteRelation(rel.stableid)}
+                                                ><Icon name={FA.delete} /></button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </foreignObject>
                         )}
@@ -706,7 +798,8 @@ export function CanvasView(props: Props): React.ReactElement {
                                     autoFocus
                                     onChange={e => setEditValue(e.target.value)}
                                     onKeyDown={onEditKeyDown}
-                                    onBlur={commitEdit}
+                                    onFocus={() => vdbg('node-textarea focus', node.stableid)}
+                                    onBlur={() => vdbg('node-textarea blur', node.stableid)}
                                     onPointerDown={e => e.stopPropagation()}
                                     style={{width: '100%', height: '100%', resize: 'none', textAlign: 'center', border: 'none', background: 'transparent'}}
                                 />
