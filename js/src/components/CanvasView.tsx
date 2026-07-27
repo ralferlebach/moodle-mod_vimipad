@@ -91,6 +91,20 @@ const MAX_H = 240;
 const HANDLE = 9;
 /** Finger-friendly hit area around each corner handle (touch targets). */
 const HANDLE_HIT = 26;
+// Pan/zoom viewport limits: view width can shrink to a 4x zoom-in, grow to full canvas.
+const MIN_VIEW_W = CANVAS_WIDTH * 0.25;
+const MAX_VIEW_W = CANVAS_WIDTH;
+const VIEW_ASPECT = CANVAS_HEIGHT / CANVAS_WIDTH;
+
+/** Keep the viewport within the canvas bounds. */
+function clampView(v: {x: number; y: number; w: number; h: number}): {x: number; y: number; w: number; h: number} {
+    return {
+        w: v.w,
+        h: v.h,
+        x: Math.min(Math.max(0, v.x), Math.max(0, CANVAS_WIDTH - v.w)),
+        y: Math.min(Math.max(0, v.y), Math.max(0, CANVAS_HEIGHT - v.h)),
+    };
+}
 /** Base label font size, in canvas units; each size step adds 2. */
 const BASE_FONT = 13;
 
@@ -167,6 +181,16 @@ export function CanvasView(props: Props): React.ReactElement {
         onCreateRelation,
     } = props;
     const svgRef = useRef<SVGSVGElement>(null);
+    // Manual double-click detection: pointer capture on nodes swallows native dblclick.
+    const lastNodeClick = useRef<{id: string; t: number}>({id: '', t: 0});
+    // Pan/zoom viewport (SVG viewBox) plus a ref mirror for use inside gesture handlers.
+    const [view, setView] = useState({x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT});
+    const viewRef = useRef(view);
+    useEffect(() => { viewRef.current = view; }, [view]);
+    // Active pointers on the background, for one-finger pan and two-finger pinch.
+    const pointers = useRef<Map<number, {x: number; y: number}>>(new Map());
+    const panStart = useRef<{cx: number; cy: number; vx: number; vy: number} | null>(null);
+    const pinchDist = useRef<number | null>(null);
     const [dragId, setDragId] = useState<string | null>(null);
     const [dragPos, setDragPos] = useState<Point | null>(null);
     const [moved, setMoved] = useState(false);
@@ -221,15 +245,28 @@ export function CanvasView(props: Props): React.ReactElement {
             return {x: 0, y: 0};
         }
         const rect = svg.getBoundingClientRect();
-        const scaleX = CANVAS_WIDTH / rect.width;
-        const scaleY = CANVAS_HEIGHT / rect.height;
+        const v = viewRef.current;
         return {
-            x: (clientX - rect.left) * scaleX,
-            y: (clientY - rect.top) * scaleY,
+            x: v.x + (clientX - rect.left) / rect.width * v.w,
+            y: v.y + (clientY - rect.top) / rect.height * v.h,
         };
     }, []);
 
-    const onNodePointerDown = useCallback(async (event: React.PointerEvent, stableid: string) => {
+    const onNodePointerDown = useCallback(async (event: React.PointerEvent, stableid: string, label: string) => {
+        // Manual double-click: two quick clicks on the same node open the text editor.
+        const now = Date.now();
+        const isDouble = lastNodeClick.current.id === stableid && now - lastNodeClick.current.t < 350;
+        lastNodeClick.current = {id: stableid, t: now};
+        if (isDouble && !disabled) {
+            lastNodeClick.current = {id: '', t: 0};
+            event.stopPropagation();
+            setDragId(null);
+            setDragPos(null);
+            setMoved(false);
+            setEditValue(label);
+            dispatchInteraction({kind: 'startEditing', target: {kind: 'node', id: stableid}});
+            return;
+        }
         // A click always selects the node (and reveals its affordances).
         dispatchInteraction({kind: 'select', target: {kind: 'node', id: stableid}});
         if (disabled || lockedByOther(stableid)) {
@@ -269,6 +306,41 @@ export function CanvasView(props: Props): React.ReactElement {
     }, [disabled, lockedByOther, onNodeResized, beginEdit, sizeOf]);
 
     const onPointerMove = useCallback((event: React.PointerEvent) => {
+        // Background gesture: one-finger pan, two-finger pinch-zoom.
+        if (pointers.current.has(event.pointerId)) {
+            pointers.current.set(event.pointerId, {x: event.clientX, y: event.clientY});
+            const svg = svgRef.current;
+            if (pointers.current.size >= 2 && svg) {
+                const pts = [...pointers.current.values()];
+                const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+                const midX = (pts[0].x + pts[1].x) / 2;
+                const midY = (pts[0].y + pts[1].y) / 2;
+                if (pinchDist.current && dist > 0) {
+                    const ratio = pinchDist.current / dist;
+                    const rect = svg.getBoundingClientRect();
+                    setView(v => {
+                        const fx = (midX - rect.left) / rect.width;
+                        const fy = (midY - rect.top) / rect.height;
+                        const cx = v.x + fx * v.w;
+                        const cy = v.y + fy * v.h;
+                        const nw = Math.min(MAX_VIEW_W, Math.max(MIN_VIEW_W, v.w * ratio));
+                        const nh = nw * VIEW_ASPECT;
+                        return clampView({x: cx - fx * nw, y: cy - fy * nh, w: nw, h: nh});
+                    });
+                }
+                pinchDist.current = dist;
+                return;
+            }
+            if (panStart.current && svg) {
+                const rect = svg.getBoundingClientRect();
+                const v = viewRef.current;
+                const dx = (event.clientX - panStart.current.cx) / rect.width * v.w;
+                const dy = (event.clientY - panStart.current.cy) / rect.height * v.h;
+                const start = panStart.current;
+                setView(cur => clampView({...cur, x: start.vx - dx, y: start.vy - dy}));
+                return;
+            }
+        }
         if (connectFrom !== null) {
             setConnectTo(toSvgPoint(event.clientX, event.clientY));
             return;
@@ -288,7 +360,18 @@ export function CanvasView(props: Props): React.ReactElement {
         setDragPos(clampToCanvas(toSvgPoint(event.clientX, event.clientY)));
     }, [connectFrom, resizeId, dragId, positionOf, toSvgPoint]);
 
-    const onPointerUp = useCallback(() => {
+    const onPointerUp = useCallback((event: React.PointerEvent) => {
+        // Release a background gesture pointer.
+        if (pointers.current.has(event.pointerId)) {
+            pointers.current.delete(event.pointerId);
+            if (pointers.current.size < 2) {
+                pinchDist.current = null;
+            }
+            if (pointers.current.size === 0) {
+                panStart.current = null;
+            }
+            return;
+        }
         if (connectFrom !== null) {
             const target = connectTo ? nodeAt(connectTo) : null;
             if (target && target !== connectFrom && onCreateRelation) {
@@ -332,6 +415,48 @@ export function CanvasView(props: Props): React.ReactElement {
         setConnectFrom(stableid);
         setConnectTo(toSvgPoint(event.clientX, event.clientY));
     }, [disabled, lockedByOther, onCreateRelation, toSvgPoint]);
+
+    // Pointer-down on empty canvas: clear selection and start a pan (or pinch if two fingers).
+    const onBackgroundPointerDown = useCallback((event: React.PointerEvent) => {
+        dispatchInteraction({kind: 'clear'});
+        const svg = svgRef.current;
+        if (!svg) {
+            return;
+        }
+        svg.setPointerCapture(event.pointerId);
+        pointers.current.set(event.pointerId, {x: event.clientX, y: event.clientY});
+        if (pointers.current.size >= 2) {
+            panStart.current = null;
+            const pts = [...pointers.current.values()];
+            pinchDist.current = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        } else {
+            panStart.current = {cx: event.clientX, cy: event.clientY, vx: viewRef.current.x, vy: viewRef.current.y};
+        }
+    }, []);
+
+    // Wheel: zoom around the cursor. Registered natively so preventDefault is honoured.
+    useEffect(() => {
+        const svg = svgRef.current;
+        if (!svg) {
+            return undefined;
+        }
+        const onWheel = (event: WheelEvent): void => {
+            event.preventDefault();
+            const rect = svg.getBoundingClientRect();
+            const factor = event.deltaY > 0 ? 1.1 : 1 / 1.1;
+            setView(v => {
+                const fx = (event.clientX - rect.left) / rect.width;
+                const fy = (event.clientY - rect.top) / rect.height;
+                const cx = v.x + fx * v.w;
+                const cy = v.y + fy * v.h;
+                const nw = Math.min(MAX_VIEW_W, Math.max(MIN_VIEW_W, v.w * factor));
+                const nh = nw * VIEW_ASPECT;
+                return clampView({x: cx - fx * nw, y: cy - fy * nh, w: nw, h: nh});
+            });
+        };
+        svg.addEventListener('wheel', onWheel, {passive: false});
+        return () => svg.removeEventListener('wheel', onWheel);
+    }, []);
 
     // Begin inline editing of a node's label (double-click on its text).
     const startNodeEdit = useCallback((stableid: string, label: string) => {
@@ -411,10 +536,11 @@ export function CanvasView(props: Props): React.ReactElement {
         <svg
             ref={svgRef}
             className="vimipad-canvas border rounded"
-            viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
+            viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
             width="100%"
             role="img"
             tabIndex={0}
+            style={{touchAction: 'none'}}
             aria-label={t('editor:canvasaria')}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
@@ -434,14 +560,15 @@ export function CanvasView(props: Props): React.ReactElement {
                 </marker>
             </defs>
 
-            {/* Background: a click on empty canvas clears the selection. */}
+            {/* Background: pan/pinch surface; a tap also clears the selection. */}
             <rect
                 x={0}
                 y={0}
                 width={CANVAS_WIDTH}
                 height={CANVAS_HEIGHT}
                 fill="transparent"
-                onPointerDown={() => dispatchInteraction({kind: 'clear'})}
+                style={{touchAction: 'none', cursor: 'grab'}}
+                onPointerDown={onBackgroundPointerDown}
             />
 
             {state.relations.map(rel => {
@@ -542,15 +669,16 @@ export function CanvasView(props: Props): React.ReactElement {
                 // Hover/selection reveals the quick affordances (resize corners, connector docks).
                 const affordances = (selected || hovered) && !disabled && !otherLock && !editing;
                 const canResize = !!onNodeResized && affordances;
-                // The format dock stays open while the node is selected or being edited.
-                const dockVisible = (selected || editing) && !disabled && !otherLock;
+                // The format dock shows while selected; hidden during edit so the
+                // inline textarea keeps focus (matching the working relation editor).
+                const dockVisible = selected && !editing && !disabled && !otherLock;
                 return (
                     <g
                         key={node.stableid}
                         className={`vimipad-canvas-node${otherLock ? ' vimipad-canvas-node-locked' : ''}`
                             + `${selected ? ' vimipad-canvas-node-selected' : ''}`}
                         transform={`translate(${pos.x}, ${pos.y})`}
-                        onPointerDown={e => onNodePointerDown(e, node.stableid)}
+                        onPointerDown={e => onNodePointerDown(e, node.stableid, node.label)}
                         onPointerEnter={() => setHoveredId(node.stableid)}
                         onPointerLeave={() => setHoveredId(cur => (cur === node.stableid ? null : cur))}
                         style={{cursor: disabled || otherLock ? 'not-allowed' : 'move'}}
@@ -671,7 +799,6 @@ export function CanvasView(props: Props): React.ReactElement {
                                         target={node}
                                         profile={profile}
                                         disabled={disabled}
-                                        defaultPanel={editing ? 'text' : undefined}
                                         onChangeStyle={m => onChangeStyle(node.stableid, m)}
                                         onDuplicate={() => onDuplicateNode && onDuplicateNode(node.stableid)}
                                         onDelete={() => onDeleteNode && onDeleteNode(node.stableid)}
