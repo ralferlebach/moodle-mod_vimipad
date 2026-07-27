@@ -54,3 +54,27 @@
     padding: 0;
     box-sizing: border-box;
 }
+
+/* Selected node: animated "marching ants" outline (move affordance). */
+.vimipad-canvas-seloutline {
+    pointer-events: none;
+    animation: vimipad-ants 0.6s linear infinite;
+}
+
+@keyframes vimipad-ants {
+    to {
+        stroke-dashoffset: -10;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vimipad-canvas-seloutline {
+        animation: none;
+    }
+}
+
+/* Corner resize handles on a selected node. */
+.vimipad-canvas-handle {
+    stroke: var(--vimipad-canvas-bg, #fff);
+    stroke-width: 1;
+}

@@ -272,13 +272,19 @@ jobs:
 
   # ── 3. Behat ─────────────────────────────────────────────────────────────
   behat:
-    name: "Behat (${{ matrix.moodle }} / PHP 8.2 / Chrome)"
+    name: "Behat (${{ matrix.moodle }} / PHP ${{ matrix.php }} / Chrome)"
     runs-on: ubuntu-24.04
     needs: [lint-php, lint-js]
     strategy:
       fail-fast: false
+      # PHP must satisfy each Moodle core's minimum: 4.5/5.0 run on 8.2,
+      # 5.2 requires PHP 8.3+. A single hard-coded PHP made the 5.2 job die at
+      # "moodle-plugin-ci install" (composer: "requires php >=8.3.0").
       matrix:
-        moodle: [MOODLE_405_STABLE, MOODLE_500_STABLE, MOODLE_502_STABLE]
+        include:
+          - { moodle: MOODLE_405_STABLE, php: '8.2' }
+          - { moodle: MOODLE_500_STABLE, php: '8.2' }
+          - { moodle: MOODLE_502_STABLE, php: '8.3' }
 
     services:
       mariadb:
@@ -298,7 +304,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: ${{ matrix.php }}
           extensions: mbstring, pdo, pdo_mysql, gd, xml, zip, intl
           ini-values: max_input_vars=5000
           coverage: none

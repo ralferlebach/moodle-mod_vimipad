@@ -102,6 +102,9 @@ class get_workspace extends external_api {
             'stableid' => $node->stableid,
             'type' => $node->type,
             'label' => (string) $node->label,
+            'content' => (string) ($node->content ?? ''),
+            'contentformat' => (int) ($node->contentformat ?? 0),
+            'metadatajson' => (string) ($node->metadatajson ?? ''),
         ];
     }
 
@@ -119,6 +122,7 @@ class get_workspace extends external_api {
             'type' => $relation->type,
             'label' => (string) $relation->label,
             'direction' => (int) $relation->direction,
+            'metadatajson' => (string) ($relation->metadatajson ?? ''),
         ];
     }
 
@@ -138,6 +142,9 @@ class get_workspace extends external_api {
                 'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable node id'),
                 'type' => new external_value(PARAM_ALPHANUMEXT, 'Node type'),
                 'label' => new external_value(PARAM_TEXT, 'Node label'),
+                'content' => new external_value(PARAM_RAW, 'Rich node content (HTML), empty if none'),
+                'contentformat' => new external_value(PARAM_INT, 'Content format (1 = HTML)'),
+                'metadatajson' => new external_value(PARAM_RAW, 'Style/profile metadata JSON, empty if none'),
             ])),
             'relations' => new external_multiple_structure(new external_single_structure([
                 'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable relation id'),
@@ -146,6 +153,7 @@ class get_workspace extends external_api {
                 'type' => new external_value(PARAM_ALPHANUMEXT, 'Relation type'),
                 'label' => new external_value(PARAM_TEXT, 'Relation label'),
                 'direction' => new external_value(PARAM_INT, 'Direction 0/1/2'),
+                'metadatajson' => new external_value(PARAM_RAW, 'Style/profile metadata JSON, empty if none'),
             ])),
             'collab' => new external_single_structure([
                 'pollinterval' => new external_value(PARAM_INT, 'Default poll interval (ms)'),

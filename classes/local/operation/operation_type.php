@@ -89,9 +89,13 @@ class operation_type {
                 self::require_string($payload, 'type');
                 self::optional_string($payload, 'stableid');
                 self::optional_string($payload, 'label');
+                self::optional_string($payload, 'content');
+                self::validate_node_metadata($payload);
                 break;
             case self::NODE_UPDATE:
                 self::require_string($payload, 'stableid');
+                self::optional_string($payload, 'content');
+                self::validate_node_metadata($payload);
                 break;
             case self::NODE_DELETE:
                 self::require_string($payload, 'stableid');
@@ -119,6 +123,23 @@ class operation_type {
             default:
                 throw new \invalid_parameter_exception('Unknown operation type: ' . $type);
         }
+    }
+
+    /**
+     * Validate an optional node metadatajson style payload, if present.
+     *
+     * @param array $payload The payload.
+     * @return void
+     * @throws \invalid_parameter_exception
+     */
+    private static function validate_node_metadata(array $payload): void {
+        if (!array_key_exists('metadatajson', $payload)) {
+            return;
+        }
+        if (!is_string($payload['metadatajson'])) {
+            throw new \invalid_parameter_exception('Invalid field type: metadatajson');
+        }
+        \mod_vimipad\local\style\node_style::validate_metadata($payload['metadatajson']);
     }
 
     /**

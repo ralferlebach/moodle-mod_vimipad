@@ -16,12 +16,16 @@
 /**
  * The graphical canvas view.
  *
- * Renders nodes as boxes and relations as connectors on an SVG surface. Nodes
- * can be dragged (position committed on drop). A click selects an element and
- * reveals its affordances; ESC clears the selection; Del removes the selected
- * element; a double-click on a node's text opens inline editing (Enter commits,
+ * Renders nodes as shaped boxes (rounded rectangle, rectangle or ellipse,
+ * according to the node's stored style clamped to the active profile) and
+ * relations as connectors on an SVG surface. A selected node shows a dashed
+ * "marching ants" outline (move affordance) and four corner handles (resize
+ * affordance). Nodes can be dragged to move and their corners dragged to resize
+ * (both non-revisioned layout operations, committed on drop). A click selects an
+ * element; ESC clears the selection; Del removes the selected element; a
+ * double-click on a node's text opens inline editing (Enter commits,
  * Shift+Enter inserts a newline). The pure interaction rules live in
- * ../canvas/interaction.
+ * ../canvas/interaction; shape and style parsing live in ../canvas/*.
  *
  * @module     mod_vimipad/components/CanvasView
  * @copyright  2026 Ralf Erlebach
@@ -31,7 +35,9 @@
 import React, {useCallback, useReducer, useRef, useState} from 'react';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas} from '../graph/autolayout';
 import {EditorState} from '../store/reducer';
-import {LayoutMap, Point} from '../types';
+import {LayoutMap, Point, Size, SizeMap} from '../types';
+import {clampShape, NodeShape} from '../canvas/shape_catalog';
+import {parseNodeStyle} from '../canvas/node_style';
 import {
     deletableTarget,
     initialInteraction,
@@ -43,8 +49,14 @@ import {
 interface Props {
     state: EditorState;
     layout: LayoutMap;
+    /** Active diagram profile; decides the default and allowed node shapes. */
+    profile: string;
+    /** Stored manual node sizes; nodes without one use a label-derived size. */
+    sizes: SizeMap;
     disabled: boolean;
     onNodeMoved: (stableid: string, point: Point) => void;
+    /** Commit a manual resize (layout channel, like move). */
+    onNodeResized?: (stableid: string, size: Size) => void;
     onDeleteNode?: (stableid: string) => void;
     onDeleteRelation?: (stableid: string) => void;
     onRenameNode?: (stableid: string, label: string) => void;
@@ -58,8 +70,53 @@ interface Props {
     endEdit?: (targettype: string, stableid: string) => Promise<void>;
 }
 
-/** Width of a node box for the given label. */
+/** Default node box height when no manual size is stored. */
+const DEFAULT_NODE_HEIGHT = 40;
+/** Resize bounds, kept within the canvas. */
+const MIN_W = 60;
+const MIN_H = 32;
+const MAX_W = 360;
+const MAX_H = 240;
+/** Size of a corner resize handle, in canvas units. */
+const HANDLE = 9;
+
+/** Default width of a node box for the given label. */
 const nodeWidth = (label: string): number => Math.max(70, label.length * 8 + 20);
+
+/**
+ * Clamp a candidate size to the accepted resize bounds.
+ *
+ * @param w Candidate width.
+ * @param h Candidate height.
+ * @returns The clamped size.
+ */
+function clampSize(w: number, h: number): Size {
+    return {
+        w: Math.max(MIN_W, Math.min(MAX_W, Math.round(w))),
+        h: Math.max(MIN_H, Math.min(MAX_H, Math.round(h))),
+    };
+}
+
+/**
+ * Render the outline element for a shape at the origin (node group is centred).
+ *
+ * @param shape The node shape.
+ * @param w The box width.
+ * @param h The box height.
+ * @param extra Extra SVG props (fill, stroke, class …).
+ * @returns The shape element.
+ */
+function shapeElement(
+    shape: NodeShape,
+    w: number,
+    h: number,
+    extra: React.SVGProps<SVGRectElement & SVGEllipseElement>
+): React.ReactElement {
+    if (shape === 'ellipse') {
+        return <ellipse cx={0} cy={0} rx={w / 2} ry={h / 2} {...extra} />;
+    }
+    return <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={shape === 'roundrect' ? 10 : 0} {...extra} />;
+}
 
 /**
  * Render the SVG canvas.
@@ -69,13 +126,16 @@ const nodeWidth = (label: string): number => Math.max(70, label.length * 8 + 20)
  */
 export function CanvasView(props: Props): React.ReactElement {
     const {
-        state, layout, disabled, onNodeMoved, onDeleteNode, onDeleteRelation,
-        onRenameNode, onRenameRelation, t, isLockedByOther, beginEdit, endEdit,
+        state, layout, profile, sizes, disabled, onNodeMoved, onNodeResized,
+        onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
+        isLockedByOther, beginEdit, endEdit,
     } = props;
     const svgRef = useRef<SVGSVGElement>(null);
     const [dragId, setDragId] = useState<string | null>(null);
     const [dragPos, setDragPos] = useState<Point | null>(null);
     const [moved, setMoved] = useState(false);
+    const [resizeId, setResizeId] = useState<string | null>(null);
+    const [resizeSize, setResizeSize] = useState<Size | null>(null);
     const [interaction, dispatchInteraction] = useReducer(interactionReduce, initialInteraction);
     const [editValue, setEditValue] = useState('');
 
@@ -89,6 +149,13 @@ export function CanvasView(props: Props): React.ReactElement {
         return layout[stableid] ?? {x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2};
     }, [dragId, dragPos, layout]);
 
+    const sizeOf = useCallback((stableid: string, label: string): Size => {
+        if (resizeId === stableid && resizeSize) {
+            return resizeSize;
+        }
+        return sizes[stableid] ?? {w: nodeWidth(label), h: DEFAULT_NODE_HEIGHT};
+    }, [resizeId, resizeSize, sizes]);
+
     const toSvgPoint = useCallback((clientX: number, clientY: number): Point => {
         const svg = svgRef.current;
         if (!svg) {
@@ -97,10 +164,10 @@ export function CanvasView(props: Props): React.ReactElement {
         const rect = svg.getBoundingClientRect();
         const scaleX = CANVAS_WIDTH / rect.width;
         const scaleY = CANVAS_HEIGHT / rect.height;
-        return clampToCanvas({
+        return {
             x: (clientX - rect.left) * scaleX,
             y: (clientY - rect.top) * scaleY,
-        });
+        };
     }, []);
 
     const onNodePointerDown = useCallback(async (event: React.PointerEvent, stableid: string) => {
@@ -119,19 +186,57 @@ export function CanvasView(props: Props): React.ReactElement {
         event.preventDefault();
         (event.target as Element).setPointerCapture(event.pointerId);
         setDragId(stableid);
-        setDragPos(positionOf(stableid));
+        setDragPos(clampToCanvas(positionOf(stableid)));
         setMoved(false);
     }, [disabled, lockedByOther, beginEdit, positionOf]);
 
+    const onHandlePointerDown = useCallback(async (
+        event: React.PointerEvent, stableid: string, label: string
+    ) => {
+        event.stopPropagation();
+        if (disabled || lockedByOther(stableid) || !onNodeResized) {
+            return;
+        }
+        if (beginEdit) {
+            const granted = await beginEdit('node', stableid);
+            if (!granted) {
+                return;
+            }
+        }
+        event.preventDefault();
+        (event.target as Element).setPointerCapture(event.pointerId);
+        setResizeId(stableid);
+        setResizeSize(sizeOf(stableid, label));
+    }, [disabled, lockedByOther, onNodeResized, beginEdit, sizeOf]);
+
     const onPointerMove = useCallback((event: React.PointerEvent) => {
+        if (resizeId !== null) {
+            // Centre-anchored resize: the box grows symmetrically about its
+            // position, so a drag from any corner behaves the same.
+            const centre = positionOf(resizeId);
+            const p = toSvgPoint(event.clientX, event.clientY);
+            setResizeSize(clampSize(2 * Math.abs(p.x - centre.x), 2 * Math.abs(p.y - centre.y)));
+            return;
+        }
         if (dragId === null) {
             return;
         }
         setMoved(true);
-        setDragPos(toSvgPoint(event.clientX, event.clientY));
-    }, [dragId, toSvgPoint]);
+        setDragPos(clampToCanvas(toSvgPoint(event.clientX, event.clientY)));
+    }, [resizeId, dragId, positionOf, toSvgPoint]);
 
     const onPointerUp = useCallback(() => {
+        if (resizeId !== null) {
+            if (resizeSize && onNodeResized) {
+                onNodeResized(resizeId, resizeSize);
+            }
+            if (endEdit) {
+                void endEdit('node', resizeId);
+            }
+            setResizeId(null);
+            setResizeSize(null);
+            return;
+        }
         if (dragId !== null && dragPos && moved) {
             onNodeMoved(dragId, dragPos);
         }
@@ -141,7 +246,7 @@ export function CanvasView(props: Props): React.ReactElement {
         setDragId(null);
         setDragPos(null);
         setMoved(false);
-    }, [dragId, dragPos, moved, onNodeMoved, endEdit]);
+    }, [resizeId, resizeSize, onNodeResized, dragId, dragPos, moved, onNodeMoved, endEdit]);
 
     // Begin inline editing of a node's label (double-click on its text).
     const startNodeEdit = useCallback((stableid: string, label: string) => {
@@ -294,32 +399,42 @@ export function CanvasView(props: Props): React.ReactElement {
 
             {state.nodes.map(node => {
                 const pos = positionOf(node.stableid);
-                const width = nodeWidth(node.label);
+                const {w, h} = sizeOf(node.stableid, node.label);
                 const otherLock = lockedByOther(node.stableid);
                 const selected = isSelected(interaction, 'node', node.stableid);
                 const editing = isEditing(interaction, 'node', node.stableid);
+                const style = parseNodeStyle(node.metadatajson);
+                const shape = clampShape(profile, style.shape);
+                const fill = otherLock
+                    ? 'var(--vimipad-node-locked-fill, #f3f4f6)'
+                    : (style.fill ?? 'var(--vimipad-node-fill, #eef2ff)');
+                const canResize = !!onNodeResized && selected && !disabled && !otherLock && !editing;
                 return (
                     <g
                         key={node.stableid}
-                        className={`vimipad-canvas-node${otherLock ? ' vimipad-canvas-node-locked' : ''}`}
+                        className={`vimipad-canvas-node${otherLock ? ' vimipad-canvas-node-locked' : ''}`
+                            + `${selected ? ' vimipad-canvas-node-selected' : ''}`}
                         transform={`translate(${pos.x}, ${pos.y})`}
                         onPointerDown={e => onNodePointerDown(e, node.stableid)}
-                        style={{cursor: disabled || otherLock ? 'not-allowed' : 'grab'}}
+                        style={{cursor: disabled || otherLock ? 'not-allowed' : 'move'}}
                         aria-disabled={otherLock}
                     >
-                        <rect
-                            x={-width / 2}
-                            y={-16}
-                            width={width}
-                            height={32}
-                            rx={6}
-                            fill={otherLock ? 'var(--vimipad-node-locked-fill, #f3f4f6)' : 'var(--vimipad-node-fill, #eef2ff)'}
-                            stroke={selected ? selColor : 'currentColor'}
-                            strokeWidth={selected ? 2.5 : 1}
-                            strokeDasharray={otherLock ? '4 2' : undefined}
-                        />
+                        {shapeElement(shape, w, h, {
+                            fill,
+                            stroke: selected ? selColor : 'currentColor',
+                            strokeWidth: selected ? 2.5 : 1,
+                            strokeDasharray: otherLock ? '4 2' : undefined,
+                        })}
+                        {/* Marching-ants move affordance for the selected node. */}
+                        {selected && !otherLock && shapeElement(shape, w + 6, h + 6, {
+                            className: 'vimipad-canvas-seloutline',
+                            fill: 'none',
+                            stroke: selColor,
+                            strokeWidth: 1.5,
+                            strokeDasharray: '6 4',
+                        })}
                         {editing ? (
-                            <foreignObject x={-width / 2} y={-16} width={width} height={32}>
+                            <foreignObject x={-w / 2} y={-h / 2} width={w} height={h}>
                                 <textarea
                                     className="vimipad-canvas-edit"
                                     value={editValue}
@@ -341,10 +456,29 @@ export function CanvasView(props: Props): React.ReactElement {
                                 {node.label}
                             </text>
                         )}
+                        {/* Four corner resize handles when the node is selected. */}
+                        {canResize && ([
+                            {x: -w / 2, y: -h / 2, cursor: 'nwse-resize'},
+                            {x: w / 2, y: -h / 2, cursor: 'nesw-resize'},
+                            {x: -w / 2, y: h / 2, cursor: 'nesw-resize'},
+                            {x: w / 2, y: h / 2, cursor: 'nwse-resize'},
+                        ].map((c, i) => (
+                            <rect
+                                key={i}
+                                className="vimipad-canvas-handle"
+                                x={c.x - HANDLE / 2}
+                                y={c.y - HANDLE / 2}
+                                width={HANDLE}
+                                height={HANDLE}
+                                fill={selColor}
+                                style={{cursor: c.cursor}}
+                                onPointerDown={e => onHandlePointerDown(e, node.stableid, node.label)}
+                            />
+                        )))}
                         {otherLock && (
                             <text
                                 textAnchor="middle"
-                                y={28}
+                                y={h / 2 + 14}
                                 className="vimipad-canvas-lockhint"
                                 fill="var(--vimipad-lock-hint, #6b7280)"
                             >

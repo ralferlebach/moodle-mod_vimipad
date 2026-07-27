@@ -27,7 +27,7 @@
  */
 
 import {EditorAction} from '../store/reducer';
-import {PolledOperation} from '../types';
+import {PolledOperation, VimiNode} from '../types';
 
 /**
  * Convert a polled operation into a reducer action, or null if it has no local
@@ -49,16 +49,40 @@ export function operationToAction(op: PolledOperation): EditorAction | null {
         typeof payload[key] === 'number' ? payload[key] as number : fallback;
 
     switch (op.operationtype) {
-        case 'node_create':
+        case 'node_create': {
             if (!payload.stableid) {
                 return null;
             }
-            return {
-                kind: 'addNode',
-                node: {stableid: str('stableid'), type: str('type') || 'concept', label: str('label')},
+            const node: VimiNode = {
+                stableid: str('stableid'), type: str('type') || 'concept', label: str('label'),
             };
-        case 'node_update':
-            return {kind: 'updateNode', stableid: str('stableid'), label: str('label'), type: str('type')};
+            if ('content' in payload) {
+                node.content = str('content');
+            }
+            if ('metadatajson' in payload) {
+                node.metadatajson = str('metadatajson');
+            }
+            return {kind: 'addNode', node};
+        }
+        case 'node_update': {
+            // A node_update may touch any subset of fields; only forward the
+            // keys that are actually present so a style change never blanks the
+            // label (and vice versa).
+            const action: EditorAction = {kind: 'updateNode', stableid: str('stableid')};
+            if ('label' in payload) {
+                action.label = str('label');
+            }
+            if ('type' in payload) {
+                action.type = str('type');
+            }
+            if ('content' in payload) {
+                action.content = str('content');
+            }
+            if ('metadatajson' in payload) {
+                action.metadatajson = str('metadatajson');
+            }
+            return action;
+        }
         case 'node_delete':
             return {kind: 'deleteNode', stableid: str('stableid')};
         case 'relation_create':

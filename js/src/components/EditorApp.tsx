@@ -32,7 +32,8 @@ import {computeLayout} from '../graph/autolayout';
 import {EditorState, reduce} from '../store/reducer';
 import {CanvasView} from './CanvasView';
 import {RelationListView} from './RelationListView';
-import {LayoutMap, Point, PolledOperation} from '../types';
+import {LayoutMap, Point, PolledOperation, Size, SizeMap} from '../types';
+import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
 import {useCollaboration} from '../collab/use_collaboration';
 import {operationToAction} from '../collab/apply_remote';
 
@@ -47,23 +48,7 @@ const EMPTY: EditorState = {
     workspaceid: 0, revision: 0, locked: 0, profile: 'conceptmap', layoutjson: '', nodes: [], relations: [],
 };
 
-/**
- * Parse a stored layout JSON string into a position map.
- *
- * @param json The layout JSON string.
- * @returns The parsed position map, or empty on failure.
- */
-function parseLayout(json: string): LayoutMap {
-    if (!json) {
-        return {};
-    }
-    try {
-        const parsed = JSON.parse(json);
-        return (parsed && typeof parsed === 'object') ? parsed as LayoutMap : {};
-    } catch {
-        return {};
-    }
-}
+
 
 /**
  * The editor root component.
@@ -76,6 +61,7 @@ export function EditorApp(props: Props): React.ReactElement {
     const [state, dispatch] = useReducer(reduce, EMPTY);
     const [view, setView] = useState<ViewMode>('canvas');
     const [stored, setStored] = useState<LayoutMap>({});
+    const [sizes, setSizes] = useState<SizeMap>({});
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -89,7 +75,9 @@ export function EditorApp(props: Props): React.ReactElement {
         try {
             const ws = await api.getWorkspace();
             dispatch({kind: 'load', state: ws});
-            setStored(parseLayout(ws.layoutjson));
+            const decoded = decodeLayout(ws.layoutjson);
+            setStored(decoded.positions);
+            setSizes(decoded.sizes);
             setError(null);
         } catch (e) {
             setError((e as Error).message);
@@ -219,14 +207,24 @@ export function EditorApp(props: Props): React.ReactElement {
     }, [runOperation]);
 
     const onNodeMoved = useCallback(async (stableid: string, point: Point) => {
-        const next = {...stored, [stableid]: point};
-        setStored(next);
+        const nextPos = {...stored, [stableid]: point};
+        setStored(nextPos);
         try {
-            await api.saveLayout(state.workspaceid, JSON.stringify(next));
+            await api.saveLayout(state.workspaceid, encodeLayout(nextPos, sizes));
         } catch (e) {
             setError((e as Error).message);
         }
-    }, [api, state.workspaceid, stored]);
+    }, [api, state.workspaceid, stored, sizes]);
+
+    const onNodeResized = useCallback(async (stableid: string, size: Size) => {
+        const nextSizes = {...sizes, [stableid]: size};
+        setSizes(nextSizes);
+        try {
+            await api.saveLayout(state.workspaceid, encodeLayout(stored, nextSizes));
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [api, state.workspaceid, stored, sizes]);
 
     const submit = useCallback(async () => {
         // eslint-disable-next-line no-alert
@@ -340,8 +338,11 @@ export function EditorApp(props: Props): React.ReactElement {
                 <CanvasView
                     state={state}
                     layout={layout}
+                    profile={state.profile}
+                    sizes={sizes}
                     disabled={disabled}
                     onNodeMoved={onNodeMoved}
+                    onNodeResized={onNodeResized}
                     onDeleteNode={deleteNode}
                     onDeleteRelation={deleteRelation}
                     onRenameNode={renameNode}

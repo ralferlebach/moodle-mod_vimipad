@@ -81,4 +81,29 @@ describe('operationToAction', () => {
             revision: 8, userid: 1, operationtype: 'node_create', payloadjson: 'not json',
         })).toBeNull();
     });
+
+    test('carries metadatajson and content on node_create', () => {
+        const action = operationToAction({
+            revision: 9, userid: 1, operationtype: 'node_create',
+            payloadjson: JSON.stringify({
+                stableid: 'n2', type: 'concept', label: 'X',
+                metadatajson: '{"shape":"ellipse"}', content: '<p>hi</p>',
+            }),
+        });
+        expect(action).toEqual({
+            kind: 'addNode',
+            node: {stableid: 'n2', type: 'concept', label: 'X',
+                metadatajson: '{"shape":"ellipse"}', content: '<p>hi</p>'},
+        });
+    });
+
+    test('node_update forwards only the keys present (style-only change)', () => {
+        const action = operationToAction({
+            revision: 10, userid: 1, operationtype: 'node_update',
+            payloadjson: JSON.stringify({stableid: 'n1', metadatajson: '{"fill":"#ff0000"}'}),
+        });
+        expect(action).toEqual({
+            kind: 'updateNode', stableid: 'n1', metadatajson: '{"fill":"#ff0000"}',
+        });
+    });
 });

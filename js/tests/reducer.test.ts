@@ -76,3 +76,21 @@ describe('autolayout', () => {
         expect(computeLayout(base.nodes, {})).toEqual(computeLayout(base.nodes, {}));
     });
 });
+
+describe('reducer node style/content', () => {
+    it('updateNode applies metadatajson and content while preserving the label', () => {
+        const meta = JSON.stringify({shape: 'ellipse', fill: '#ff0000'});
+        const next = reduce(base, {kind: 'updateNode', stableid: 'node_a', metadatajson: meta});
+        const a = next.nodes.find(n => n.stableid === 'node_a');
+        expect(a?.metadatajson).toBe(meta);
+        expect(a?.label).toBe('A');
+    });
+
+    it('updateNode leaves unspecified fields untouched', () => {
+        const withMeta = reduce(base, {kind: 'updateNode', stableid: 'node_a', metadatajson: '{"shape":"rect"}'});
+        const renamed = reduce(withMeta, {kind: 'updateNode', stableid: 'node_a', label: 'A2'});
+        const a = renamed.nodes.find(n => n.stableid === 'node_a');
+        expect(a?.label).toBe('A2');
+        expect(a?.metadatajson).toBe('{"shape":"rect"}');
+    });
+});

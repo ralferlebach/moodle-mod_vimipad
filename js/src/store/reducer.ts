@@ -33,7 +33,8 @@ export type EditorAction =
     | {kind: 'load'; state: WorkspaceState}
     | {kind: 'setRevision'; revision: number}
     | {kind: 'addNode'; node: VimiNode}
-    | {kind: 'updateNode'; stableid: string; label?: string; type?: string}
+    | {kind: 'updateNode'; stableid: string; label?: string; type?: string;
+        content?: string; metadatajson?: string}
     | {kind: 'deleteNode'; stableid: string}
     | {kind: 'addRelation'; relation: VimiRelation}
     | {kind: 'updateRelation'; stableid: string; label?: string; type?: string}
@@ -64,7 +65,13 @@ export function reduce(state: EditorState, action: EditorState | EditorAction): 
             return {
                 ...state,
                 nodes: state.nodes.map(n => n.stableid === act.stableid
-                    ? {...n, label: act.label ?? n.label, type: act.type ?? n.type}
+                    ? {
+                        ...n,
+                        label: act.label ?? n.label,
+                        type: act.type ?? n.type,
+                        content: act.content ?? n.content,
+                        metadatajson: act.metadatajson ?? n.metadatajson,
+                    }
                     : n),
             };
         case 'deleteNode':

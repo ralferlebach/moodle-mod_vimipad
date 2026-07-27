@@ -25,6 +25,12 @@ export interface VimiNode {
     stableid: string;
     type: string;
     label: string;
+    /** Optional rich text content (FORMAT_HTML), empty if none. */
+    content?: string;
+    /** Content format constant; 1 == FORMAT_HTML. */
+    contentformat?: number;
+    /** Raw style/profile metadata JSON (shape, fill, text style), empty if none. */
+    metadatajson?: string;
 }
 
 export interface VimiRelation {
@@ -34,6 +40,8 @@ export interface VimiRelation {
     type: string;
     label: string;
     direction: number;
+    /** Raw style/profile metadata JSON, empty if none. */
+    metadatajson?: string;
 }
 
 /** Collaboration client configuration, sourced from plugin settings. */
@@ -66,6 +74,15 @@ export interface Point {
 
 /** Map of node stable id to its stored canvas position. */
 export type LayoutMap = Record<string, Point>;
+
+/** A node box size in canvas units. */
+export interface Size {
+    w: number;
+    h: number;
+}
+
+/** Map of node stable id to its stored canvas size (manual resize). */
+export type SizeMap = Record<string, Size>;
 
 /** An active editing lease held by a collaborator (presence). */
 export interface Lease {
