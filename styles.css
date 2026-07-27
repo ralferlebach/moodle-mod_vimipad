@@ -84,13 +84,14 @@
     width: 100%;
     height: 100%;
     display: flex;
-    align-items: flex-end;
+    align-items: flex-start;
     justify-content: center;
+    pointer-events: none;
 }
 
 .vimipad-node-dock {
     display: flex;
-    flex-direction: column-reverse;
+    flex-direction: column;
     align-items: center;
     gap: 0.4rem;
     pointer-events: auto;
@@ -167,6 +168,25 @@
 .vimipad-controls-submit {
     margin-left: auto;
     align-self: flex-start;
+}
+
+/* Connector dock at a node edge midpoint (drag to another node to connect). */
+.vimipad-canvas-connector {
+    opacity: 0.85;
+}
+
+.vimipad-canvas-connector:hover {
+    opacity: 1;
+}
+
+/* Inline editor for a relation label. */
+.vimipad-canvas-relation-edit {
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    border: 1px solid var(--vimipad-border, #ced4da);
+    border-radius: 0.25rem;
+    background: var(--vimipad-input-bg, #ffffff);
 }
 
 .vimipad-format-color {

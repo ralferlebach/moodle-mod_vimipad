@@ -182,8 +182,23 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [runOperation, relSource, relTarget, relLabel]);
 
-    const deleteRelation = useCallback(async (stableid: string) => {
-        await runOperation('relation_delete', {stableid},
+    const createRelation = useCallback(async (sourceid: string, targetid: string) => {
+        if (sourceid === targetid) {
+            return;
+        }
+        const res = await runOperation('relation_create',
+            {sourceid, targetid, type: 'related', label: ''}, () => undefined);
+        if (res) {
+            dispatch({
+                kind: 'addRelation',
+                relation: {
+                    stableid: res.stableid, sourceid, targetid, type: 'related', label: '', direction: 1,
+                },
+            });
+        }
+    }, [runOperation]);
+
+    const deleteRelation = useCallback(async (stableid: string) => {        await runOperation('relation_delete', {stableid},
             () => dispatch({kind: 'deleteRelation', stableid}));
     }, [runOperation]);
 
@@ -409,6 +424,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         onNodeResized={onNodeResized}
                         onChangeStyle={changeNodeStyle}
                         onDuplicateNode={duplicateNode}
+                        onCreateRelation={createRelation}
                         onDeleteNode={deleteNode}
                         onDeleteRelation={deleteRelation}
                         onRenameNode={renameNode}

@@ -14,15 +14,15 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Node control dock.
+ * Element control dock.
  *
- * A small cluster of round buttons that floats just above a node while it is
- * hovered or selected, replacing hover menus uniformly for mouse and touch. The
- * primary row exposes shape, fill, text, duplicate and delete; shape, fill and
- * text each open a compact panel so a plain selection never dumps a full menu.
- * Every style edit is a node_update operation, so it is revisioned, graded and
- * propagated to collaborators. Typography applies to the whole label for now;
- * selection-range rich text is a later step.
+ * A cluster of round buttons that floats just below a hovered/selected element,
+ * replacing hover menus uniformly for mouse and touch. For nodes the primary row
+ * exposes shape, fill, text, duplicate and delete; shape, fill and text each open
+ * a compact panel so a plain selection never dumps a full menu. For relations the
+ * row is reduced to text (opens the inline label editor) and delete, since a line
+ * has no shape or fill. Every node style edit is a node_update operation, so it is
+ * revisioned, graded and propagated. Typography applies to the whole label for now.
  *
  * @module     mod_vimipad/components/NodeFormatToolbar
  * @copyright  2026 Ralf Erlebach
@@ -30,19 +30,25 @@
  */
 
 import React, {useState} from 'react';
-import {VimiNode} from '../types';
 import {allowedShapes, clampShape, NodeShape} from '../canvas/shape_catalog';
 import {FontFamily, NodeStyle, nextSizeStep, parseNodeStyle, serialiseNodeStyle, withNodeStyle} from '../canvas/node_style';
 import {FA, Icon, ShapeGlyph} from '../canvas/icons';
 
 interface Props {
-    node: VimiNode;
+    /** Element kind: nodes get the full toolset, relations a reduced one. */
+    kind?: 'node' | 'relation';
+    /** The styled element (only its metadatajson is read). */
+    target: {metadatajson?: string};
     profile: string;
     disabled: boolean;
-    /** Persist a new full metadatajson for the node. */
+    /** Panel to open initially (e.g. 'text' while inline editing). */
+    defaultPanel?: Panel;
+    /** Persist a new full metadatajson for the element (nodes only for now). */
     onChangeStyle: (metadatajson: string) => void;
-    onDuplicate: () => void;
+    onDuplicate?: () => void;
     onDelete: () => void;
+    /** Start inline text editing of the element's label. */
+    onEditText?: () => void;
     t: (key: string) => string;
 }
 
@@ -62,58 +68,66 @@ const SHAPE_LABEL: Record<NodeShape, string> = {
 };
 
 /**
- * Render the node control dock.
+ * Render the element control dock.
  *
  * @param props Component props.
  * @returns The dock element.
  */
 export function NodeFormatToolbar(props: Props): React.ReactElement {
-    const {node, profile, disabled, onChangeStyle, onDuplicate, onDelete, t} = props;
-    const [panel, setPanel] = useState<Panel>('none');
-    const style = parseNodeStyle(node.metadatajson);
+    const {kind = 'node', target, profile, disabled, defaultPanel, onChangeStyle, onDuplicate, onDelete, onEditText, t}
+        = props;
+    const isNode = kind !== 'relation';
+    const [panel, setPanel] = useState<Panel>(defaultPanel ?? 'none');
+    const style = parseNodeStyle(target.metadatajson);
     const activeShape = clampShape(profile, style.shape);
 
-    const apply = (change: NodeStyle): void => onChangeStyle(withNodeStyle(node.metadatajson, change));
+    const apply = (change: NodeStyle): void => onChangeStyle(withNodeStyle(target.metadatajson, change));
     const toggle = (p: Panel): void => setPanel(cur => (cur === p ? 'none' : p));
 
     return (
         <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:fmt_toolbar')}>
             <div className="vimipad-node-dock-row">
+                {isNode && (
+                    <button
+                        type="button"
+                        className={`vimipad-dock-btn${panel === 'shape' ? ' active' : ''}`}
+                        aria-pressed={panel === 'shape'}
+                        disabled={disabled}
+                        title={t('editor:fmt_shape')}
+                        aria-label={t('editor:fmt_shape')}
+                        onClick={() => toggle('shape')}
+                    ><Icon name={FA.shape} /></button>
+                )}
+                {isNode && (
+                    <button
+                        type="button"
+                        className={`vimipad-dock-btn${panel === 'fill' ? ' active' : ''}`}
+                        aria-pressed={panel === 'fill'}
+                        disabled={disabled}
+                        title={t('editor:fmt_fill')}
+                        aria-label={t('editor:fmt_fill')}
+                        onClick={() => toggle('fill')}
+                    ><Icon name={FA.fill} /></button>
+                )}
                 <button
                     type="button"
-                    className={`vimipad-dock-btn${panel === 'shape' ? ' active' : ''}`}
-                    aria-pressed={panel === 'shape'}
-                    disabled={disabled}
-                    title={t('editor:fmt_shape')}
-                    aria-label={t('editor:fmt_shape')}
-                    onClick={() => toggle('shape')}
-                ><Icon name={FA.shape} /></button>
-                <button
-                    type="button"
-                    className={`vimipad-dock-btn${panel === 'fill' ? ' active' : ''}`}
-                    aria-pressed={panel === 'fill'}
-                    disabled={disabled}
-                    title={t('editor:fmt_fill')}
-                    aria-label={t('editor:fmt_fill')}
-                    onClick={() => toggle('fill')}
-                ><Icon name={FA.fill} /></button>
-                <button
-                    type="button"
-                    className={`vimipad-dock-btn${panel === 'text' ? ' active' : ''}`}
-                    aria-pressed={panel === 'text'}
+                    className={`vimipad-dock-btn${isNode && panel === 'text' ? ' active' : ''}`}
+                    aria-pressed={isNode ? panel === 'text' : undefined}
                     disabled={disabled}
                     title={t('editor:fmt_text')}
                     aria-label={t('editor:fmt_text')}
-                    onClick={() => toggle('text')}
+                    onClick={() => (isNode ? toggle('text') : onEditText && onEditText())}
                 ><Icon name={FA.text} /></button>
-                <button
-                    type="button"
-                    className="vimipad-dock-btn"
-                    disabled={disabled}
-                    title={t('editor:fmt_duplicate')}
-                    aria-label={t('editor:fmt_duplicate')}
-                    onClick={onDuplicate}
-                ><Icon name={FA.duplicate} /></button>
+                {isNode && onDuplicate && (
+                    <button
+                        type="button"
+                        className="vimipad-dock-btn"
+                        disabled={disabled}
+                        title={t('editor:fmt_duplicate')}
+                        aria-label={t('editor:fmt_duplicate')}
+                        onClick={onDuplicate}
+                    ><Icon name={FA.duplicate} /></button>
+                )}
                 <button
                     type="button"
                     className="vimipad-dock-btn vimipad-dock-danger"
@@ -124,7 +138,7 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                 ><Icon name={FA.delete} /></button>
             </div>
 
-            {panel === 'shape' && (
+            {isNode && panel === 'shape' && (
                 <div className="vimipad-node-dock-panel" role="group" aria-label={t('editor:fmt_shape')}>
                     {allowedShapes(profile).map(shape => (
                         <button
@@ -141,7 +155,7 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                 </div>
             )}
 
-            {panel === 'fill' && (
+            {isNode && panel === 'fill' && (
                 <div className="vimipad-node-dock-panel">
                     <label className="vimipad-format-color" title={t('editor:fmt_fill')}>
                         <Icon name={FA.fill} />
@@ -164,7 +178,7 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                 </div>
             )}
 
-            {panel === 'text' && (
+            {isNode && panel === 'text' && (
                 <div className="vimipad-node-dock-panel">
                     <select
                         className="form-control form-control-sm"

@@ -69,6 +69,8 @@ interface Props {
     onChangeStyle?: (stableid: string, metadatajson: string) => void;
     /** Duplicate a node (without its relations). */
     onDuplicateNode?: (stableid: string) => void;
+    /** Create a relation by dragging from a connector dock to another node. */
+    onCreateRelation?: (sourceid: string, targetid: string) => void;
     t: (key: string) => string;
     /** True if a node is held by another collaborator (renders as locked). */
     isLockedByOther?: (targettype: string, stableid: string) => boolean;
@@ -162,6 +164,7 @@ export function CanvasView(props: Props): React.ReactElement {
         state, layout, profile, sizes, disabled, onNodeMoved, onNodeResized,
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
+        onCreateRelation,
     } = props;
     const svgRef = useRef<SVGSVGElement>(null);
     const [dragId, setDragId] = useState<string | null>(null);
@@ -172,6 +175,9 @@ export function CanvasView(props: Props): React.ReactElement {
     const [interaction, dispatchInteraction] = useReducer(interactionReduce, initialInteraction);
     const [editValue, setEditValue] = useState('');
     const [hoveredId, setHoveredId] = useState<string | null>(null);
+    // Dragging a new connection out of a node's connector dock.
+    const [connectFrom, setConnectFrom] = useState<string | null>(null);
+    const [connectTo, setConnectTo] = useState<Point | null>(null);
 
     // Surface the current selection so the host can show a format bar for it.
     useEffect(() => {
@@ -196,6 +202,18 @@ export function CanvasView(props: Props): React.ReactElement {
         }
         return sizes[stableid] ?? {w: nodeWidth(label), h: DEFAULT_NODE_HEIGHT};
     }, [resizeId, resizeSize, sizes]);
+
+    // First node whose box contains the given canvas point, if any.
+    const nodeAt = useCallback((point: Point): string | null => {
+        for (const node of state.nodes) {
+            const p = positionOf(node.stableid);
+            const s = sizeOf(node.stableid, node.label);
+            if (Math.abs(point.x - p.x) <= s.w / 2 && Math.abs(point.y - p.y) <= s.h / 2) {
+                return node.stableid;
+            }
+        }
+        return null;
+    }, [state.nodes, positionOf, sizeOf]);
 
     const toSvgPoint = useCallback((clientX: number, clientY: number): Point => {
         const svg = svgRef.current;
@@ -251,6 +269,10 @@ export function CanvasView(props: Props): React.ReactElement {
     }, [disabled, lockedByOther, onNodeResized, beginEdit, sizeOf]);
 
     const onPointerMove = useCallback((event: React.PointerEvent) => {
+        if (connectFrom !== null) {
+            setConnectTo(toSvgPoint(event.clientX, event.clientY));
+            return;
+        }
         if (resizeId !== null) {
             // Centre-anchored resize: the box grows symmetrically about its
             // position, so a drag from any corner behaves the same.
@@ -264,9 +286,18 @@ export function CanvasView(props: Props): React.ReactElement {
         }
         setMoved(true);
         setDragPos(clampToCanvas(toSvgPoint(event.clientX, event.clientY)));
-    }, [resizeId, dragId, positionOf, toSvgPoint]);
+    }, [connectFrom, resizeId, dragId, positionOf, toSvgPoint]);
 
     const onPointerUp = useCallback(() => {
+        if (connectFrom !== null) {
+            const target = connectTo ? nodeAt(connectTo) : null;
+            if (target && target !== connectFrom && onCreateRelation) {
+                onCreateRelation(connectFrom, target);
+            }
+            setConnectFrom(null);
+            setConnectTo(null);
+            return;
+        }
         if (resizeId !== null) {
             if (resizeSize && onNodeResized) {
                 onNodeResized(resizeId, resizeSize);
@@ -287,7 +318,20 @@ export function CanvasView(props: Props): React.ReactElement {
         setDragId(null);
         setDragPos(null);
         setMoved(false);
-    }, [resizeId, resizeSize, onNodeResized, dragId, dragPos, moved, onNodeMoved, endEdit]);
+    }, [connectFrom, connectTo, nodeAt, onCreateRelation,
+        resizeId, resizeSize, onNodeResized, dragId, dragPos, moved, onNodeMoved, endEdit]);
+
+    // Begin dragging a new connection out of a node's connector dock.
+    const startConnect = useCallback((event: React.PointerEvent, stableid: string) => {
+        event.stopPropagation();
+        if (disabled || lockedByOther(stableid) || !onCreateRelation) {
+            return;
+        }
+        event.preventDefault();
+        (event.target as Element).setPointerCapture(event.pointerId);
+        setConnectFrom(stableid);
+        setConnectTo(toSvgPoint(event.clientX, event.clientY));
+    }, [disabled, lockedByOther, onCreateRelation, toSvgPoint]);
 
     // Begin inline editing of a node's label (double-click on its text).
     const startNodeEdit = useCallback((stableid: string, label: string) => {
@@ -297,6 +341,15 @@ export function CanvasView(props: Props): React.ReactElement {
         setEditValue(label);
         dispatchInteraction({kind: 'startEditing', target: {kind: 'node', id: stableid}});
     }, [disabled, lockedByOther]);
+
+    // Begin inline editing of a relation's label (double-click / text button).
+    const startRelationEdit = useCallback((stableid: string, label: string) => {
+        if (disabled) {
+            return;
+        }
+        setEditValue(label);
+        dispatchInteraction({kind: 'startEditing', target: {kind: 'relation', id: stableid}});
+    }, [disabled]);
 
     // Commit the current inline edit to the parent.
     const commitEdit = useCallback(() => {
@@ -336,7 +389,7 @@ export function CanvasView(props: Props): React.ReactElement {
     }, [interaction, disabled, onDeleteNode, onDeleteRelation]);
 
     // Text keys while editing: Enter commits, Shift+Enter inserts a newline.
-    const onEditKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const onEditKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
         event.stopPropagation();
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
@@ -397,6 +450,7 @@ export function CanvasView(props: Props): React.ReactElement {
                 const midX = (from.x + to.x) / 2;
                 const midY = (from.y + to.y) / 2;
                 const selected = isSelected(interaction, 'relation', rel.stableid);
+                const editing = isEditing(interaction, 'relation', rel.stableid);
                 return (
                     <g key={rel.stableid} className="vimipad-canvas-relation">
                         <line
@@ -419,7 +473,19 @@ export function CanvasView(props: Props): React.ReactElement {
                             style={{cursor: 'pointer'}}
                             onPointerDown={e => selectRelation(e, rel.stableid)}
                         />
-                        {rel.label && (
+                        {editing ? (
+                            <foreignObject x={midX - 80} y={midY - 18} width={160} height={34}>
+                                <input
+                                    className="vimipad-canvas-relation-edit"
+                                    value={editValue}
+                                    autoFocus
+                                    onChange={e => setEditValue(e.target.value)}
+                                    onKeyDown={onEditKeyDown}
+                                    onBlur={commitEdit}
+                                    onPointerDown={e => e.stopPropagation()}
+                                />
+                            </foreignObject>
+                        ) : (rel.label && (
                             <text
                                 x={midX}
                                 y={midY - 4}
@@ -430,9 +496,32 @@ export function CanvasView(props: Props): React.ReactElement {
                                 strokeWidth={3}
                                 strokeLinejoin="round"
                                 fill="currentColor"
+                                onDoubleClick={() => startRelationEdit(rel.stableid, rel.label)}
                             >
                                 {rel.label}
                             </text>
+                        ))}
+                        {selected && !disabled && !editing && onDeleteRelation && (
+                            <foreignObject
+                                x={midX - 150}
+                                y={midY + 10}
+                                width={300}
+                                height={90}
+                                style={{overflow: 'visible'}}
+                            >
+                                <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
+                                    <NodeFormatToolbar
+                                        kind="relation"
+                                        target={rel}
+                                        profile={profile}
+                                        disabled={disabled}
+                                        onChangeStyle={() => undefined}
+                                        onDelete={() => onDeleteRelation(rel.stableid)}
+                                        onEditText={() => startRelationEdit(rel.stableid, rel.label)}
+                                        t={t}
+                                    />
+                                </div>
+                            </foreignObject>
                         )}
                     </g>
                 );
@@ -450,8 +539,11 @@ export function CanvasView(props: Props): React.ReactElement {
                     ? 'var(--vimipad-node-locked-fill, #f3f4f6)'
                     : (style.fill ?? 'var(--vimipad-node-fill, #eef2ff)');
                 const hovered = hoveredId === node.stableid;
-                const showControls = (selected || hovered) && !disabled && !otherLock && !editing;
-                const canResize = !!onNodeResized && showControls;
+                // Hover/selection reveals the quick affordances (resize corners, connector docks).
+                const affordances = (selected || hovered) && !disabled && !otherLock && !editing;
+                const canResize = !!onNodeResized && affordances;
+                // The format dock stays open while the node is selected or being edited.
+                const dockVisible = (selected || editing) && !disabled && !otherLock;
                 return (
                     <g
                         key={node.stableid}
@@ -546,19 +638,40 @@ export function CanvasView(props: Props): React.ReactElement {
                                 />
                             </g>
                         )))}
-                        {showControls && onChangeStyle && (
+                        {/* Connector docks at the four edge midpoints: drag one to another node. */}
+                        {affordances && onCreateRelation && [
+                            {x: 0, y: -h / 2},
+                            {x: w / 2, y: 0},
+                            {x: 0, y: h / 2},
+                            {x: -w / 2, y: 0},
+                        ].map((c, i) => (
+                            <circle
+                                key={`conn${i}`}
+                                className="vimipad-canvas-connector"
+                                cx={c.x}
+                                cy={c.y}
+                                r={7}
+                                fill={selColor}
+                                stroke="var(--vimipad-connector-ring, #ffffff)"
+                                strokeWidth={1.5}
+                                style={{cursor: 'crosshair'}}
+                                onPointerDown={e => startConnect(e, node.stableid)}
+                            />
+                        ))}
+                        {dockVisible && onChangeStyle && (
                             <foreignObject
                                 x={-150}
-                                y={-h / 2 - 150}
+                                y={h / 2 + 12}
                                 width={300}
-                                height={150}
+                                height={160}
                                 style={{overflow: 'visible'}}
                             >
                                 <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
                                     <NodeFormatToolbar
-                                        node={node}
+                                        target={node}
                                         profile={profile}
                                         disabled={disabled}
+                                        defaultPanel={editing ? 'text' : undefined}
                                         onChangeStyle={m => onChangeStyle(node.stableid, m)}
                                         onDuplicate={() => onDuplicateNode && onDuplicateNode(node.stableid)}
                                         onDelete={() => onDeleteNode && onDeleteNode(node.stableid)}
@@ -580,6 +693,21 @@ export function CanvasView(props: Props): React.ReactElement {
                     </g>
                 );
             })}
+
+            {connectFrom !== null && connectTo && (
+                <line
+                    className="vimipad-canvas-connectline"
+                    x1={positionOf(connectFrom).x}
+                    y1={positionOf(connectFrom).y}
+                    x2={connectTo.x}
+                    y2={connectTo.y}
+                    stroke={selColor}
+                    strokeWidth={2}
+                    strokeDasharray="6 4"
+                    markerEnd="url(#vimipad-arrow)"
+                    style={{pointerEvents: 'none'}}
+                />
+            )}
         </svg>
     );
 }

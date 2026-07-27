@@ -44,6 +44,11 @@ const STRING_KEYS = [
     'editor:locked', 'editor:nodelabel', 'editor:norelations', 'editor:object',
     'editor:relation', 'editor:relations', 'editor:retarget', 'editor:revision',
     'editor:subject', 'editor:submit', 'editor:submitconfirm',
+    'editor:fmt_bigger', 'editor:fmt_delete', 'editor:fmt_duplicate', 'editor:fmt_ellipse',
+    'editor:fmt_fill', 'editor:fmt_font', 'editor:fmt_fontdefault', 'editor:fmt_highlight',
+    'editor:fmt_move', 'editor:fmt_rect', 'editor:fmt_reset', 'editor:fmt_roundrect',
+    'editor:fmt_shape', 'editor:fmt_smaller', 'editor:fmt_text', 'editor:fmt_textcolor',
+    'editor:fmt_toolbar',
 ];
 
 /**
