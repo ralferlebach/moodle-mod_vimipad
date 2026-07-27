@@ -114,6 +114,17 @@ function cleanSize(value: unknown): number | undefined {
 }
 
 /**
+ * Clamp the next relative font size step after applying a delta.
+ *
+ * @param current The current step, or undefined (treated as 0/base).
+ * @param delta The change to apply (+1 larger, -1 smaller).
+ * @returns The new step within the accepted range.
+ */
+export function nextSizeStep(current: number | undefined, delta: number): number {
+    return Math.max(MIN_SIZE_STEP, Math.min(MAX_SIZE_STEP, (current ?? 0) + delta));
+}
+
+/**
  * Parse a node's metadatajson into a typed style, dropping malformed values.
  *
  * @param metadatajson The raw metadata JSON, or undefined.

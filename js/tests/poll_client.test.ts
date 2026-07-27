@@ -69,6 +69,19 @@ describe('PollClient', () => {
         expect(seen).toEqual(leases);
     });
 
+    test('emits the layout json to the onLayout callback', async () => {
+        const layoutjson = JSON.stringify({v: 1, pos: {n1: {x: 5, y: 6}}, size: {n1: {w: 90, h: 40}}});
+        const transport = jest.fn(async () => result({layoutjson}));
+        let seen = '';
+        const client = new PollClient({
+            cmid: 1, workspaceid: 2, transport,
+            adaptive: {min: 1000, max: 10000, base: 1000, adaptive: true},
+            onLayout: (l) => { seen = l; },
+        });
+        await client.pollOnce();
+        expect(seen).toBe(layoutjson);
+    });
+
     test('lengthens the interval after an empty poll', async () => {
         const transport = jest.fn(async () => result());
         const client = new PollClient({

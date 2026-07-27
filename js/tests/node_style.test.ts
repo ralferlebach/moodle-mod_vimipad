@@ -22,12 +22,20 @@
  */
 
 import {
+    nextSizeStep,
     parseNodeStyle,
     serialiseNodeStyle,
     withNodeStyle,
 } from '../src/canvas/node_style';
 
 describe('node_style', () => {
+    it('steps and clamps the font size', () => {
+        expect(nextSizeStep(undefined, 1)).toBe(1);
+        expect(nextSizeStep(0, -1)).toBe(-1);
+        expect(nextSizeStep(6, 1)).toBe(6);
+        expect(nextSizeStep(-3, -1)).toBe(-3);
+    });
+
     it('parses a full valid style', () => {
         const json = JSON.stringify({
             shape: 'ellipse', fill: '#AABBCC',

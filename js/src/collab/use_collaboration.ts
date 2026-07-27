@@ -76,6 +76,7 @@ function toAdaptive(collab?: CollabConfig): AdaptiveConfig {
  * @param currentUserId The current user's id, to distinguish own vs others' locks.
  * @param collab The collaboration settings from the workspace load.
  * @param onOperations Called with operations polled from the server.
+ * @param onLayout Called with the current layout JSON when it changes.
  * @param onError Called on transport errors.
  * @returns The collaboration handle.
  */
@@ -85,6 +86,7 @@ export function useCollaboration(
     currentUserId: number,
     collab: CollabConfig | undefined,
     onOperations: (operations: PolledOperation[]) => void,
+    onLayout?: (layoutjson: string) => void,
     onError?: (error: Error) => void
 ): Collaboration {
     const [presence, setPresence] = useState<PresenceMap>({});
@@ -94,6 +96,12 @@ export function useCollaboration(
     // Keep the latest operations handler without restarting the loop.
     const opsHandler = useRef(onOperations);
     opsHandler.current = onOperations;
+
+    // Same for the layout handler, plus a dedup of the last layout seen so an
+    // unchanged layout (echoed every poll) does not trigger re-renders.
+    const layoutHandler = useRef(onLayout);
+    layoutHandler.current = onLayout;
+    const lastLayout = useRef<string>('');
 
     const adaptive = useMemo(() => toAdaptive(collab), [collab]);
 
@@ -121,6 +129,14 @@ export function useCollaboration(
 
         const poll = api.createPollClient(workspaceid, adaptive, {
             onOperations: (ops) => opsHandler.current(ops),
+            onLayout: (layoutjson: string) => {
+                if (layoutjson !== lastLayout.current) {
+                    lastLayout.current = layoutjson;
+                    if (layoutHandler.current) {
+                        layoutHandler.current(layoutjson);
+                    }
+                }
+            },
             onPresence: (leases: Lease[]) => {
                 const next: PresenceMap = {};
                 leases.forEach((l) => {

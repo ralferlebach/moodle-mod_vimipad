@@ -31,7 +31,10 @@ import {ApiClient} from '../api/service';
 import {computeLayout} from '../graph/autolayout';
 import {EditorState, reduce} from '../store/reducer';
 import {CanvasView} from './CanvasView';
+import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {RelationListView} from './RelationListView';
+import {FA, Icon} from '../canvas/icons';
+import {Target} from '../canvas/interaction';
 import {LayoutMap, Point, PolledOperation, Size, SizeMap} from '../types';
 import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
 import {useCollaboration} from '../collab/use_collaboration';
@@ -62,6 +65,7 @@ export function EditorApp(props: Props): React.ReactElement {
     const [view, setView] = useState<ViewMode>('canvas');
     const [stored, setStored] = useState<LayoutMap>({});
     const [sizes, setSizes] = useState<SizeMap>({});
+    const [selected, setSelected] = useState<Target | null>(null);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -101,6 +105,16 @@ export function EditorApp(props: Props): React.ReactElement {
         });
     }, []);
 
+    // Reconcile remote layout (positions + sizes) live. Merge rather than
+    // replace so a node the remote map does not mention keeps its local value,
+    // and so an in-progress local drag/resize (which CanvasView renders from its
+    // own gesture state) is not disturbed.
+    const onRemoteLayout = useCallback((layoutjson: string) => {
+        const decoded = decodeLayout(layoutjson);
+        setStored(prev => ({...prev, ...decoded.positions}));
+        setSizes(prev => ({...prev, ...decoded.sizes}));
+    }, []);
+
     const currentUserId = useMemo(() => {
         const cfg = (window as unknown as {M?: {cfg?: {userId?: number}}}).M?.cfg;
         return cfg?.userId ?? 0;
@@ -112,10 +126,15 @@ export function EditorApp(props: Props): React.ReactElement {
         currentUserId,
         state.collab,
         applyRemoteOperations,
+        onRemoteLayout,
         (e) => setError(e.message)
     );
 
     const layout = useMemo(() => computeLayout(state.nodes, stored), [state.nodes, stored]);
+    const selectedNode = useMemo(
+        () => (selected?.kind === 'node' ? state.nodes.find(n => n.stableid === selected.id) ?? null : null),
+        [selected, state.nodes]
+    );
     const disabled = busy || loading || state.locked === 1;
 
     const runOperation = useCallback(async (
@@ -187,6 +206,11 @@ export function EditorApp(props: Props): React.ReactElement {
         }
         await runOperation('node_update', {stableid, label: trimmed},
             () => dispatch({kind: 'updateNode', stableid, label: trimmed}));
+    }, [runOperation]);
+
+    const changeNodeStyle = useCallback(async (stableid: string, metadatajson: string) => {
+        await runOperation('node_update', {stableid, metadatajson},
+            () => dispatch({kind: 'updateNode', stableid, metadatajson}));
     }, [runOperation]);
 
     const renameRelation = useCallback(async (stableid: string, label: string) => {
@@ -264,7 +288,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         role="tab"
                         onClick={() => setView('canvas')}
                     >
-                        {t('editor:canvasview')}
+                        <Icon name={FA.canvasView} /> {t('editor:canvasview')}
                     </button>
                 </li>
                 <li className="nav-item" role="presentation">
@@ -275,7 +299,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         role="tab"
                         onClick={() => setView('list')}
                     >
-                        {t('editor:listview')}
+                        <Icon name={FA.listView} /> {t('editor:listview')}
                     </button>
                 </li>
             </ul>
@@ -293,7 +317,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         onChange={e => setNodeLabel(e.target.value)}
                     />
                     <button type="button" className="btn btn-primary" onClick={addNode}>
-                        {t('editor:add')}
+                        <Icon name={FA.addNode} /> {t('editor:add')}
                     </button>
                 </div>
             </fieldset>
@@ -329,29 +353,42 @@ export function EditorApp(props: Props): React.ReactElement {
                         {state.nodes.map(n => <option key={n.stableid} value={n.stableid}>{n.label}</option>)}
                     </select>
                     <button type="button" className="btn btn-primary" onClick={addRelation}>
-                        {t('editor:add')}
+                        <Icon name={FA.addRelation} /> {t('editor:add')}
                     </button>
                 </div>
             </fieldset>
 
             {view === 'canvas' ? (
-                <CanvasView
-                    state={state}
-                    layout={layout}
-                    profile={state.profile}
-                    sizes={sizes}
-                    disabled={disabled}
-                    onNodeMoved={onNodeMoved}
-                    onNodeResized={onNodeResized}
-                    onDeleteNode={deleteNode}
-                    onDeleteRelation={deleteRelation}
-                    onRenameNode={renameNode}
-                    onRenameRelation={renameRelation}
-                    t={t}
-                    isLockedByOther={collab.isLockedByOther}
-                    beginEdit={collab.beginEdit}
-                    endEdit={collab.endEdit}
-                />
+                <>
+                    {selectedNode && (
+                        <NodeFormatToolbar
+                            node={selectedNode}
+                            profile={state.profile}
+                            disabled={disabled}
+                            onChangeStyle={m => changeNodeStyle(selectedNode.stableid, m)}
+                            onDelete={() => deleteNode(selectedNode.stableid)}
+                            t={t}
+                        />
+                    )}
+                    <CanvasView
+                        state={state}
+                        layout={layout}
+                        profile={state.profile}
+                        sizes={sizes}
+                        disabled={disabled}
+                        onNodeMoved={onNodeMoved}
+                        onNodeResized={onNodeResized}
+                        onDeleteNode={deleteNode}
+                        onDeleteRelation={deleteRelation}
+                        onRenameNode={renameNode}
+                        onRenameRelation={renameRelation}
+                        onSelectionChange={setSelected}
+                        t={t}
+                        isLockedByOther={collab.isLockedByOther}
+                        beginEdit={collab.beginEdit}
+                        endEdit={collab.endEdit}
+                    />
+                </>
             ) : (
                 <RelationListView
                     state={state}
@@ -372,7 +409,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         disabled={busy || loading || state.nodes.length === 0}
                         onClick={submit}
                     >
-                        {t('editor:submit')}
+                        <Icon name={FA.submit} /> {t('editor:submit')}
                     </button>
                 </div>
             )}

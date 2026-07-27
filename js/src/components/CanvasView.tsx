@@ -32,18 +32,19 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import React, {useCallback, useReducer, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useReducer, useRef, useState} from 'react';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas} from '../graph/autolayout';
 import {EditorState} from '../store/reducer';
 import {LayoutMap, Point, Size, SizeMap} from '../types';
 import {clampShape, NodeShape} from '../canvas/shape_catalog';
-import {parseNodeStyle} from '../canvas/node_style';
+import {parseNodeStyle, TextStyle} from '../canvas/node_style';
 import {
     deletableTarget,
     initialInteraction,
     interactionReduce,
     isEditing,
     isSelected,
+    Target,
 } from '../canvas/interaction';
 
 interface Props {
@@ -61,6 +62,8 @@ interface Props {
     onDeleteRelation?: (stableid: string) => void;
     onRenameNode?: (stableid: string, label: string) => void;
     onRenameRelation?: (stableid: string, label: string) => void;
+    /** Notify the host when the selected element changes (for the format bar). */
+    onSelectionChange?: (target: Target | null) => void;
     t: (key: string) => string;
     /** True if a node is held by another collaborator (renders as locked). */
     isLockedByOther?: (targettype: string, stableid: string) => boolean;
@@ -79,6 +82,31 @@ const MAX_W = 360;
 const MAX_H = 240;
 /** Size of a corner resize handle, in canvas units. */
 const HANDLE = 9;
+/** Finger-friendly hit area around each corner handle (touch targets). */
+const HANDLE_HIT = 26;
+/** Base label font size, in canvas units; each size step adds 2. */
+const BASE_FONT = 13;
+
+/**
+ * Resolve CSS font properties for a node label from its text style.
+ *
+ * @param text The parsed text style, if any.
+ * @returns Inline style properties for the label text element.
+ */
+function labelFont(text: TextStyle | undefined): React.CSSProperties {
+    const family = text?.font === 'serif' ? 'Georgia, "Times New Roman", serif'
+        : text?.font === 'mono' ? 'ui-monospace, Menlo, Consolas, monospace'
+            : text?.font === 'sans' ? 'system-ui, -apple-system, "Segoe UI", sans-serif'
+                : undefined;
+    const props: React.CSSProperties = {fontSize: `${BASE_FONT + (text?.size ?? 0) * 2}px`};
+    if (family) {
+        props.fontFamily = family;
+    }
+    if (text?.color) {
+        props.fill = text.color;
+    }
+    return props;
+}
 
 /** Default width of a node box for the given label. */
 const nodeWidth = (label: string): number => Math.max(70, label.length * 8 + 20);
@@ -128,7 +156,7 @@ export function CanvasView(props: Props): React.ReactElement {
     const {
         state, layout, profile, sizes, disabled, onNodeMoved, onNodeResized,
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
-        isLockedByOther, beginEdit, endEdit,
+        isLockedByOther, beginEdit, endEdit, onSelectionChange,
     } = props;
     const svgRef = useRef<SVGSVGElement>(null);
     const [dragId, setDragId] = useState<string | null>(null);
@@ -138,6 +166,13 @@ export function CanvasView(props: Props): React.ReactElement {
     const [resizeSize, setResizeSize] = useState<Size | null>(null);
     const [interaction, dispatchInteraction] = useReducer(interactionReduce, initialInteraction);
     const [editValue, setEditValue] = useState('');
+
+    // Surface the current selection so the host can show a format bar for it.
+    useEffect(() => {
+        if (onSelectionChange) {
+            onSelectionChange(interaction.selected);
+        }
+    }, [interaction.selected, onSelectionChange]);
 
     const lockedByOther = useCallback((stableid: string): boolean =>
         isLockedByOther ? isLockedByOther('node', stableid) : false, [isLockedByOther]);
@@ -447,14 +482,30 @@ export function CanvasView(props: Props): React.ReactElement {
                                 />
                             </foreignObject>
                         ) : (
-                            <text
-                                textAnchor="middle"
-                                dominantBaseline="central"
-                                className="vimipad-canvas-nodelabel"
-                                onDoubleClick={() => startNodeEdit(node.stableid, node.label)}
-                            >
-                                {node.label}
-                            </text>
+                            <>
+                                {style.text?.background && (
+                                    <rect
+                                        className="vimipad-canvas-texthl"
+                                        x={-Math.min(w - 6, node.label.length
+                                            * (BASE_FONT + (style.text.size ?? 0) * 2) * 0.62 + 10) / 2}
+                                        y={-(BASE_FONT + (style.text.size ?? 0) * 2) * 0.8}
+                                        width={Math.min(w - 6, node.label.length
+                                            * (BASE_FONT + (style.text.size ?? 0) * 2) * 0.62 + 10)}
+                                        height={(BASE_FONT + (style.text.size ?? 0) * 2) * 1.6}
+                                        rx={3}
+                                        fill={style.text.background}
+                                    />
+                                )}
+                                <text
+                                    textAnchor="middle"
+                                    dominantBaseline="central"
+                                    className="vimipad-canvas-nodelabel"
+                                    style={labelFont(style.text)}
+                                    onDoubleClick={() => startNodeEdit(node.stableid, node.label)}
+                                >
+                                    {node.label}
+                                </text>
+                            </>
                         )}
                         {/* Four corner resize handles when the node is selected. */}
                         {canResize && ([
@@ -463,17 +514,27 @@ export function CanvasView(props: Props): React.ReactElement {
                             {x: -w / 2, y: h / 2, cursor: 'nesw-resize'},
                             {x: w / 2, y: h / 2, cursor: 'nwse-resize'},
                         ].map((c, i) => (
-                            <rect
-                                key={i}
-                                className="vimipad-canvas-handle"
-                                x={c.x - HANDLE / 2}
-                                y={c.y - HANDLE / 2}
-                                width={HANDLE}
-                                height={HANDLE}
-                                fill={selColor}
-                                style={{cursor: c.cursor}}
-                                onPointerDown={e => onHandlePointerDown(e, node.stableid, node.label)}
-                            />
+                            <g key={i}>
+                                {/* Enlarged transparent hit target for finger use. */}
+                                <rect
+                                    x={c.x - HANDLE_HIT / 2}
+                                    y={c.y - HANDLE_HIT / 2}
+                                    width={HANDLE_HIT}
+                                    height={HANDLE_HIT}
+                                    fill="transparent"
+                                    style={{cursor: c.cursor}}
+                                    onPointerDown={e => onHandlePointerDown(e, node.stableid, node.label)}
+                                />
+                                <rect
+                                    className="vimipad-canvas-handle"
+                                    x={c.x - HANDLE / 2}
+                                    y={c.y - HANDLE / 2}
+                                    width={HANDLE}
+                                    height={HANDLE}
+                                    fill={selColor}
+                                    style={{pointerEvents: 'none'}}
+                                />
+                            </g>
                         )))}
                         {otherLock && (
                             <text

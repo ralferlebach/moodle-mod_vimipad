@@ -38,6 +38,8 @@ export interface PollClientOptions {
     adaptive: AdaptiveConfig;
     onOperations?: (operations: PolledOperation[]) => void;
     onPresence?: (leases: Lease[]) => void;
+    /** Called with the current layout JSON each poll (positions + sizes). */
+    onLayout?: (layoutjson: string) => void;
     onError?: (error: Error) => void;
     /** Clock, injectable for tests. Defaults to Date.now. */
     now?: () => number;
@@ -137,6 +139,11 @@ export class PollClient {
             }
             if (this.opts.onPresence) {
                 this.opts.onPresence(poll.leases);
+            }
+            // Forward the current layout (positions + sizes) so remote moves and
+            // resizes reconcile live; dedup/merge happens upstream.
+            if (this.opts.onLayout) {
+                this.opts.onLayout(poll.layoutjson);
             }
 
             // Advance the revision monotonically.
