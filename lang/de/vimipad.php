@@ -68,6 +68,7 @@ $string['editor:deleterelation'] = 'Relation löschen';
 $string['editor:dragnodes'] = 'Ziehen Sie einen Begriff auf eine Subjekt- oder Objektzelle, um eine Relation umzuhängen';
 $string['editor:fmt_bigger'] = 'Schrift größer';
 $string['editor:fmt_delete'] = 'Knoten löschen';
+$string['editor:fmt_duplicate'] = 'Knoten duplizieren';
 $string['editor:fmt_ellipse'] = 'Ellipse';
 $string['editor:fmt_fill'] = 'Füllfarbe';
 $string['editor:fmt_font'] = 'Schriftart';

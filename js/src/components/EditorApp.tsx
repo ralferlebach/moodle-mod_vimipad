@@ -28,13 +28,11 @@
 
 import React, {useCallback, useEffect, useMemo, useReducer, useState} from 'react';
 import {ApiClient} from '../api/service';
-import {computeLayout} from '../graph/autolayout';
+import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
 import {EditorState, reduce} from '../store/reducer';
 import {CanvasView} from './CanvasView';
-import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {RelationListView} from './RelationListView';
 import {FA, Icon} from '../canvas/icons';
-import {Target} from '../canvas/interaction';
 import {LayoutMap, Point, PolledOperation, Size, SizeMap} from '../types';
 import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
 import {useCollaboration} from '../collab/use_collaboration';
@@ -65,7 +63,6 @@ export function EditorApp(props: Props): React.ReactElement {
     const [view, setView] = useState<ViewMode>('canvas');
     const [stored, setStored] = useState<LayoutMap>({});
     const [sizes, setSizes] = useState<SizeMap>({});
-    const [selected, setSelected] = useState<Target | null>(null);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -131,10 +128,6 @@ export function EditorApp(props: Props): React.ReactElement {
     );
 
     const layout = useMemo(() => computeLayout(state.nodes, stored), [state.nodes, stored]);
-    const selectedNode = useMemo(
-        () => (selected?.kind === 'node' ? state.nodes.find(n => n.stableid === selected.id) ?? null : null),
-        [selected, state.nodes]
-    );
     const disabled = busy || loading || state.locked === 1;
 
     const runOperation = useCallback(async (
@@ -250,6 +243,37 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [api, state.workspaceid, stored, sizes]);
 
+    const duplicateNode = useCallback(async (stableid: string) => {
+        const src = state.nodes.find(n => n.stableid === stableid);
+        if (!src) {
+            return;
+        }
+        const res = await runOperation('node_create',
+            {type: src.type, label: src.label, metadatajson: src.metadatajson ?? ''},
+            () => undefined);
+        if (!res) {
+            return;
+        }
+        dispatch({kind: 'addNode', node: {
+            stableid: res.stableid, type: src.type, label: src.label, metadatajson: src.metadatajson,
+        }});
+        // Offset the copy so it does not sit exactly on the original.
+        const base = layout[stableid] ?? {x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2};
+        const pos = clampToCanvas({x: base.x + 40, y: base.y + 40});
+        const next = {...stored, [res.stableid]: pos};
+        const srcSize = sizes[stableid];
+        const nextSizes = srcSize ? {...sizes, [res.stableid]: srcSize} : sizes;
+        setStored(next);
+        if (srcSize) {
+            setSizes(nextSizes);
+        }
+        try {
+            await api.saveLayout(state.workspaceid, encodeLayout(next, nextSizes));
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [runOperation, state.nodes, state.workspaceid, api, layout, stored, sizes]);
+
     const submit = useCallback(async () => {
         // eslint-disable-next-line no-alert
         if (!window.confirm(t('editor:submitconfirm'))) {
@@ -271,6 +295,75 @@ export function EditorApp(props: Props): React.ReactElement {
     if (loading) {
         return <div className="vimipad-editor-loading">{t('editor:loading')}</div>;
     }
+
+    const addNodeControls = (
+        <fieldset disabled={disabled} className="vimipad-control">
+            <legend className="h6">{t('editor:addnode')}</legend>
+            <div className="form-inline">
+                <label className="sr-only" htmlFor="vimipad-node-label">{t('editor:nodelabel')}</label>
+                <input
+                    id="vimipad-node-label"
+                    type="text"
+                    className="form-control mr-2"
+                    value={nodeLabel}
+                    placeholder={t('editor:nodelabel')}
+                    onChange={e => setNodeLabel(e.target.value)}
+                />
+                <button type="button" className="btn btn-primary" onClick={addNode}>
+                    <Icon name={FA.addNode} /> {t('editor:add')}
+                </button>
+            </div>
+        </fieldset>
+    );
+
+    const addRelationControls = (
+        <fieldset disabled={disabled || state.nodes.length < 2} className="vimipad-control">
+            <legend className="h6">{t('editor:addrelation')}</legend>
+            <div className="form-inline">
+                <label className="sr-only" htmlFor="vimipad-rel-source">{t('editor:subject')}</label>
+                <select
+                    id="vimipad-rel-source"
+                    className="form-control mr-2"
+                    value={relSource}
+                    onChange={e => setRelSource(e.target.value)}
+                >
+                    <option value="">{t('editor:subject')}</option>
+                    {state.nodes.map(n => <option key={n.stableid} value={n.stableid}>{n.label}</option>)}
+                </select>
+                <input
+                    type="text"
+                    className="form-control mr-2"
+                    value={relLabel}
+                    placeholder={t('editor:relation')}
+                    onChange={e => setRelLabel(e.target.value)}
+                />
+                <label className="sr-only" htmlFor="vimipad-rel-target">{t('editor:object')}</label>
+                <select
+                    id="vimipad-rel-target"
+                    className="form-control mr-2"
+                    value={relTarget}
+                    onChange={e => setRelTarget(e.target.value)}
+                >
+                    <option value="">{t('editor:object')}</option>
+                    {state.nodes.map(n => <option key={n.stableid} value={n.stableid}>{n.label}</option>)}
+                </select>
+                <button type="button" className="btn btn-primary" onClick={addRelation}>
+                    <Icon name={FA.addRelation} /> {t('editor:add')}
+                </button>
+            </div>
+        </fieldset>
+    );
+
+    const submitButton = state.locked !== 1 ? (
+        <button
+            type="button"
+            className="btn btn-success"
+            disabled={busy || loading || state.nodes.length === 0}
+            onClick={submit}
+        >
+            <Icon name={FA.submit} /> {t('editor:submit')}
+        </button>
+    ) : null;
 
     return (
         <div className="vimipad-editor">
@@ -304,72 +397,8 @@ export function EditorApp(props: Props): React.ReactElement {
                 </li>
             </ul>
 
-            <fieldset disabled={disabled} className="mb-3">
-                <legend className="h6">{t('editor:addnode')}</legend>
-                <div className="form-inline">
-                    <label className="sr-only" htmlFor="vimipad-node-label">{t('editor:nodelabel')}</label>
-                    <input
-                        id="vimipad-node-label"
-                        type="text"
-                        className="form-control mr-2"
-                        value={nodeLabel}
-                        placeholder={t('editor:nodelabel')}
-                        onChange={e => setNodeLabel(e.target.value)}
-                    />
-                    <button type="button" className="btn btn-primary" onClick={addNode}>
-                        <Icon name={FA.addNode} /> {t('editor:add')}
-                    </button>
-                </div>
-            </fieldset>
-
-            <fieldset disabled={disabled || state.nodes.length < 2} className="mb-3">
-                <legend className="h6">{t('editor:addrelation')}</legend>
-                <div className="form-inline">
-                    <label className="sr-only" htmlFor="vimipad-rel-source">{t('editor:subject')}</label>
-                    <select
-                        id="vimipad-rel-source"
-                        className="form-control mr-2"
-                        value={relSource}
-                        onChange={e => setRelSource(e.target.value)}
-                    >
-                        <option value="">{t('editor:subject')}</option>
-                        {state.nodes.map(n => <option key={n.stableid} value={n.stableid}>{n.label}</option>)}
-                    </select>
-                    <input
-                        type="text"
-                        className="form-control mr-2"
-                        value={relLabel}
-                        placeholder={t('editor:relation')}
-                        onChange={e => setRelLabel(e.target.value)}
-                    />
-                    <label className="sr-only" htmlFor="vimipad-rel-target">{t('editor:object')}</label>
-                    <select
-                        id="vimipad-rel-target"
-                        className="form-control mr-2"
-                        value={relTarget}
-                        onChange={e => setRelTarget(e.target.value)}
-                    >
-                        <option value="">{t('editor:object')}</option>
-                        {state.nodes.map(n => <option key={n.stableid} value={n.stableid}>{n.label}</option>)}
-                    </select>
-                    <button type="button" className="btn btn-primary" onClick={addRelation}>
-                        <Icon name={FA.addRelation} /> {t('editor:add')}
-                    </button>
-                </div>
-            </fieldset>
-
             {view === 'canvas' ? (
                 <>
-                    {selectedNode && (
-                        <NodeFormatToolbar
-                            node={selectedNode}
-                            profile={state.profile}
-                            disabled={disabled}
-                            onChangeStyle={m => changeNodeStyle(selectedNode.stableid, m)}
-                            onDelete={() => deleteNode(selectedNode.stableid)}
-                            t={t}
-                        />
-                    )}
                     <CanvasView
                         state={state}
                         layout={layout}
@@ -378,41 +407,41 @@ export function EditorApp(props: Props): React.ReactElement {
                         disabled={disabled}
                         onNodeMoved={onNodeMoved}
                         onNodeResized={onNodeResized}
+                        onChangeStyle={changeNodeStyle}
+                        onDuplicateNode={duplicateNode}
                         onDeleteNode={deleteNode}
                         onDeleteRelation={deleteRelation}
                         onRenameNode={renameNode}
                         onRenameRelation={renameRelation}
-                        onSelectionChange={setSelected}
                         t={t}
                         isLockedByOther={collab.isLockedByOther}
                         beginEdit={collab.beginEdit}
                         endEdit={collab.endEdit}
                     />
+                    <div className="vimipad-controls-row">
+                        {addNodeControls}
+                        {addRelationControls}
+                        {submitButton && <div className="vimipad-controls-submit">{submitButton}</div>}
+                    </div>
                 </>
             ) : (
-                <RelationListView
-                    state={state}
-                    disabled={disabled}
-                    onDeleteRelation={deleteRelation}
-                    onRetarget={retarget}
-                    t={t}
-                />
+                <>
+                    <div className="vimipad-controls-row">
+                        {addNodeControls}
+                        {addRelationControls}
+                    </div>
+                    <RelationListView
+                        state={state}
+                        disabled={disabled}
+                        onDeleteRelation={deleteRelation}
+                        onRetarget={retarget}
+                        t={t}
+                    />
+                    {submitButton && <div className="vimipad-controls-submit mt-3">{submitButton}</div>}
+                </>
             )}
 
             <p className="text-muted small mt-2">{t('editor:revision')}: {state.revision}</p>
-
-            {state.locked !== 1 && (
-                <div className="vimipad-submit-bar mt-3">
-                    <button
-                        type="button"
-                        className="btn btn-success"
-                        disabled={busy || loading || state.nodes.length === 0}
-                        onClick={submit}
-                    >
-                        <Icon name={FA.submit} /> {t('editor:submit')}
-                    </button>
-                </div>
-            )}
         </div>
     );
 }

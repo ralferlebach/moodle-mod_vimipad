@@ -38,6 +38,7 @@ import {EditorState} from '../store/reducer';
 import {LayoutMap, Point, Size, SizeMap} from '../types';
 import {clampShape, NodeShape} from '../canvas/shape_catalog';
 import {parseNodeStyle, TextStyle} from '../canvas/node_style';
+import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {
     deletableTarget,
     initialInteraction,
@@ -64,6 +65,10 @@ interface Props {
     onRenameRelation?: (stableid: string, label: string) => void;
     /** Notify the host when the selected element changes (for the format bar). */
     onSelectionChange?: (target: Target | null) => void;
+    /** Persist a new full metadatajson for a node (from the dock). */
+    onChangeStyle?: (stableid: string, metadatajson: string) => void;
+    /** Duplicate a node (without its relations). */
+    onDuplicateNode?: (stableid: string) => void;
     t: (key: string) => string;
     /** True if a node is held by another collaborator (renders as locked). */
     isLockedByOther?: (targettype: string, stableid: string) => boolean;
@@ -156,7 +161,7 @@ export function CanvasView(props: Props): React.ReactElement {
     const {
         state, layout, profile, sizes, disabled, onNodeMoved, onNodeResized,
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
-        isLockedByOther, beginEdit, endEdit, onSelectionChange,
+        isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
     } = props;
     const svgRef = useRef<SVGSVGElement>(null);
     const [dragId, setDragId] = useState<string | null>(null);
@@ -166,6 +171,7 @@ export function CanvasView(props: Props): React.ReactElement {
     const [resizeSize, setResizeSize] = useState<Size | null>(null);
     const [interaction, dispatchInteraction] = useReducer(interactionReduce, initialInteraction);
     const [editValue, setEditValue] = useState('');
+    const [hoveredId, setHoveredId] = useState<string | null>(null);
 
     // Surface the current selection so the host can show a format bar for it.
     useEffect(() => {
@@ -443,7 +449,9 @@ export function CanvasView(props: Props): React.ReactElement {
                 const fill = otherLock
                     ? 'var(--vimipad-node-locked-fill, #f3f4f6)'
                     : (style.fill ?? 'var(--vimipad-node-fill, #eef2ff)');
-                const canResize = !!onNodeResized && selected && !disabled && !otherLock && !editing;
+                const hovered = hoveredId === node.stableid;
+                const showControls = (selected || hovered) && !disabled && !otherLock && !editing;
+                const canResize = !!onNodeResized && showControls;
                 return (
                     <g
                         key={node.stableid}
@@ -451,6 +459,8 @@ export function CanvasView(props: Props): React.ReactElement {
                             + `${selected ? ' vimipad-canvas-node-selected' : ''}`}
                         transform={`translate(${pos.x}, ${pos.y})`}
                         onPointerDown={e => onNodePointerDown(e, node.stableid)}
+                        onPointerEnter={() => setHoveredId(node.stableid)}
+                        onPointerLeave={() => setHoveredId(cur => (cur === node.stableid ? null : cur))}
                         style={{cursor: disabled || otherLock ? 'not-allowed' : 'move'}}
                         aria-disabled={otherLock}
                     >
@@ -536,6 +546,27 @@ export function CanvasView(props: Props): React.ReactElement {
                                 />
                             </g>
                         )))}
+                        {showControls && onChangeStyle && (
+                            <foreignObject
+                                x={-150}
+                                y={-h / 2 - 150}
+                                width={300}
+                                height={150}
+                                style={{overflow: 'visible'}}
+                            >
+                                <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
+                                    <NodeFormatToolbar
+                                        node={node}
+                                        profile={profile}
+                                        disabled={disabled}
+                                        onChangeStyle={m => onChangeStyle(node.stableid, m)}
+                                        onDuplicate={() => onDuplicateNode && onDuplicateNode(node.stableid)}
+                                        onDelete={() => onDeleteNode && onDeleteNode(node.stableid)}
+                                        t={t}
+                                    />
+                                </div>
+                            </foreignObject>
+                        )}
                         {otherLock && (
                             <text
                                 textAnchor="middle"

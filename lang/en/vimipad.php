@@ -68,6 +68,7 @@ $string['editor:deleterelation'] = 'Delete relation';
 $string['editor:dragnodes'] = 'Drag a concept onto a subject or object cell to retarget a relation';
 $string['editor:fmt_bigger'] = 'Larger text';
 $string['editor:fmt_delete'] = 'Delete node';
+$string['editor:fmt_duplicate'] = 'Duplicate node';
 $string['editor:fmt_ellipse'] = 'Ellipse';
 $string['editor:fmt_fill'] = 'Fill colour';
 $string['editor:fmt_font'] = 'Font';

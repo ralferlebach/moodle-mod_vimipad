@@ -44,6 +44,7 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:dragnodes': 'Drag a concept onto a subject or object cell to retarget a relation',
     'editor:fmt_bigger': 'Larger text',
     'editor:fmt_delete': 'Delete node',
+    'editor:fmt_duplicate': 'Duplicate node',
     'editor:fmt_ellipse': 'Ellipse',
     'editor:fmt_fill': 'Fill colour',
     'editor:fmt_font': 'Font',

@@ -47,6 +47,7 @@ export const FA = {
     textColor: 'fa-solid fa-palette',
     highlight: 'fa-solid fa-highlighter',
     reset: 'fa-solid fa-eraser',
+    duplicate: 'fa-solid fa-clone',
     delete: 'fa-solid fa-trash',
     move: 'fa-solid fa-up-down-left-right',
     resize: 'fa-solid fa-up-right-and-down-left-from-center',
