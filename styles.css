@@ -529,3 +529,57 @@
 .vimipad-export-menu button:focus-visible {
     background: var(--vimipad-hover-bg, #e9ecef);
 }
+
+/* -------------------------------------------------------------------------
+   Learner journal panel
+   ------------------------------------------------------------------------- */
+
+.vimipad-journal {
+    margin-top: 1rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--vimipad-border, #ced4da);
+    border-radius: 0.4rem;
+}
+
+.vimipad-journal summary {
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.vimipad-journal-body {
+    margin-top: 0.75rem;
+}
+
+.vimipad-journal-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+}
+
+.vimipad-journal-visibility {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.vimipad-journal-list {
+    margin-top: 1rem;
+    padding: 0;
+    list-style: none;
+}
+
+.vimipad-journal-entry {
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--vimipad-border, #ced4da);
+}
+
+.vimipad-journal-meta {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.vimipad-journal-text {
+    white-space: pre-wrap;
+}

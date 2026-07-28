@@ -33,6 +33,7 @@ import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanv
 import {EditorState, reduce} from '../store/reducer';
 import {History, HistoryEntry, OpSpec} from '../store/history';
 import {CanvasView} from './CanvasView';
+import {JournalPanel} from './JournalPanel';
 import {RelationListView} from './RelationListView';
 import {FA, Icon} from '../canvas/icons';
 import {LayoutMap, Point, PolledOperation, Size, SizeMap, VimiNode, VimiRelation} from '../types';
@@ -815,6 +816,8 @@ export function EditorApp(props: Props): React.ReactElement {
                 </>
             )}
             </div>
+
+            <JournalPanel api={api} workspaceid={state.workspaceid} t={t} />
 
             <p className="text-muted small mt-2">{t('editor:revision')}: {state.revision}</p>
         </div>

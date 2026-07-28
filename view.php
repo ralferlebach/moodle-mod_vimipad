@@ -87,6 +87,12 @@ if ($showgroupmenu) {
 if ($cangrade) {
     echo $OUTPUT->heading(get_string('submissions', 'mod_vimipad'), 3);
 
+    echo html_writer::div(html_writer::link(
+        new moodle_url('/mod/vimipad/report.php', ['cmid' => $cm->id]),
+        get_string('report:link', 'mod_vimipad'),
+        ['class' => 'btn btn-secondary']
+    ), 'mb-3');
+
     $sql = "SELECT s.id AS snapshotid, s.status, s.timecreated, ws.userid, ws.groupid
               FROM {vimipad_snapshot} s
               JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid

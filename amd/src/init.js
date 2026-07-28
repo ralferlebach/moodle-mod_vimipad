@@ -43,6 +43,7 @@ const STRING_KEYS = [
     'editor:canvasview', 'editor:canvasplaceholder',
     'editor:confirm', 'editor:deleterelation', 'editor:fmt_bold', 'editor:fmt_italic', 'editor:fmt_underline', 'editor:fullview',
     'editor:dir_both', 'editor:dir_left', 'editor:dir_none', 'editor:dir_right',
+    'editor:journal', 'editor:journalnew', 'editor:journalsave', 'editor:journalteachervisible',
     'editor:dragnodes', 'editor:export', 'editor:line_curved', 'editor:line_orthogonal',
     'editor:line_straight', 'editor:listview', 'editor:loading',
     'editor:locked', 'editor:nodelabel', 'editor:norelations', 'editor:normalview', 'editor:object',

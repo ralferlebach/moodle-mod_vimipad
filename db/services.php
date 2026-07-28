@@ -93,4 +93,20 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/vimipad:submit',
     ],
+    'mod_vimipad_get_journal_entries' => [
+        'classname' => 'mod_vimipad\external\get_journal_entries',
+        'methodname' => 'execute',
+        'description' => 'Return the current user\'s own journal entries for a workspace.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:view',
+    ],
+    'mod_vimipad_add_journal_entry' => [
+        'classname' => 'mod_vimipad\external\add_journal_entry',
+        'methodname' => 'execute',
+        'description' => 'Add a journal entry to the current user\'s own journal.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:comment',
+    ],
 ];

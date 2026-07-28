@@ -134,6 +134,14 @@ export interface PollResult {
     leases: Lease[];
 }
 
+/** A learner journal entry. */
+export interface JournalEntry {
+    id: number;
+    entrytext: string;
+    visibility: number;
+    timecreated: number;
+}
+
 /** A transport that dispatches a single Moodle external function call. */
 export type ServiceTransport = (methodname: string, args: Record<string, unknown>) => Promise<unknown>;
 

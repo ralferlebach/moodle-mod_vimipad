@@ -26,7 +26,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {Lease, PolledOperation, ServiceTransport, WorkspaceState} from '../types';
+import {JournalEntry, Lease, PolledOperation, ServiceTransport, WorkspaceState} from '../types';
 import {AdaptiveConfig} from '../collab/adaptive';
 import {PollClient} from '../collab/poll_client';
 import {LockClient} from '../collab/lock_client';
@@ -114,6 +114,42 @@ export class ApiClient {
             workspaceid,
         });
         return result as {snapshotid: number; status: number};
+    }
+
+    /**
+     * Fetch the current user's own journal entries for a workspace.
+     *
+     * @param workspaceid The workspace id.
+     * @returns The entries, newest first.
+     */
+    async getJournalEntries(workspaceid: number): Promise<{entries: JournalEntry[]}> {
+        const result = await this.transport('mod_vimipad_get_journal_entries', {
+            cmid: this.cmid,
+            workspaceid,
+        });
+        return result as {entries: JournalEntry[]};
+    }
+
+    /**
+     * Add a journal entry to the current user's own journal.
+     *
+     * @param workspaceid The workspace id.
+     * @param entrytext The entry text.
+     * @param visibility 0 private, 1 teacher-visible.
+     * @returns The new entry id.
+     */
+    async addJournalEntry(
+        workspaceid: number,
+        entrytext: string,
+        visibility: number
+    ): Promise<{id: number}> {
+        const result = await this.transport('mod_vimipad_add_journal_entry', {
+            cmid: this.cmid,
+            workspaceid,
+            entrytext,
+            visibility,
+        });
+        return result as {id: number};
     }
 
     /**
