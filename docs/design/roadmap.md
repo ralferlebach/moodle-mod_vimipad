@@ -19,7 +19,8 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 ## 0.3.x — Barrierefreiheit & Editor-Politur
 
 - Barrierefreiheit prüfen und umsetzen (Ziel WCAG 2.1 AA): Tastaturbedienung des
-  Canvas, Screenreader/ARIA, Fokusführung, Kontraste
+  Canvas, Screenreader/ARIA, Fokusführung, Kontraste — Stand und offene Punkte in
+  [barrierearmut.md](barrierearmut.md)
 - Undo/Redo im Editor
 - Mobile-/Touch-Politur
 - Completion-Detailregeln (z. B. „mindestens n Knoten", „bewertet")

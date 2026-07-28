@@ -774,11 +774,14 @@ export function CanvasView(props: Props): React.ReactElement {
             role="img"
             tabIndex={0}
             style={{touchAction: 'none'}}
-            aria-label={t('editor:canvasaria')}
+            aria-labelledby="vimipad-canvas-title"
+            aria-describedby="vimipad-canvas-desc"
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onKeyDown={onKeyDown}
         >
+            <title id="vimipad-canvas-title">{t('editor:canvasaria')}</title>
+            <desc id="vimipad-canvas-desc">{t('editor:canvashint')}</desc>
             <defs>
                 <marker
                     id="vimipad-arrow"

@@ -112,6 +112,15 @@ export function EditorApp(props: Props): React.ReactElement {
     const historyRef = useRef(new History());
     const [canUndo, setCanUndo] = useState(false);
     const [canRedo, setCanRedo] = useState(false);
+    // Polite screen-reader announcements for actions with little visual feedback.
+    const [status, setStatus] = useState('');
+    const statusTick = useRef(false);
+    const announce = useCallback((text: string) => {
+        // Toggle a trailing non-breaking space so repeating the same action still
+        // changes the node text and is re-announced by assistive technology.
+        statusTick.current = !statusTick.current;
+        setStatus(statusTick.current ? text : `${text}\u00a0`);
+    }, []);
     const syncHistory = useCallback(() => {
         setCanUndo(historyRef.current.canUndo());
         setCanRedo(historyRef.current.canRedo());
@@ -259,16 +268,18 @@ export function EditorApp(props: Props): React.ReactElement {
         syncHistory();
         if (entry) {
             await runOps(entry.undo);
+            announce(t('editor:undo'));
         }
-    }, [runOps, syncHistory]);
+    }, [runOps, syncHistory, announce, t]);
 
     const redo = useCallback(async () => {
         const entry = historyRef.current.takeRedo();
         syncHistory();
         if (entry) {
             await runOps(entry.redo);
+            announce(t('editor:redo'));
         }
-    }, [runOps, syncHistory]);
+    }, [runOps, syncHistory, announce, t]);
 
     // Keyboard: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redo. Skipped
     // while a text field or contentEditable has focus so native text undo keeps
@@ -491,10 +502,11 @@ export function EditorApp(props: Props): React.ReactElement {
         setStored(auto);
         try {
             await api.saveLayout(state.workspaceid, encodeLayout(auto, sizes));
+            announce(t('editor:rearrange'));
         } catch (e) {
             setError((e as Error).message);
         }
-    }, [api, state.workspaceid, state.nodes, state.relations, state.profile, sizes]);
+    }, [api, state.workspaceid, state.nodes, state.relations, state.profile, sizes, announce, t]);
 
     const onNodeResized = useCallback(async (stableid: string, size: Size) => {
         const nextSizes = {...sizes, [stableid]: size};
@@ -630,6 +642,7 @@ export function EditorApp(props: Props): React.ReactElement {
 
     return (
         <div className="vimipad-editor">
+            <div className="vimipad-sr-only" role="status" aria-live="polite">{status}</div>
             {error && <div className="alert alert-danger" role="alert">{error}</div>}
             {state.locked === 1 && (
                 <div className="alert alert-warning" role="status">{t('editor:locked')}</div>
@@ -660,7 +673,7 @@ export function EditorApp(props: Props): React.ReactElement {
                 </li>
             </ul>
 
-            <div className="vimipad-history-toolbar mb-2" role="group" aria-label={t('editor:undo')}>
+            <div className="vimipad-history-toolbar mb-2" role="group" aria-label={t('editor:actions')}>
                 <button
                     type="button"
                     className="btn btn-outline-secondary btn-sm"

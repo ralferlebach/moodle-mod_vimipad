@@ -63,6 +63,7 @@ $string['editor:addrelation'] = 'Relation hinzufügen';
 $string['editor:beingedited'] = 'Wird bearbeitet';
 $string['editor:cancel'] = 'Abbrechen';
 $string['editor:canvasaria'] = 'Map-Zeichenfläche mit verschiebbaren Begriffen';
+$string['editor:canvashint'] = 'Interaktives Diagramm. Zum Bearbeiten mit der Tastatur zur Listen-Ansicht wechseln.';
 $string['editor:canvasplaceholder'] = 'Die grafische Zeichenfläche erscheint hier in einer späteren Version.';
 $string['editor:canvasview'] = 'Zeichenfläche';
 $string['editor:confirm'] = 'Übernehmen';

@@ -102,6 +102,7 @@ export function RelationListView(props: Props): React.ReactElement {
             </ul>
 
             <table className="table table-sm vimipad-relation-list">
+                <caption className="vimipad-sr-only">{t('editor:relations')}</caption>
                 <thead>
                     <tr>
                         <th scope="col">{t('editor:subject')}</th>

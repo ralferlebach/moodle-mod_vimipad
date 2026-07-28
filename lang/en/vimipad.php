@@ -63,6 +63,7 @@ $string['editor:addrelation'] = 'Add relation';
 $string['editor:beingedited'] = 'Being edited';
 $string['editor:cancel'] = 'Cancel';
 $string['editor:canvasaria'] = 'Map canvas with draggable concepts';
+$string['editor:canvashint'] = 'Interactive diagram. To edit with the keyboard, switch to the list view.';
 $string['editor:canvasplaceholder'] = 'The graphical canvas will appear here in a later version.';
 $string['editor:canvasview'] = 'Canvas';
 $string['editor:confirm'] = 'Confirm';

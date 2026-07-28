@@ -39,6 +39,7 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:actions': 'Actions',
     'editor:cancel': 'Cancel',
     'editor:canvasaria': 'Map canvas with draggable concepts',
+    'editor:canvashint': 'Interactive diagram. To edit with the keyboard, switch to the list view.',
     'editor:canvasview': 'Canvas',
     'editor:canvasplaceholder': 'The graphical canvas will appear here in a later version.',
     'editor:confirm': 'Confirm',
