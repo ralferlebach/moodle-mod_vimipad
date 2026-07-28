@@ -44,6 +44,20 @@ describe('reducer', () => {
         expect(base.nodes).toHaveLength(2);
     });
 
+    it('addNode is idempotent for an existing stable id', () => {
+        const once = reduce(base, {kind: 'addNode', node: {stableid: 'node_c', type: 'concept', label: 'C'}});
+        const twice = reduce(once, {kind: 'addNode', node: {stableid: 'node_c', type: 'concept', label: 'C'}});
+        expect(twice.nodes).toHaveLength(3);
+        expect(twice).toBe(once);
+    });
+
+    it('addRelation is idempotent for an existing stable id', () => {
+        const rel = {stableid: 'rel_1', sourceid: 'node_a', targetid: 'node_b', type: 'related', label: '', direction: 1};
+        const next = reduce(base, {kind: 'addRelation', relation: rel});
+        expect(next.relations).toHaveLength(base.relations.length);
+        expect(next).toBe(base);
+    });
+
     it('deleting a node removes its relations', () => {
         const next = reduce(base, {kind: 'deleteNode', stableid: 'node_a'});
         expect(next.nodes).toHaveLength(1);

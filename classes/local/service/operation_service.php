@@ -70,6 +70,15 @@ class operation_service {
         $newrevision = (int) $workspace->currentrevision + 1;
         $stableid = $this->mutate($workspaceid, $type, $payload, $userid);
 
+        // Ensure the logged operation carries the server-assigned stable id.
+        // Create operations are sent without one (the server assigns it), so
+        // without this a collaborator applying the operation from the poll feed
+        // would have no id to add and would drop it (the element would only
+        // appear for them after a full reload).
+        if ($stableid !== null && !isset($payload['stableid'])) {
+            $payload['stableid'] = $stableid;
+        }
+
         // Append to the operation log.
         $DB->insert_record('vimipad_operation', (object) [
             'workspaceid' => $workspaceid,

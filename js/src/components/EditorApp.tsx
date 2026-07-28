@@ -94,12 +94,22 @@ export function EditorApp(props: Props): React.ReactElement {
     // Feed operations polled from collaborators into the local state. Layout
     // changes travel on the separate layout channel and are reconciled below.
     const applyRemoteOperations = useCallback((operations: PolledOperation[]) => {
+        let maxRevision = 0;
         operations.forEach((op) => {
             const action = operationToAction(op);
             if (action) {
                 dispatch(action);
             }
+            if (op.revision > maxRevision) {
+                maxRevision = op.revision;
+            }
         });
+        // Keep our base revision in step with what we have applied, so the next
+        // local edit does not send a stale base revision and hit a needless
+        // revision conflict (which would force a full reload).
+        if (maxRevision > 0) {
+            dispatch({kind: 'setRevision', revision: maxRevision});
+        }
     }, []);
 
     // Reconcile remote layout (positions + sizes) live. Merge rather than

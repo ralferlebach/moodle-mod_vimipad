@@ -1,6 +1,7 @@
 # Arbeitsplanung / Backlog
 
 Lebendes Planungsdokument. Reihenfolge = grobe Priorität, nicht fix.
+Die versionierte Gesamtplanung bis 1.0 steht in [roadmap.md](roadmap.md).
 
 ## In Arbeit / als Nächstes
 

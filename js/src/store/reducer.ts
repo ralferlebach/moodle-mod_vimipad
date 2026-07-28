@@ -61,7 +61,11 @@ export function reduce(state: EditorState, action: EditorState | EditorAction): 
         case 'setRevision':
             return {...state, revision: act.revision};
         case 'addNode':
-            return {...state, nodes: [...state.nodes, act.node]};
+            // Idempotent: applying the same create twice (e.g. the author's own
+            // operation echoed back by the poll feed) must not duplicate it.
+            return state.nodes.some(n => n.stableid === act.node.stableid)
+                ? state
+                : {...state, nodes: [...state.nodes, act.node]};
         case 'updateNode':
             return {
                 ...state,
@@ -84,7 +88,10 @@ export function reduce(state: EditorState, action: EditorState | EditorAction): 
                 ),
             };
         case 'addRelation':
-            return {...state, relations: [...state.relations, act.relation]};
+            // Idempotent for the same reason as addNode.
+            return state.relations.some(r => r.stableid === act.relation.stableid)
+                ? state
+                : {...state, relations: [...state.relations, act.relation]};
         case 'updateRelation':
             return {
                 ...state,

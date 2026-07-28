@@ -102,6 +102,35 @@ final class operation_service_test extends \advanced_testcase {
     }
 
     /**
+     * The logged create operation carries the server-assigned stable id, so
+     * collaborators applying it from the poll feed can add the element.
+     *
+     * @return void
+     */
+    public function test_create_operation_payload_carries_stableid(): void {
+        global $DB;
+        $service = new operation_service();
+
+        $result = $service->apply(
+            $this->workspaceid,
+            0,
+            operation_type::NODE_CREATE,
+            ['type' => 'concept', 'label' => 'Energy'],
+            $this->userid
+        );
+
+        $operation = $DB->get_record(
+            'vimipad_operation',
+            ['workspaceid' => $this->workspaceid, 'revision' => 1],
+            '*',
+            MUST_EXIST
+        );
+        $payload = json_decode($operation->payloadjson, true);
+        $this->assertArrayHasKey('stableid', $payload);
+        $this->assertSame($result['stableid'], $payload['stableid']);
+    }
+
+    /**
      * A stale base revision is rejected as a conflict.
      *
      * @return void

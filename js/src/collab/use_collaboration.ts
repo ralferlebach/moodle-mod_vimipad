@@ -103,6 +103,14 @@ export function useCollaboration(
     layoutHandler.current = onLayout;
     const lastLayout = useRef<string>('');
 
+    // Keep the latest error handler behind a stable wrapper, so passing a fresh
+    // inline onError each render does not tear down and recreate the poll loop.
+    const errorHandler = useRef(onError);
+    errorHandler.current = onError;
+    const handleError = useCallback((error: Error): void => {
+        errorHandler.current?.(error);
+    }, []);
+
     const adaptive = useMemo(() => toAdaptive(collab), [collab]);
 
     useEffect(() => {
@@ -110,7 +118,7 @@ export function useCollaboration(
             return undefined;
         }
 
-        const lock = api.createLockClient(workspaceid, onError);
+        const lock = api.createLockClient(workspaceid, handleError);
         lockRef.current = lock;
 
         // Under Behat acceptance testing, skip the continuous background poll
@@ -146,7 +154,7 @@ export function useCollaboration(
                 // Renew our own held leases on the same tick (heartbeat).
                 void lock.heartbeat();
             },
-            onError,
+            onError: handleError,
         });
         pollRef.current = poll;
         poll.start();
@@ -156,7 +164,7 @@ export function useCollaboration(
             pollRef.current = null;
             lockRef.current = null;
         };
-    }, [api, workspaceid, adaptive, onError]);
+    }, [api, workspaceid, adaptive, handleError]);
 
     const isLockedByOther = useCallback((targettype: string, stableid: string): boolean => {
         const holder = presence[keyOf(targettype, stableid)];
