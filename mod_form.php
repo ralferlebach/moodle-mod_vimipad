@@ -51,15 +51,9 @@ class mod_vimipad_mod_form extends moodleform_mod {
 
         $this->standard_intro_elements();
 
-        // Diagram profile. Only the MVP profiles are listed; the list will be
-        // provided by the profile subplugin registry once it exists.
-        $profiles = [
-            'conceptmap' => get_string('profile_conceptmap', 'mod_vimipad'),
-            'mindmap' => get_string('profile_mindmap', 'mod_vimipad'),
-            'tree' => get_string('profile_tree', 'mod_vimipad'),
-            'semanticnetwork' => get_string('profile_semanticnetwork', 'mod_vimipad'),
-            'bubblemap' => get_string('profile_bubblemap', 'mod_vimipad'),
-        ];
+        // Diagram profile. The list is provided by the profile subplugin
+        // registry: the built-in profiles plus any installed vimipadform_*.
+        $profiles = \mod_vimipad\local\form\registry::menu_options();
         $mform->addElement('select', 'defaultprofile', get_string('defaultprofile', 'mod_vimipad'), $profiles);
         $mform->setDefault('defaultprofile', 'conceptmap');
         $mform->addHelpButton('defaultprofile', 'defaultprofile', 'mod_vimipad');

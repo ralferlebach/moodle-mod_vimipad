@@ -93,12 +93,18 @@ export class ApiClient {
      * @param layoutjson The layout JSON payload.
      * @param viewportjson Optional viewport JSON payload.
      */
-    async saveLayout(workspaceid: number, layoutjson: string, viewportjson = ''): Promise<void> {
+    async saveLayout(
+        workspaceid: number,
+        layoutjson: string,
+        viewportjson = '',
+        mode: 'replace' | 'merge' = 'replace'
+    ): Promise<void> {
         await this.transport('mod_vimipad_save_layout', {
             cmid: this.cmid,
             workspaceid,
             layoutjson,
             viewportjson,
+            mode,
         });
     }
 

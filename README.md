@@ -8,10 +8,18 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.1.0 — installable shell.** The activity can be created,
-configured (diagram profile, working mode, AI toggle), viewed, backed up and
-restored. The editor itself (React canvas + relation list view) is not
-implemented yet.
+**Development status: 0.4.22 — feature-complete 0.4.x, hardening in progress.**
+The activity can be created and configured (diagram profile, working mode,
+optional companion channel, AI toggle), and provides the full editor: a React
+canvas and an equal-rights relation list view with real-time collaboration,
+undo/redo, automatic layout, and export (JSON, XML, SVG, PNG, PDF). Learners
+work individually, in groups or course-wide; teachers submit snapshots for
+grading, add annotations to the map or to individual concepts/relations, view a
+shared learner journal, and draft AI-assisted feedback. Groups, gradebook,
+completion, privacy and backup/restore are integrated. The 0.4.x line has since
+focused on hardening (authorization, backup/restore completeness, a full privacy
+provider, workspace-creation and submission concurrency, group/course grading
+and completion semantics, operation payload contracts and layout merge).
 
 
 ## Requirements

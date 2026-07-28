@@ -1,5 +1,49 @@
 # Changelog — mod_vimipad (ViMi Pad)
 
+> **Versioning note.** The authoritative version is always `version.php`
+> (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
+> used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
+> line; those entries are kept for historical reference only. The current
+> release is **0.4.22** (2026072679).
+
+## 0.4.22 (2026072679) — 0.4.x feature-complete, hardened + consolidated
+
+Full editor and collaboration (0.4.3–0.4.16): real-time collaborative canvas and
+relation list view, undo/redo, automatic layout, canvas overlays and full-screen
+view, group/course workspace switcher, export (JSON, XML, SVG, PNG, PDF), an
+edit-activity report, a learner journal with a teacher-visible view, annotations
+targetable at the whole map or at individual concepts/relations, and an optional
+companion-channel link.
+
+Hardening (0.4.17–0.4.21), following an external review:
+
+- **Security:** AI-feedback drafts can only be accepted scoped to their own
+  snapshot; a foreign draft can no longer be overwritten.
+- **Backup/restore:** activity grade/completion settings, grades (with snapshot
+  remap) and journal entries are now backed up and restored; round-trip tested.
+- **Privacy:** the provider discovers, exports and deletes/anonymises every
+  personal reference it declares (nodes, relations, operations, snapshots,
+  annotations, AI feedback, journal, layout, grades, locks), including shared
+  contributions.
+- **Concurrency:** workspace creation and snapshot submission are serialized via
+  the core lock API; layout saves merge per node so concurrent moves no longer
+  clobber each other.
+- **Grading/completion:** course-wide grades reach all participants; the submit,
+  minimum-concepts and graded completion rules resolve the user's workspace
+  uniformly across individual, group and course modes.
+- **Operation contracts:** every operation payload is validated per type (field
+  types, the relation direction enum, relation metadata JSON) and unknown fields
+  are rejected.
+- **Consolidation (0.4.22):** version metadata aligned across `version.php` and
+  `package.json`; README status updated; the diagram-profile list is now sourced
+  from the subplugin registry instead of a hard-coded list; the release CI
+  workflow unified with the development one (bundle reproducibility, typecheck
+  and Jest gates, the bundle-preserving Grunt step) and the Moodle 4.5–5.3 test
+  matrix (adding 5.2 and 5.3).
+
+---
+
+
 ## 0.1.0 (2026072500) — Session 001
 
 Initial installable plugin shell with full project infrastructure.

@@ -92,4 +92,24 @@ final class form_registry_test extends \advanced_testcase {
         $this->assertSame('orthogonal', $array['line']);
         $this->assertSame('shared', $array['bifurcation']);
     }
+
+    /**
+     * The registry exposes the built-in profiles as localised menu options.
+     *
+     * @return void
+     */
+    public function test_menu_options_cover_builtin_profiles(): void {
+        $this->resetAfterTest();
+
+        $known = registry::known_profiles();
+        foreach (registry::BUILTIN_PROFILES as $profile) {
+            $this->assertContains($profile, $known);
+        }
+
+        $options = registry::menu_options();
+        foreach (registry::BUILTIN_PROFILES as $profile) {
+            $this->assertArrayHasKey($profile, $options);
+            $this->assertNotSame('', (string) $options[$profile]);
+        }
+    }
 }

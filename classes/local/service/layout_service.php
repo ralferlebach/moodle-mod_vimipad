@@ -31,11 +31,18 @@ class layout_service {
     /**
      * Upsert the layout for a workspace and profile.
      *
+     * In 'merge' mode the given layout is treated as a patch: its per-node
+     * positions and sizes are merged into the stored layout (other nodes are
+     * preserved), so concurrent moves of different nodes do not clobber each
+     * other. In 'replace' mode the layout is stored as-is. The read-merge-write
+     * is serialized per workspace/profile.
+     *
      * @param int $workspaceid The workspace id.
      * @param string $profile The diagram profile.
-     * @param string $layoutjson The layout JSON payload.
+     * @param string $layoutjson The layout JSON payload (full, or a patch in merge mode).
      * @param string $viewportjson The viewport JSON payload.
      * @param int $userid The acting user id.
+     * @param string $mode 'replace' (default) or 'merge'.
      * @return void
      */
     public function save(
@@ -43,7 +50,42 @@ class layout_service {
         string $profile,
         string $layoutjson,
         string $viewportjson,
-        int $userid
+        int $userid,
+        string $mode = 'replace'
+    ): void {
+        $lockfactory = \core\lock\lock_config::get_lock_factory('mod_vimipad_layout');
+        $lock = $lockfactory->get_lock($workspaceid . ':' . $profile, 5);
+
+        if (!$lock) {
+            // Could not serialize; fall back to a direct write.
+            $this->write($workspaceid, $profile, $layoutjson, $viewportjson, $userid, $mode);
+            return;
+        }
+        try {
+            $this->write($workspaceid, $profile, $layoutjson, $viewportjson, $userid, $mode);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Read-merge-write of the layout row (call site holds the lock).
+     *
+     * @param int $workspaceid The workspace id.
+     * @param string $profile The diagram profile.
+     * @param string $layoutjson The layout JSON (full, or a patch in merge mode).
+     * @param string $viewportjson The viewport JSON payload.
+     * @param int $userid The acting user id.
+     * @param string $mode 'replace' or 'merge'.
+     * @return void
+     */
+    private function write(
+        int $workspaceid,
+        string $profile,
+        string $layoutjson,
+        string $viewportjson,
+        int $userid,
+        string $mode
     ): void {
         global $DB;
 
@@ -52,6 +94,13 @@ class layout_service {
             'vimipad_layout',
             ['workspaceid' => $workspaceid, 'profile' => $profile]
         );
+
+        if ($mode === 'merge' && $existing && $existing->layoutjson !== null && $existing->layoutjson !== '') {
+            $layoutjson = self::merge_layout($existing->layoutjson, $layoutjson);
+            if ($viewportjson === '' && $existing->viewportjson !== null) {
+                $viewportjson = $existing->viewportjson;
+            }
+        }
 
         if ($existing) {
             $DB->update_record('vimipad_layout', (object) [
@@ -72,6 +121,35 @@ class layout_service {
             'modifiedby' => $userid,
             'timemodified' => $now,
         ]);
+    }
+
+    /**
+     * Merge a layout patch (per-node positions and sizes) into a stored layout.
+     *
+     * @param string $storedjson The stored layout JSON.
+     * @param string $patchjson The incoming patch layout JSON.
+     * @return string The merged layout JSON.
+     */
+    private static function merge_layout(string $storedjson, string $patchjson): string {
+        $stored = json_decode($storedjson, true);
+        $patch = json_decode($patchjson, true);
+        if (!is_array($patch)) {
+            return $storedjson;
+        }
+        if (!is_array($stored)) {
+            return $patchjson;
+        }
+
+        $merged = $stored;
+        $merged['v'] = $patch['v'] ?? ($stored['v'] ?? 1);
+        if (isset($patch['pos']) && is_array($patch['pos'])) {
+            $merged['pos'] = array_merge(is_array($stored['pos'] ?? null) ? $stored['pos'] : [], $patch['pos']);
+        }
+        if (isset($patch['size']) && is_array($patch['size'])) {
+            $merged['size'] = array_merge(is_array($stored['size'] ?? null) ? $stored['size'] : [], $patch['size']);
+        }
+
+        return json_encode($merged);
     }
 
     /**

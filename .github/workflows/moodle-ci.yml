@@ -3,7 +3,7 @@
 #
 # Triggered on push / PR to any branch EXCEPT main (dev workflow).
 #
-# Matrix: Moodle 4.5 · 5.0  ×  PHP 8.1 · 8.2 · 8.3  ×  mariadb · pgsql
+# Matrix: Moodle 4.5 · 5.0 · 5.2 · 5.3  ×  PHP 8.1–8.3  ×  mariadb · pgsql
 #
 # The plugin has NO external plugin dependencies. Integration with local_adele
 # is optional and detected at runtime, so nothing extra is installed here.
@@ -43,6 +43,8 @@ jobs:
       - name: Rebuild bundle and verify it matches the commit
         run: |
           npm ci --no-audit --no-fund
+          npm run typecheck
+          npm test
           node build.mjs
           git diff --exit-code -- amd/build/editor_lazy.min.js amd/build/editor_lazy.min.js.map
 
@@ -195,7 +197,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        moodle: [MOODLE_405_STABLE, MOODLE_500_STABLE, MOODLE_502_STABLE]
+        moodle: [MOODLE_405_STABLE, MOODLE_500_STABLE, MOODLE_502_STABLE, MOODLE_503_STABLE]
         php: ['8.1', '8.2', '8.3']
         db:
           - { engine: mariadb, type: mariadb, port: 3306, user: root,   pass: root   }
@@ -206,6 +208,9 @@ jobs:
           # Moodle 5.2 requires PHP 8.3+.
           - { moodle: MOODLE_502_STABLE, php: '8.1' }
           - { moodle: MOODLE_502_STABLE, php: '8.2' }
+          # Moodle 5.3 requires PHP 8.3+.
+          - { moodle: MOODLE_503_STABLE, php: '8.1' }
+          - { moodle: MOODLE_503_STABLE, php: '8.2' }
 
     services:
       mariadb:
@@ -285,6 +290,7 @@ jobs:
           - { moodle: MOODLE_405_STABLE, php: '8.2' }
           - { moodle: MOODLE_500_STABLE, php: '8.2' }
           - { moodle: MOODLE_502_STABLE, php: '8.3' }
+          - { moodle: MOODLE_503_STABLE, php: '8.3' }
 
     services:
       mariadb:

@@ -550,7 +550,9 @@ export function EditorApp(props: Props): React.ReactElement {
         const nextPos = {...stored, [stableid]: point};
         setStored(nextPos);
         try {
-            await api.saveLayout(state.workspaceid, encodeLayout(nextPos, sizes));
+            // Send only the moved node so concurrent moves of other nodes are not
+            // clobbered; the server merges this patch into the stored layout.
+            await api.saveLayout(state.workspaceid, encodeLayout({[stableid]: point}, {}), '', 'merge');
             pushHistory({
                 undo: [{type: '__layout', payload: {positions: prevPos, sizes}}],
                 redo: [{type: '__layout', payload: {positions: nextPos, sizes}}],

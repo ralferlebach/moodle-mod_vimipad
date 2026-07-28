@@ -42,6 +42,7 @@ class save_layout extends external_api {
             'workspaceid' => new external_value(PARAM_INT, 'Workspace id'),
             'layoutjson' => new external_value(PARAM_RAW, 'JSON-encoded layout state'),
             'viewportjson' => new external_value(PARAM_RAW, 'JSON-encoded viewport state', VALUE_DEFAULT, ''),
+            'mode' => new external_value(PARAM_ALPHA, 'Write mode: replace or merge', VALUE_DEFAULT, 'replace'),
         ]);
     }
 
@@ -52,13 +53,15 @@ class save_layout extends external_api {
      * @param int $workspaceid Workspace id.
      * @param string $layoutjson JSON layout.
      * @param string $viewportjson JSON viewport.
+     * @param string $mode Write mode: replace or merge.
      * @return array{status: bool}
      */
     public static function execute(
         int $cmid,
         int $workspaceid,
         string $layoutjson,
-        string $viewportjson = ''
+        string $viewportjson = '',
+        string $mode = 'replace'
     ): array {
         global $USER, $DB;
 
@@ -67,6 +70,7 @@ class save_layout extends external_api {
             'workspaceid' => $workspaceid,
             'layoutjson' => $layoutjson,
             'viewportjson' => $viewportjson,
+            'mode' => $mode,
         ]);
 
         [, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
@@ -98,7 +102,8 @@ class save_layout extends external_api {
             $instance->defaultprofile,
             $params['layoutjson'],
             $viewport,
-            (int) $USER->id
+            (int) $USER->id,
+            $params['mode'] === 'merge' ? 'merge' : 'replace'
         );
 
         return ['status' => true];

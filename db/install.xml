@@ -89,7 +89,7 @@
         <FIELD NAME="targetid" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false" COMMENT="Stable id of target node"/>
         <FIELD NAME="type" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT="related" SEQUENCE="false" COMMENT="Profile-defined relation type"/>
         <FIELD NAME="label" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
-        <FIELD NAME="direction" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="0=undirected, 1=source to target, 2=bidirectional"/>
+        <FIELD NAME="direction" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="-1=arrow to source, 0=undirected, 1=source to target, 2=bidirectional"/>
         <FIELD NAME="metadatajson" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>

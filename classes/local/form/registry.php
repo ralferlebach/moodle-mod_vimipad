@@ -32,6 +32,9 @@ use core_component;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class registry {
+    /** @var string[] The built-in profiles the core module always offers. */
+    public const BUILTIN_PROFILES = ['conceptmap', 'mindmap', 'tree', 'semanticnetwork', 'bubblemap'];
+
     /** @var base[]|null Cached definitions keyed by profile, or null if not yet built. */
     private static ?array $cache = null;
 
@@ -79,5 +82,38 @@ class registry {
      */
     public static function reset_cache(): void {
         self::$cache = null;
+    }
+
+    /**
+     * Every profile key on offer: the built-in profiles plus any installed
+     * subplugins not already covered.
+     *
+     * @return string[]
+     */
+    public static function known_profiles(): array {
+        $profiles = self::BUILTIN_PROFILES;
+        foreach (array_keys(self::all()) as $profile) {
+            if (!in_array($profile, $profiles, true)) {
+                $profiles[] = $profile;
+            }
+        }
+        return $profiles;
+    }
+
+    /**
+     * Profile => localised label options for a settings menu. A subplugin's own
+     * name is used when installed, otherwise the core language string.
+     *
+     * @return array<string,string>
+     */
+    public static function menu_options(): array {
+        $all = self::all();
+        $options = [];
+        foreach (self::known_profiles() as $profile) {
+            $options[$profile] = isset($all[$profile])
+                ? $all[$profile]->get_name()
+                : get_string('profile_' . $profile, 'mod_vimipad');
+        }
+        return $options;
     }
 }

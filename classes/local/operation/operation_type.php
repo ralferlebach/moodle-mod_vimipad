@@ -91,26 +91,44 @@ class operation_type {
                 self::optional_string($payload, 'label');
                 self::optional_string($payload, 'content');
                 self::validate_node_metadata($payload);
+                self::assert_allowed($payload, ['type', 'stableid', 'label', 'content', 'metadatajson']);
                 break;
             case self::NODE_UPDATE:
                 self::require_string($payload, 'stableid');
+                self::optional_string($payload, 'label');
+                self::optional_string($payload, 'type');
                 self::optional_string($payload, 'content');
                 self::validate_node_metadata($payload);
+                self::assert_allowed($payload, ['stableid', 'label', 'type', 'content', 'metadatajson']);
                 break;
             case self::NODE_DELETE:
                 self::require_string($payload, 'stableid');
+                self::assert_allowed($payload, ['stableid']);
                 break;
             case self::RELATION_CREATE:
                 self::require_string($payload, 'sourceid');
                 self::require_string($payload, 'targetid');
                 self::require_string($payload, 'type');
                 self::optional_string($payload, 'stableid');
+                self::optional_string($payload, 'label');
+                self::validate_direction($payload);
+                self::validate_relation_metadata($payload);
+                self::assert_allowed(
+                    $payload,
+                    ['sourceid', 'targetid', 'type', 'stableid', 'label', 'direction', 'metadatajson']
+                );
                 break;
             case self::RELATION_UPDATE:
                 self::require_string($payload, 'stableid');
+                self::optional_string($payload, 'type');
+                self::optional_string($payload, 'label');
+                self::validate_direction($payload);
+                self::validate_relation_metadata($payload);
+                self::assert_allowed($payload, ['stableid', 'type', 'label', 'direction', 'metadatajson']);
                 break;
             case self::RELATION_DELETE:
                 self::require_string($payload, 'stableid');
+                self::assert_allowed($payload, ['stableid']);
                 break;
             case self::RELATION_RETARGET:
                 self::require_string($payload, 'stableid');
@@ -119,6 +137,7 @@ class operation_type {
                 }
                 self::optional_string($payload, 'newsource');
                 self::optional_string($payload, 'newtarget');
+                self::assert_allowed($payload, ['stableid', 'newsource', 'newtarget']);
                 break;
             default:
                 throw new \invalid_parameter_exception('Unknown operation type: ' . $type);
@@ -140,6 +159,66 @@ class operation_type {
             throw new \invalid_parameter_exception('Invalid field type: metadatajson');
         }
         \mod_vimipad\local\style\node_style::validate_metadata($payload['metadatajson']);
+    }
+
+    /**
+     * Validate the optional relation direction against its enum domain.
+     *
+     * Domain: -1 (arrow to source), 0 (undirected), 1 (source to target),
+     * 2 (bidirectional).
+     *
+     * @param array $payload The payload.
+     * @return void
+     * @throws \invalid_parameter_exception
+     */
+    private static function validate_direction(array $payload): void {
+        if (!array_key_exists('direction', $payload)) {
+            return;
+        }
+        $direction = $payload['direction'];
+        if (!is_int($direction) && !(is_string($direction) && preg_match('/^-?\d+$/', $direction))) {
+            throw new \invalid_parameter_exception('Invalid field type: direction');
+        }
+        if (!in_array((int) $direction, [-1, 0, 1, 2], true)) {
+            throw new \invalid_parameter_exception('Invalid relation direction: ' . $direction);
+        }
+    }
+
+    /**
+     * Validate an optional relation metadatajson field, if present.
+     *
+     * @param array $payload The payload.
+     * @return void
+     * @throws \invalid_parameter_exception
+     */
+    private static function validate_relation_metadata(array $payload): void {
+        if (!array_key_exists('metadatajson', $payload)) {
+            return;
+        }
+        if (!is_string($payload['metadatajson'])) {
+            throw new \invalid_parameter_exception('Invalid field type: metadatajson');
+        }
+        if ($payload['metadatajson'] !== '') {
+            json_decode($payload['metadatajson']);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new \invalid_parameter_exception('Invalid JSON: metadatajson');
+            }
+        }
+    }
+
+    /**
+     * Reject any payload key outside the allowed set for the operation type.
+     *
+     * @param array $payload The payload.
+     * @param string[] $allowed The allowed keys.
+     * @return void
+     * @throws \invalid_parameter_exception
+     */
+    private static function assert_allowed(array $payload, array $allowed): void {
+        $unknown = array_diff(array_keys($payload), $allowed);
+        if (!empty($unknown)) {
+            throw new \invalid_parameter_exception('Unexpected payload field(s): ' . implode(', ', $unknown));
+        }
     }
 
     /**

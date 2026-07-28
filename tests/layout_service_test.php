@@ -109,4 +109,28 @@ final class layout_service_test extends \advanced_testcase {
         $this->assertSame('{"c":1}', $service->get_layout_json($this->workspaceid, 'conceptmap'));
         $this->assertSame('{"m":1}', $service->get_layout_json($this->workspaceid, 'mindmap'));
     }
+
+    /**
+     * Merge mode updates only the patched nodes, preserving the others.
+     *
+     * @return void
+     */
+    public function test_merge_preserves_other_nodes(): void {
+        $service = new layout_service();
+
+        $full = json_encode([
+            'v' => 1,
+            'pos' => ['n1' => ['x' => 1, 'y' => 1], 'n2' => ['x' => 2, 'y' => 2]],
+            'size' => [],
+        ]);
+        $service->save($this->workspaceid, 'conceptmap', $full, '', $this->userid, 'replace');
+
+        // Merge only n1's new position.
+        $patch = json_encode(['v' => 1, 'pos' => ['n1' => ['x' => 9, 'y' => 9]], 'size' => []]);
+        $service->save($this->workspaceid, 'conceptmap', $patch, '', $this->userid, 'merge');
+
+        $stored = json_decode($service->get_layout_json($this->workspaceid, 'conceptmap'), true);
+        $this->assertSame(9, $stored['pos']['n1']['x']);
+        $this->assertSame(2, $stored['pos']['n2']['x']);
+    }
 }
