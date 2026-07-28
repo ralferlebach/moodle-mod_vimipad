@@ -111,6 +111,12 @@ export function EditorApp(props: Props): React.ReactElement {
     // Undo/redo. In a server-authoritative editor an undo is the inverse
     // operation sent to the server, not a local rollback (see store/history).
     const rootRef = useRef<HTMLDivElement>(null);
+    // Absolute export endpoint URL. A relative "export.php" can resolve wrongly
+    // depending on the Moodle base URL / subdirectory, so anchor it at wwwroot.
+    const exportBase = useMemo(() => {
+        const cfg = (window as unknown as {M?: {cfg?: {wwwroot?: string}}}).M?.cfg;
+        return `${cfg?.wwwroot ?? ''}/mod/vimipad/export.php`;
+    }, []);
     const historyRef = useRef(new History());
     const [canUndo, setCanUndo] = useState(false);
     const [canRedo, setCanRedo] = useState(false);
@@ -776,8 +782,8 @@ export function EditorApp(props: Props): React.ReactElement {
                         onExportSvg={exportSvg}
                         onExportPng={exportPng}
                         onExportPdf={exportPdf}
-                        exportJsonUrl={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
-                        exportXmlUrl={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
+                        exportJsonUrl={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
+                        exportXmlUrl={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
                         t={t}
                         isLockedByOther={collab.isLockedByOther}
                         beginEdit={collab.beginEdit}

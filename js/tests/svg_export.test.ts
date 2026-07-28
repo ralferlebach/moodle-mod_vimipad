@@ -21,7 +21,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {computeContentBounds, buildImagePdf, Bounds} from '../src/canvas/svg_export';
+import {computeContentBounds, buildImagePdf, serializeCanvasSvg, Bounds} from '../src/canvas/svg_export';
 import {VimiNode} from '../src/types';
 
 const node = (id: string): VimiNode => ({stableid: id, type: 'concept', label: id});
@@ -54,6 +54,33 @@ describe('computeContentBounds', () => {
         // Default node size 120x44 → half 60x22; with pad 10 → x -70, y -32.
         expect(bounds.x).toBe(-70);
         expect(bounds.y).toBe(-32);
+    });
+});
+
+describe('serializeCanvasSvg', () => {
+    const NS = 'http://www.w3.org/2000/svg';
+
+    test('produces a standalone svg with viewBox, background and no overlays', () => {
+        const svg = document.createElementNS(NS, 'svg') as SVGSVGElement;
+        const nodeGroup = document.createElementNS(NS, 'g');
+        nodeGroup.setAttribute('class', 'vimipad-canvas-node');
+        const outline = document.createElementNS(NS, 'rect');
+        outline.setAttribute('class', 'vimipad-canvas-seloutline');
+        svg.appendChild(nodeGroup);
+        svg.appendChild(outline);
+
+        const out = serializeCanvasSvg(svg, {x: 0, y: 0, w: 100, h: 80});
+
+        expect(out.startsWith('<?xml')).toBe(true);
+        expect(out).toContain('viewBox="0 0 100 80"');
+        expect(out).toContain('width="100"');
+        expect(out).toContain('height="80"');
+        expect(out).toContain('color:#495057');
+        // An opaque background rect is inserted.
+        expect(out).toContain('fill="#ffffff"');
+        // Interaction-only overlays are stripped, real content is kept.
+        expect(out).not.toContain('vimipad-canvas-seloutline');
+        expect(out).toContain('vimipad-canvas-node');
     });
 });
 

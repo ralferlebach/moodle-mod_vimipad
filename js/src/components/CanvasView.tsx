@@ -917,7 +917,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                         href={exportJsonUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        onClick={() => setExportOpen(false)}
+                                        onClick={() => window.setTimeout(() => setExportOpen(false), 0)}
                                     >JSON</a>
                                 )}
                                 {exportXmlUrl && (
@@ -926,7 +926,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                         href={exportXmlUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        onClick={() => setExportOpen(false)}
+                                        onClick={() => window.setTimeout(() => setExportOpen(false), 0)}
                                     >XML</a>
                                 )}
                                 <button
