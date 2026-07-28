@@ -164,6 +164,9 @@ function labelBox(text: TextStyle | undefined): React.CSSProperties {
         lineHeight: 1.2,
         fontFamily: family,
         fontSize: `${BASE_FONT + (text?.size ?? 0) * 2}px`,
+        fontWeight: text?.bold ? 700 : undefined,
+        fontStyle: text?.italic ? 'italic' : undefined,
+        textDecoration: text?.underline ? 'underline' : undefined,
         color: text?.color ?? 'var(--vimipad-node-text, #212529)',
     };
 }
@@ -235,11 +238,10 @@ export function CanvasView(props: Props): React.ReactElement {
     const [interaction, dispatchInteraction] = useReducer(interactionReduce, initialInteraction);
     const [editValue, setEditValue] = useState('');
     const [hoveredId, setHoveredId] = useState<string | null>(null);
-    // Live mirror of the edit value, and a callback ref that seeds/focuses the
-    // multi-line node editor once on mount (contentEditable is uncontrolled to
-    // keep the caret stable while typing).
+    // Live mirror of the edit value, kept in sync synchronously (never via a
+    // post-render effect) so the callback ref below always seeds the editor with
+    // THIS element's text, not the previously edited one.
     const editValueRef = useRef('');
-    useEffect(() => { editValueRef.current = editValue; }, [editValue]);
     const setEditRef = useCallback((el: HTMLDivElement | null) => {
         if (!el) {
             return;
@@ -329,6 +331,7 @@ export function CanvasView(props: Props): React.ReactElement {
             setDragId(null);
             setDragPos(null);
             setMoved(false);
+            editValueRef.current = label;
             setEditValue(label);
             dispatchInteraction({kind: 'startEditing', target: {kind: 'node', id: stableid}});
             return;
@@ -529,6 +532,7 @@ export function CanvasView(props: Props): React.ReactElement {
         if (disabled || lockedByOther(stableid)) {
             return;
         }
+        editValueRef.current = label;
         setEditValue(label);
         dispatchInteraction({kind: 'startEditing', target: {kind: 'node', id: stableid}});
     }, [disabled, lockedByOther]);
@@ -538,6 +542,7 @@ export function CanvasView(props: Props): React.ReactElement {
         if (disabled) {
             return;
         }
+        editValueRef.current = label;
         setEditValue(label);
         dispatchInteraction({kind: 'startEditing', target: {kind: 'relation', id: stableid}});
     }, [disabled]);
@@ -806,13 +811,17 @@ export function CanvasView(props: Props): React.ReactElement {
                             strokeDasharray: '6 4',
                         })}
                         {editing ? (
-                            <foreignObject x={-w / 2} y={-h / 2} width={w} height={h}>
+                            <foreignObject key={`edit-${node.stableid}`} x={-w / 2} y={-h / 2} width={w} height={h}>
                                 <div
                                     ref={setEditRef}
                                     className="vimipad-canvas-edit"
                                     contentEditable
                                     suppressContentEditableWarning
-                                    onInput={e => setEditValue(e.currentTarget.textContent ?? '')}
+                                    onInput={e => {
+                                        const text = e.currentTarget.textContent ?? '';
+                                        editValueRef.current = text;
+                                        setEditValue(text);
+                                    }}
                                     onKeyDown={onEditKeyDown}
                                     onFocus={() => vdbg('node-editor focus', node.stableid)}
                                     onBlur={() => vdbg('node-editor blur', node.stableid)}
@@ -826,7 +835,14 @@ export function CanvasView(props: Props): React.ReactElement {
                                 />
                             </foreignObject>
                         ) : (
-                            <foreignObject x={-w / 2} y={-h / 2} width={w} height={h} style={{pointerEvents: 'none'}}>
+                            <foreignObject
+                                key={`label-${node.stableid}`}
+                                x={-w / 2}
+                                y={-h / 2}
+                                width={w}
+                                height={h}
+                                style={{pointerEvents: 'none'}}
+                            >
                                 <div style={labelBox(style.text)}>
                                     <span
                                         style={style.text?.background

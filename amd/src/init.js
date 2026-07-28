@@ -40,7 +40,7 @@ import Notification from 'core/notification';
 const STRING_KEYS = [
     'editor:add', 'editor:addnode', 'editor:addrelation', 'editor:actions',
     'editor:beingedited', 'editor:cancel', 'editor:canvasaria', 'editor:canvasview', 'editor:canvasplaceholder',
-    'editor:confirm', 'editor:deleterelation', 'editor:dir_both', 'editor:dir_left', 'editor:dir_none', 'editor:dir_right',
+    'editor:confirm', 'editor:deleterelation', 'editor:fmt_bold', 'editor:fmt_italic', 'editor:fmt_underline', 'editor:dir_both', 'editor:dir_left', 'editor:dir_none', 'editor:dir_right',
     'editor:dragnodes', 'editor:listview', 'editor:loading',
     'editor:locked', 'editor:nodelabel', 'editor:norelations', 'editor:object',
     'editor:relation', 'editor:relations', 'editor:retarget', 'editor:revision',

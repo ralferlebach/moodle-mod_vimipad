@@ -63,13 +63,6 @@ export function TextEditMenu(props: Props): React.ReactElement {
     return (
         <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:fmt_text')}>
             <div className="vimipad-node-dock-row">
-                <button
-                    type="button"
-                    className="vimipad-dock-btn vimipad-dock-confirm"
-                    title={t('editor:confirm')}
-                    aria-label={t('editor:confirm')}
-                    onClick={onConfirm}
-                ><Icon name={FA.confirm} /></button>
                 {onChangeStyle && (
                     <>
                         <select
@@ -101,6 +94,33 @@ export function TextEditMenu(props: Props): React.ReactElement {
                             aria-label={t('editor:fmt_bigger')}
                             onClick={() => apply({text: {size: nextSizeStep(style.text?.size, 1)}})}
                         >A<Icon name={FA.fontSizeUp} /></button>
+                        <button
+                            type="button"
+                            className={`vimipad-dock-btn${style.text?.bold ? ' active' : ''}`}
+                            aria-pressed={!!style.text?.bold}
+                            disabled={disabled}
+                            title={t('editor:fmt_bold')}
+                            aria-label={t('editor:fmt_bold')}
+                            onClick={() => apply({text: {bold: !style.text?.bold}})}
+                        ><Icon name={FA.bold} /></button>
+                        <button
+                            type="button"
+                            className={`vimipad-dock-btn${style.text?.italic ? ' active' : ''}`}
+                            aria-pressed={!!style.text?.italic}
+                            disabled={disabled}
+                            title={t('editor:fmt_italic')}
+                            aria-label={t('editor:fmt_italic')}
+                            onClick={() => apply({text: {italic: !style.text?.italic}})}
+                        ><Icon name={FA.italic} /></button>
+                        <button
+                            type="button"
+                            className={`vimipad-dock-btn${style.text?.underline ? ' active' : ''}`}
+                            aria-pressed={!!style.text?.underline}
+                            disabled={disabled}
+                            title={t('editor:fmt_underline')}
+                            aria-label={t('editor:fmt_underline')}
+                            onClick={() => apply({text: {underline: !style.text?.underline}})}
+                        ><Icon name={FA.underline} /></button>
                         <ColorField
                             value={style.text?.color}
                             fallback={DEFAULT_TEXT}
@@ -121,6 +141,13 @@ export function TextEditMenu(props: Props): React.ReactElement {
                         />
                     </>
                 )}
+                <button
+                    type="button"
+                    className="vimipad-dock-btn vimipad-dock-confirm"
+                    title={t('editor:confirm')}
+                    aria-label={t('editor:confirm')}
+                    onClick={onConfirm}
+                ><Icon name={FA.confirm} /></button>
             </div>
         </div>
     );

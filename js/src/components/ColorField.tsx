@@ -43,10 +43,11 @@ interface Props {
     t: (key: string) => string;
 }
 
-/** A small, neutral preset palette. */
+/** A light, friendly preset palette (plus a few solids). */
 const SWATCHES = [
-    '#212529', '#ffffff', '#dc3545', '#fd7e14', '#ffc107',
-    '#198754', '#0d6efd', '#6f42c1', '#e83e8c', '#eef2ff',
+    '#ffffff', '#f1f3f5', '#e9ecef', '#ced4da', '#212529',
+    '#ffd6d6', '#ffe8cc', '#fff3bf', '#d3f9d8', '#d0ebff',
+    '#e5dbff', '#ffdeeb', '#dc3545', '#0d6efd', '#198754',
 ];
 
 /**
@@ -106,18 +107,18 @@ export function ColorField(props: Props): React.ReactElement {
                     <div className="vimipad-color-actions">
                         <button
                             type="button"
-                            className="vimipad-dock-btn vimipad-dock-confirm"
-                            title={t('editor:confirm')}
-                            aria-label={t('editor:confirm')}
-                            onClick={ok}
-                        ><Icon name={FA.confirm} /></button>
-                        <button
-                            type="button"
                             className="vimipad-dock-btn"
                             title={t('editor:cancel')}
                             aria-label={t('editor:cancel')}
                             onClick={cancel}
                         ><Icon name={FA.cancel} /></button>
+                        <button
+                            type="button"
+                            className="vimipad-dock-btn vimipad-dock-confirm"
+                            title={t('editor:confirm')}
+                            aria-label={t('editor:confirm')}
+                            onClick={ok}
+                        ><Icon name={FA.confirm} /></button>
                     </div>
                 </div>
             )}

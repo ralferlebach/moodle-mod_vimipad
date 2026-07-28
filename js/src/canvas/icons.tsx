@@ -59,6 +59,9 @@ export const FA = {
     edit: 'fa-solid fa-pen-to-square',
     confirm: 'fa-solid fa-check',
     cancel: 'fa-solid fa-xmark',
+    bold: 'fa-solid fa-bold',
+    italic: 'fa-solid fa-italic',
+    underline: 'fa-solid fa-underline',
 } as const;
 
 /**

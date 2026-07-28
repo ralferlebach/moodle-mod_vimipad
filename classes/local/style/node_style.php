@@ -101,6 +101,11 @@ class node_style {
         if (array_key_exists('background', $text)) {
             self::assert_color($text['background'], 'text background');
         }
+        foreach (['bold', 'italic', 'underline'] as $flag) {
+            if (array_key_exists($flag, $text) && !is_bool($text[$flag])) {
+                throw new \invalid_parameter_exception('Text ' . $flag . ' must be boolean');
+            }
+        }
     }
 
     /**

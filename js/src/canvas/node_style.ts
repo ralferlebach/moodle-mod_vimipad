@@ -46,6 +46,12 @@ export interface TextStyle {
     color?: string;
     /** Background/highlight colour as #rrggbb, or undefined for none. */
     background?: string;
+    /** Bold weight. */
+    bold?: boolean;
+    /** Italic style. */
+    italic?: boolean;
+    /** Underline decoration. */
+    underline?: boolean;
 }
 
 /** The parsed visual style of a node. All fields optional. */
@@ -174,6 +180,15 @@ export function parseNodeStyle(metadatajson: string | undefined): NodeStyle {
         if (background) {
             text.background = background;
         }
+        if (t.bold === true) {
+            text.bold = true;
+        }
+        if (t.italic === true) {
+            text.italic = true;
+        }
+        if (t.underline === true) {
+            text.underline = true;
+        }
         if (Object.keys(text).length > 0) {
             style.text = text;
         }
@@ -231,6 +246,15 @@ export function serialiseNodeStyle(style: NodeStyle): string {
         }
         if (style.text.background) {
             t.background = style.text.background;
+        }
+        if (style.text.bold) {
+            t.bold = true;
+        }
+        if (style.text.italic) {
+            t.italic = true;
+        }
+        if (style.text.underline) {
+            t.underline = true;
         }
         if (Object.keys(t).length > 0) {
             out.text = t;
