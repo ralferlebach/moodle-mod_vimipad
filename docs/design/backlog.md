@@ -13,7 +13,9 @@ Lebendes Planungsdokument. Reihenfolge = grobe Priorität, nicht fix.
    Führung.
 3. **Auslagerung in `vimipad_form`-Subplugins**: Verbinderstil, Bifurkation und
    erlaubte Formen wandern ins jeweilige Subplugin; Entdeckung über
-   `core_component`.
+   `core_component`. — PHP-Grundgerüst erledigt (Typ `vimipadform`, Registry,
+   fünf MVP-Subplugins, `formconfig` in `get_workspace`); ausstehend: Frontend
+   konsumiert `formconfig` und die eingebaute Profil-Logik wird entfernt.
 4. Automatisches Wachsen der Node-Höhe bei mehrzeiligem Text.
 
 ## Backlog (spätere Ausbaustufen)

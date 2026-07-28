@@ -23,6 +23,7 @@ use core_external\external_multiple_structure;
 use core_external\external_value;
 use mod_vimipad\local\service\workspace_service;
 use mod_vimipad\local\service\layout_service;
+use mod_vimipad\local\form\registry;
 
 /**
  * External function: resolve and return a user's workspace with its state.
@@ -84,6 +85,7 @@ class get_workspace extends external_api {
             'revision' => (int) $workspace->currentrevision,
             'locked' => (int) $workspace->locked,
             'profile' => $instance->defaultprofile,
+            'formconfig' => registry::for_profile($instance->defaultprofile)->to_array(),
             'layoutjson' => $layoutjson,
             'nodes' => array_map([self::class, 'map_node'], $state['nodes']),
             'relations' => array_map([self::class, 'map_relation'], $state['relations']),
@@ -137,6 +139,16 @@ class get_workspace extends external_api {
             'revision' => new external_value(PARAM_INT, 'Current server revision'),
             'locked' => new external_value(PARAM_INT, '1 if the workspace is locked'),
             'profile' => new external_value(PARAM_ALPHANUMEXT, 'Active diagram profile'),
+            'formconfig' => new external_single_structure([
+                'profile' => new external_value(PARAM_ALPHANUMEXT, 'Profile key'),
+                'name' => new external_value(PARAM_TEXT, 'Display name of the form'),
+                'allowedshapes' => new external_multiple_structure(
+                    new external_value(PARAM_ALPHA, 'Allowed node shape key')
+                ),
+                'defaultshape' => new external_value(PARAM_ALPHA, 'Default node shape key'),
+                'line' => new external_value(PARAM_ALPHA, 'Connector line style'),
+                'bifurcation' => new external_value(PARAM_ALPHA, 'Bifurcation behaviour'),
+            ]),
             'layoutjson' => new external_value(PARAM_RAW, 'Stored layout JSON, empty if none'),
             'nodes' => new external_multiple_structure(new external_single_structure([
                 'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable node id'),

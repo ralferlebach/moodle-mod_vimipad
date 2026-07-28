@@ -127,7 +127,10 @@ export function EditorApp(props: Props): React.ReactElement {
         (e) => setError(e.message)
     );
 
-    const layout = useMemo(() => computeLayout(state.nodes, stored), [state.nodes, stored]);
+    const layout = useMemo(
+        () => computeLayout(state.nodes, stored, state.relations, state.profile),
+        [state.nodes, stored, state.relations, state.profile]
+    );
     const disabled = busy || loading || state.locked === 1;
 
     const runOperation = useCallback(async (
@@ -423,6 +426,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         state={state}
                         layout={layout}
                         profile={state.profile}
+                        formconfig={state.formconfig}
                         sizes={sizes}
                         disabled={disabled}
                         onNodeMoved={onNodeMoved}

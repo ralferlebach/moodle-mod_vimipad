@@ -35,8 +35,9 @@
 import React, {useCallback, useEffect, useReducer, useRef, useState} from 'react';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas} from '../graph/autolayout';
 import {EditorState} from '../store/reducer';
-import {LayoutMap, Point, Size, SizeMap} from '../types';
-import {clampShape, NodeShape} from '../canvas/shape_catalog';
+import {LayoutMap, Point, Size, SizeMap, FormConfig} from '../types';
+import {NodeShape} from '../canvas/shape_catalog';
+import {formClampShape, formLine, formShared, LineStyle} from '../canvas/form_config';
 import {parseNodeStyle, TextStyle} from '../canvas/node_style';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {TextEditMenu} from './TextEditMenu';
@@ -56,6 +57,8 @@ interface Props {
     layout: LayoutMap;
     /** Active diagram profile; decides the default and allowed node shapes. */
     profile: string;
+    /** Backend form config (shapes, line, bifurcation); preferred over built-ins. */
+    formconfig?: FormConfig;
     /** Stored manual node sizes; nodes without one use a label-derived size. */
     sizes: SizeMap;
     disabled: boolean;
@@ -119,11 +122,31 @@ const BASE_FONT = 13;
  * @param text The parsed text style, if any.
  * @returns Inline style properties for the label text element.
  */
-/** Default width of a node box for the given label. */
-const nodeWidth = (label: string): number => Math.max(70, label.length * 8 + 20);
+/** Default width of a node box: from the longest line, capped to the max width. */
+const nodeWidth = (label: string): number => {
+    const longest = label.split('\n').reduce((max, line) => Math.max(max, line.length), 1);
+    return Math.max(70, Math.min(MAX_W, longest * 8 + 20));
+};
 
-/** Connector line rendering styles. */
-type LineStyle = 'straight' | 'curved' | 'orthogonal';
+/**
+ * Auto-grown node box height for a label, from its explicit and wrapped lines.
+ *
+ * Explicit newlines and an estimate of soft-wrapping at the given width both add
+ * lines; the height grows with the line count (bounded by the resize maximum) so
+ * multi-line labels are not clipped.
+ *
+ * @param label The node label.
+ * @param width The node box width the text wraps within.
+ * @returns The box height in canvas units.
+ */
+const nodeHeight = (label: string, width: number): number => {
+    const perLine = Math.max(1, Math.floor((width - 12) / 7));
+    let lines = 0;
+    for (const segment of label.split('\n')) {
+        lines += Math.max(1, Math.ceil((segment.length || 1) / perLine));
+    }
+    return Math.max(DEFAULT_NODE_HEIGHT, Math.min(MAX_H, 16 + lines * 18));
+};
 
 /**
  * The connector line style for a display type (profile). Line style is a
@@ -198,15 +221,16 @@ function treeBusPath(sc: Point, ss: Size, tc: Point, ts: Size): string {
  */
 function relLinePath(from: Point, to: Point, line: LineStyle): string | null {
     if (line === 'curved') {
-        const mx = (from.x + to.x) / 2;
-        const my = (from.y + to.y) / 2;
-        const dx = to.x - from.x;
+        // Vertical base direction: the connector leaves the source and enters the
+        // target vertically (control points offset straight up/down). Mirrored
+        // children therefore curve symmetrically, which reads well for the radial
+        // mindmap and bubble-map layouts.
         const dy = to.y - from.y;
-        const len = Math.hypot(dx, dy) || 1;
-        const off = Math.min(70, len * 0.25);
-        const cx = mx + (-dy / len) * off;
-        const cy = my + (dx / len) * off;
-        return `M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`;
+        const dir = dy >= 0 ? 1 : -1;
+        const k = Math.max(24, Math.abs(dy) * 0.5);
+        const c1y = from.y + dir * k;
+        const c2y = to.y - dir * k;
+        return `M ${from.x} ${from.y} C ${from.x} ${c1y} ${to.x} ${c2y} ${to.x} ${to.y}`;
     }
     if (line === 'orthogonal') {
         const mx = (from.x + to.x) / 2;
@@ -293,11 +317,15 @@ function shapeElement(
  */
 export function CanvasView(props: Props): React.ReactElement {
     const {
-        state, layout, profile, sizes, disabled, onNodeMoved, onNodeResized,
+        state, layout, profile, formconfig, sizes, disabled, onNodeMoved, onNodeResized,
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
         onCreateRelation, onChangeDirection,
     } = props;
+    // Rendering rules for the active display type: prefer the backend form config,
+    // fall back to the built-in profile defaults when it is absent.
+    const relLine: LineStyle = formLine(formconfig, profileLine(profile));
+    const sharedBifurcation = formShared(formconfig, profile === 'tree');
     const svgRef = useRef<SVGSVGElement>(null);
     // Manual double-click detection: pointer capture on nodes swallows native dblclick.
     const lastNodeClick = useRef<{id: string; t: number}>({id: '', t: 0});
@@ -365,7 +393,8 @@ export function CanvasView(props: Props): React.ReactElement {
         if (resizeId === stableid && resizeSize) {
             return resizeSize;
         }
-        return sizes[stableid] ?? {w: nodeWidth(label), h: DEFAULT_NODE_HEIGHT};
+        const width = nodeWidth(label);
+        return sizes[stableid] ?? {w: width, h: nodeHeight(label, width)};
     }, [resizeId, resizeSize, sizes]);
 
     // First node whose box contains the given canvas point, if any.
@@ -783,14 +812,14 @@ export function CanvasView(props: Props): React.ReactElement {
                 const toC = positionOf(rel.targetid);
                 const fromSize = srcNode ? sizeOf(srcNode.stableid, srcNode.label) : {w: 70, h: 40};
                 const toSize = tgtNode ? sizeOf(tgtNode.stableid, tgtNode.label) : {w: 70, h: 40};
-                const isTree = profile === 'tree';
+                const isTree = sharedBifurcation;
                 const from = isTree ? {x: fromC.x, y: fromC.y + fromSize.h / 2} : edgePoint(fromC, fromSize, toC);
                 const to = isTree ? {x: toC.x, y: toC.y - toSize.h / 2} : edgePoint(toC, toSize, fromC);
                 const selected = isSelected(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
                 const path = isTree
                     ? treeBusPath(fromC, fromSize, toC, toSize)
-                    : relLinePath(from, to, profileLine(profile));
+                    : relLinePath(from, to, relLine);
                 const stroke = selected ? selColor : 'currentColor';
                 const strokeWidth = selected ? 2.5 : 1.5;
                 const markerStart = d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
@@ -888,12 +917,14 @@ export function CanvasView(props: Props): React.ReactElement {
             {/* Layer 3 (top of the graph, below the menu overlay): nodes. */}
             {state.nodes.map(node => {
                 const pos = positionOf(node.stableid);
-                const {w, h} = sizeOf(node.stableid, node.label);
+                const editing = isEditing(interaction, 'node', node.stableid);
+                // While editing, size from the live text so the box grows as lines are added.
+                const sizingLabel = editing ? editValue : node.label;
+                const {w, h} = sizeOf(node.stableid, sizingLabel);
                 const otherLock = lockedByOther(node.stableid);
                 const selected = isSelected(interaction, 'node', node.stableid);
-                const editing = isEditing(interaction, 'node', node.stableid);
                 const style = parseNodeStyle(node.metadatajson);
-                const shape = clampShape(profile, style.shape);
+                const shape = formClampShape(formconfig, profile, style.shape);
                 const fill = otherLock
                     ? 'var(--vimipad-node-locked-fill, #f3f4f6)'
                     : (style.fill ?? 'var(--vimipad-node-fill, #eef2ff)');
@@ -1059,8 +1090,8 @@ export function CanvasView(props: Props): React.ReactElement {
                         return null;
                     }
                     const pos = positionOf(node.stableid);
-                    const {h} = sizeOf(node.stableid, node.label);
                     const editing = isEditing(interaction, 'node', node.stableid);
+                    const {h} = sizeOf(node.stableid, editing ? editValue : node.label);
                     return (
                         <foreignObject
                             x={pos.x - 150}
@@ -1082,6 +1113,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                     <NodeFormatToolbar
                                         target={node}
                                         profile={profile}
+                                        formconfig={formconfig}
                                         disabled={disabled}
                                         onChangeStyle={m => onChangeStyle(node.stableid, m)}
                                         onDuplicate={() => onDuplicateNode && onDuplicateNode(node.stableid)}

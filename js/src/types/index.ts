@@ -60,10 +60,34 @@ export interface WorkspaceState {
     revision: number;
     locked: number;
     profile: string;
+    /** Active form (display type) config from the backend registry, if present. */
+    formconfig?: FormConfig;
     layoutjson: string;
     nodes: VimiNode[];
     relations: VimiRelation[];
     collab?: CollabConfig;
+}
+
+/**
+ * Rendering configuration for the active diagram form (display type).
+ *
+ * Supplied by the backend vimipadform subplugin registry. The editor prefers
+ * these values over its built-in defaults, so a new display type can ship as a
+ * subplugin without changing the renderer.
+ */
+export interface FormConfig {
+    /** The profile key (e.g. 'tree'). */
+    profile: string;
+    /** Localised display name. */
+    name: string;
+    /** Node shapes offered, in picker order. */
+    allowedshapes: string[];
+    /** Default node shape. */
+    defaultshape: string;
+    /** Connector line style: 'straight' | 'curved' | 'orthogonal'. */
+    line: string;
+    /** Bifurcation behaviour: 'individual' | 'shared' | 'radial'. */
+    bifurcation: string;
 }
 
 /** A 2D position for a node on the canvas. */

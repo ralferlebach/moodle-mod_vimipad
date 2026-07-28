@@ -30,7 +30,9 @@
  */
 
 import React, {useState} from 'react';
-import {allowedShapes, clampShape, NodeShape} from '../canvas/shape_catalog';
+import {NodeShape} from '../canvas/shape_catalog';
+import {formShapes, formClampShape} from '../canvas/form_config';
+import {FormConfig} from '../types';
 import {NodeStyle, parseNodeStyle, serialiseNodeStyle, withNodeStyle} from '../canvas/node_style';
 import {FA, Icon, ShapeGlyph} from '../canvas/icons';
 import {ColorField} from './ColorField';
@@ -41,6 +43,8 @@ interface Props {
     /** The styled element (only its metadatajson is read). */
     target: {metadatajson?: string};
     profile: string;
+    /** Backend form config; preferred over the built-in shape table. */
+    formconfig?: FormConfig;
     disabled: boolean;
     /** Panel to open initially (e.g. 'text' while inline editing). */
     defaultPanel?: Panel;
@@ -73,12 +77,12 @@ const SHAPE_LABEL: Record<NodeShape, string> = {
  * @returns The dock element.
  */
 export function NodeFormatToolbar(props: Props): React.ReactElement {
-    const {kind = 'node', target, profile, disabled, defaultPanel, onChangeStyle, onDuplicate, onDelete, onEditText, t}
+    const {kind = 'node', target, profile, formconfig, disabled, defaultPanel, onChangeStyle, onDuplicate, onDelete, onEditText, t}
         = props;
     const isNode = kind !== 'relation';
     const [panel, setPanel] = useState<Panel>(defaultPanel ?? 'none');
     const style = parseNodeStyle(target.metadatajson);
-    const activeShape = clampShape(profile, style.shape);
+    const activeShape = formClampShape(formconfig, profile, style.shape);
 
     const apply = (change: NodeStyle): void => onChangeStyle(withNodeStyle(target.metadatajson, change));
     const toggle = (p: Panel): void => setPanel(cur => (cur === p ? 'none' : p));
@@ -138,7 +142,7 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
 
             {isNode && panel === 'shape' && (
                 <div className="vimipad-node-dock-panel" role="group" aria-label={t('editor:fmt_shape')}>
-                    {allowedShapes(profile).map(shape => (
+                    {formShapes(formconfig, profile).map(shape => (
                         <button
                             key={shape}
                             type="button"

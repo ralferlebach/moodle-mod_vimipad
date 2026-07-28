@@ -49,4 +49,12 @@ liefert die hier genannten Eigenschaften selbst.
   - übrige MVP-Typen: individuell (bereits über den Verbinderstil abgedeckt).
   - spätere Formen (Argument/Fishbone/Timeline gemeinsam, Systems individuell):
     offen, kommt mit den jeweiligen Subplugins.
-- **Auslagerung in `vimipad_form`-Subplugins:** offen — nächster Schritt.
+- **Auslagerung in `vimipad_form`-Subplugins:** Grundgerüst umgesetzt —
+  Subplugin-Typ `vimipadform` deklariert (`db/subplugins.json`), Definitions-
+  Basisklasse + Registry im Kern (`\mod_vimipad\local\form\{base,fallback,registry}`),
+  die fünf MVP-Darstellungstypen als Subplugins unter `form/` (jeweils
+  Formen/Default/Verbinderstil/Bifurkation), und `get_workspace` liefert die
+  aktive Form-Konfiguration (`formconfig`) an den Editor. Offen: das Frontend
+  konsumiert `formconfig` noch nicht (nutzt weiterhin die eingebauten Regeln) —
+  das ist der nächste Schritt, danach entfällt die fest verdrahtete Profil-Logik
+  im Renderer.
