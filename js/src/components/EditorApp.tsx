@@ -29,6 +29,7 @@
 import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
+import {computeContentBounds, downloadCanvasSvg} from '../canvas/svg_export';
 import {EditorState, reduce} from '../store/reducer';
 import {History, HistoryEntry, OpSpec} from '../store/history';
 import {CanvasView} from './CanvasView';
@@ -106,11 +107,10 @@ export function EditorApp(props: Props): React.ReactElement {
     const [relSource, setRelSource] = useState('');
     const [relTarget, setRelTarget] = useState('');
     const [relLabel, setRelLabel] = useState('');
-    // Full-page canvas view: expands the editor to a full-viewport overlay.
-    const [expanded, setExpanded] = useState(false);
 
     // Undo/redo. In a server-authoritative editor an undo is the inverse
     // operation sent to the server, not a local rollback (see store/history).
+    const rootRef = useRef<HTMLDivElement>(null);
     const historyRef = useRef(new History());
     const [canUndo, setCanUndo] = useState(false);
     const [canRedo, setCanRedo] = useState(false);
@@ -328,19 +328,17 @@ export function EditorApp(props: Props): React.ReactElement {
         return () => document.removeEventListener('keydown', onKey);
     }, [undo, redo]);
 
-    // Leave the full-page canvas view on Escape.
-    useEffect(() => {
-        if (!expanded) {
-            return undefined;
+    // Export the current map as a standalone SVG file (client-side).
+    const exportSvg = useCallback(() => {
+        const svg = rootRef.current?.querySelector('svg.vimipad-canvas') as SVGSVGElement | null;
+        if (!svg) {
+            return;
         }
-        const onKey = (event: KeyboardEvent): void => {
-            if (event.key === 'Escape') {
-                setExpanded(false);
-            }
-        };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [expanded]);
+        const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
+            x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
+        });
+        downloadCanvasSvg(svg, bounds, `vimipad-${state.profile}.svg`);
+    }, [state.nodes, state.profile, stored, sizes]);
 
     const addNode = useCallback(async () => {
         const label = nodeLabel.trim();
@@ -686,7 +684,7 @@ export function EditorApp(props: Props): React.ReactElement {
     ) : null;
 
     return (
-        <div className={`vimipad-editor${expanded ? ' vimipad-editor--expanded' : ''}`}>
+        <div className="vimipad-editor" ref={rootRef}>
             <div className="vimipad-sr-only" role="status" aria-live="polite">{status}</div>
             {error && <div className="alert alert-danger" role="alert">{error}</div>}
             {state.locked === 1 && (
@@ -722,59 +720,6 @@ export function EditorApp(props: Props): React.ReactElement {
                 </li>
             </ul>
 
-            <div className="vimipad-history-toolbar mb-2" role="group" aria-label={t('editor:actions')}>
-                <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={undo}
-                    disabled={disabled || !canUndo}
-                    title={t('editor:undo')}
-                    aria-label={t('editor:undo')}
-                >
-                    <Icon name={FA.undo} /> {t('editor:undo')}
-                </button>
-                <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={redo}
-                    disabled={disabled || !canRedo}
-                    title={t('editor:redo')}
-                    aria-label={t('editor:redo')}
-                >
-                    <Icon name={FA.redo} /> {t('editor:redo')}
-                </button>
-                <details className="vimipad-export">
-                    <summary className="btn btn-outline-secondary btn-sm" title={t('editor:export')}>
-                        <Icon name={FA.export} /> {t('editor:export')}
-                    </summary>
-                    <div className="vimipad-export-menu" role="menu">
-                        <a
-                            role="menuitem"
-                            href={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >JSON</a>
-                        <a
-                            role="menuitem"
-                            href={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >XML</a>
-                    </div>
-                </details>
-                <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={() => setExpanded((v) => !v)}
-                    title={expanded ? t('editor:normalview') : t('editor:fullview')}
-                    aria-label={expanded ? t('editor:normalview') : t('editor:fullview')}
-                    aria-pressed={expanded}
-                >
-                    <Icon name={expanded ? FA.compress : FA.expand} />{' '}
-                    {expanded ? t('editor:normalview') : t('editor:fullview')}
-                </button>
-            </div>
-
             <div
                 role="tabpanel"
                 id="vimipad-tabpanel"
@@ -782,16 +727,6 @@ export function EditorApp(props: Props): React.ReactElement {
             >
             {view === 'canvas' ? (
                 <>
-                    <div className="vimipad-canvas-toolbar mb-2">
-                        <button
-                            type="button"
-                            className="btn btn-outline-secondary btn-sm"
-                            onClick={reArrangeLayout}
-                            disabled={disabled}
-                        >
-                            <Icon name={FA.reArrange} /> {t('editor:rearrange')}
-                        </button>
-                    </div>
                     <CanvasView
                         state={state}
                         layout={layout}
@@ -809,6 +744,14 @@ export function EditorApp(props: Props): React.ReactElement {
                         onDeleteRelation={deleteRelation}
                         onRenameNode={renameNode}
                         onRenameRelation={renameRelation}
+                        onUndo={undo}
+                        onRedo={redo}
+                        canUndo={canUndo}
+                        canRedo={canRedo}
+                        onReArrange={reArrangeLayout}
+                        onExportSvg={exportSvg}
+                        exportJsonUrl={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
+                        exportXmlUrl={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
                         t={t}
                         isLockedByOther={collab.isLockedByOther}
                         beginEdit={collab.beginEdit}

@@ -397,23 +397,73 @@
 }
 
 /* -------------------------------------------------------------------------
-   Full-page canvas view
+   Floating canvas overlays: actions top-left, full-view toggle top-right
    ------------------------------------------------------------------------- */
 
-/* Expand the whole editor to a full-viewport overlay so large maps have room. */
-.vimipad-editor--expanded {
+.vimipad-canvas-wrap {
+    position: relative;
+}
+
+.vimipad-canvas-actions {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.vimipad-canvas-fullview {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 2;
+}
+
+.vimipad-canvas-actions .btn,
+.vimipad-canvas-actions summary,
+.vimipad-canvas-fullview {
+    opacity: 0.9;
+    border: 1px solid var(--vimipad-border, #ced4da);
+}
+
+.vimipad-canvas-actions .btn:hover,
+.vimipad-canvas-actions .btn:focus-visible,
+.vimipad-canvas-fullview:hover,
+.vimipad-canvas-fullview:focus-visible {
+    opacity: 1;
+}
+
+/* Native fullscreen: the canvas alone fills the screen, no chrome, no margins. */
+.vimipad-canvas-wrap:fullscreen {
+    padding: 0;
+    background: var(--vimipad-canvas-bg, #fff);
+}
+
+.vimipad-canvas-wrap:fullscreen .vimipad-canvas {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+}
+
+/* Fixed-overlay fallback when the Fullscreen API is unavailable. */
+.vimipad-canvas-wrap--expanded {
     position: fixed;
     inset: 0;
     z-index: 1050;
     margin: 0;
-    padding: 1rem 1.25rem;
-    overflow: auto;
+    padding: 0;
     background: var(--vimipad-canvas-bg, #fff);
 }
 
-/* Let the canvas use most of the viewport height in full-page view. */
-.vimipad-editor--expanded .vimipad-canvas {
-    height: calc(100vh - 9rem);
+.vimipad-canvas-wrap--expanded .vimipad-canvas {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
 }
 
 /* -------------------------------------------------------------------------
@@ -450,14 +500,22 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-.vimipad-export-menu a {
+.vimipad-export-menu a,
+.vimipad-export-menu button {
     padding: 0.35rem 0.75rem;
     color: inherit;
+    font: inherit;
+    text-align: left;
     text-decoration: none;
+    background: none;
+    border: 0;
     border-radius: 0.2rem;
+    cursor: pointer;
 }
 
 .vimipad-export-menu a:hover,
-.vimipad-export-menu a:focus-visible {
+.vimipad-export-menu a:focus-visible,
+.vimipad-export-menu button:hover,
+.vimipad-export-menu button:focus-visible {
     background: var(--vimipad-hover-bg, #e9ecef);
 }

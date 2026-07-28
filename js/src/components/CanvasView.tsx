@@ -86,6 +86,15 @@ interface Props {
     beginEdit?: (targettype: string, stableid: string) => Promise<boolean>;
     /** Release the editing lock on drag-end. */
     endEdit?: (targettype: string, stableid: string) => Promise<void>;
+    /** Undo/redo, re-arrange and export actions rendered as a top-left overlay. */
+    onUndo?: () => void;
+    onRedo?: () => void;
+    canUndo?: boolean;
+    canRedo?: boolean;
+    onReArrange?: () => void;
+    onExportSvg?: () => void;
+    exportJsonUrl?: string;
+    exportXmlUrl?: string;
 }
 
 /** Default node box height when no manual size is stored. */
@@ -324,6 +333,7 @@ export function CanvasView(props: Props): React.ReactElement {
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
         onCreateRelation, onChangeDirection,
+        onUndo, onRedo, canUndo, canRedo, onReArrange, onExportSvg, exportJsonUrl, exportXmlUrl,
     } = props;
     // Rendering rules for the active display type: prefer the backend form config,
     // fall back to the built-in profile defaults when it is absent.
@@ -341,6 +351,55 @@ export function CanvasView(props: Props): React.ReactElement {
     });
     const viewRef = useRef(view);
     useEffect(() => { viewRef.current = view; }, [view]);
+
+    // Full-page canvas view. Native Fullscreen API is used when available (robust
+    // against ancestors with transform/overflow that break position:fixed); a
+    // fixed-overlay fallback covers the rare case where it is unavailable.
+    const wrapRef = useRef<HTMLDivElement>(null);
+    const [nativeFs, setNativeFs] = useState(false);
+    const [fallbackFs, setFallbackFs] = useState(false);
+    const expanded = nativeFs || fallbackFs;
+
+    useEffect(() => {
+        const onChange = (): void => setNativeFs(Boolean(document.fullscreenElement));
+        document.addEventListener('fullscreenchange', onChange);
+        return () => document.removeEventListener('fullscreenchange', onChange);
+    }, []);
+
+    const toggleFullview = useCallback(async () => {
+        if (document.fullscreenElement) {
+            await document.exitFullscreen();
+            return;
+        }
+        if (fallbackFs) {
+            setFallbackFs(false);
+            return;
+        }
+        const el = wrapRef.current;
+        if (el && el.requestFullscreen) {
+            try {
+                await el.requestFullscreen();
+                return;
+            } catch (e) {
+                // Native request refused; use the CSS overlay fallback instead.
+            }
+        }
+        setFallbackFs(true);
+    }, [fallbackFs]);
+
+    // Escape leaves the fallback overlay (native fullscreen handles Escape itself).
+    useEffect(() => {
+        if (!fallbackFs) {
+            return undefined;
+        }
+        const onKey = (event: KeyboardEvent): void => {
+            if (event.key === 'Escape') {
+                setFallbackFs(false);
+            }
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [fallbackFs]);
     // Active pointers on the background, for one-finger pan and two-finger pinch.
     const pointers = useRef<Map<number, {x: number; y: number}>>(new Map());
     const panStart = useRef<{cx: number; cy: number; vx: number; vy: number} | null>(null);
@@ -774,9 +833,86 @@ export function CanvasView(props: Props): React.ReactElement {
     const selColor = 'var(--vimipad-selected, #2563eb)';
 
     return (
-        <svg
-            ref={svgRef}
-            className="vimipad-canvas border rounded"
+        <div
+            ref={wrapRef}
+            className={`vimipad-canvas-wrap${fallbackFs ? ' vimipad-canvas-wrap--expanded' : ''}`}
+        >
+            <div className="vimipad-canvas-actions" role="toolbar" aria-label={t('editor:actions')}>
+                <button
+                    type="button"
+                    className="btn btn-sm btn-light"
+                    onClick={() => onUndo?.()}
+                    disabled={disabled || !canUndo}
+                    title={t('editor:undo')}
+                    aria-label={t('editor:undo')}
+                >
+                    <Icon name={FA.undo} />
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-sm btn-light"
+                    onClick={() => onRedo?.()}
+                    disabled={disabled || !canRedo}
+                    title={t('editor:redo')}
+                    aria-label={t('editor:redo')}
+                >
+                    <Icon name={FA.redo} />
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-sm btn-light"
+                    onClick={() => onReArrange?.()}
+                    disabled={disabled}
+                    title={t('editor:rearrange')}
+                    aria-label={t('editor:rearrange')}
+                >
+                    <Icon name={FA.reArrange} />
+                </button>
+                {!expanded && (
+                    <details className="vimipad-export">
+                        <summary
+                            className="btn btn-sm btn-light"
+                            title={t('editor:export')}
+                            aria-label={t('editor:export')}
+                        >
+                            <Icon name={FA.export} />
+                        </summary>
+                        <div className="vimipad-export-menu" role="menu">
+                            {exportJsonUrl && (
+                                <a role="menuitem" href={exportJsonUrl} target="_blank" rel="noopener noreferrer">
+                                    JSON
+                                </a>
+                            )}
+                            {exportXmlUrl && (
+                                <a role="menuitem" href={exportXmlUrl} target="_blank" rel="noopener noreferrer">
+                                    XML
+                                </a>
+                            )}
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="vimipad-export-item"
+                                onClick={() => onExportSvg?.()}
+                            >
+                                SVG
+                            </button>
+                        </div>
+                    </details>
+                )}
+            </div>
+            <button
+                type="button"
+                className="btn btn-sm btn-light vimipad-canvas-fullview"
+                onClick={() => { void toggleFullview(); }}
+                title={expanded ? t('editor:normalview') : t('editor:fullview')}
+                aria-label={expanded ? t('editor:normalview') : t('editor:fullview')}
+                aria-pressed={expanded}
+            >
+                <Icon name={expanded ? FA.compress : FA.expand} />
+            </button>
+            <svg
+                ref={svgRef}
+                className="vimipad-canvas border rounded"
             viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
             width="100%"
             role="img"
@@ -1217,5 +1353,6 @@ export function CanvasView(props: Props): React.ReactElement {
                 );
             })()}
         </svg>
+        </div>
     );
 }
