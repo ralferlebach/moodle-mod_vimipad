@@ -18,6 +18,7 @@ namespace mod_vimipad;
 
 use core_privacy\local\request\writer;
 use core_privacy\local\request\approved_contextlist;
+use core_privacy\local\request\userlist;
 use mod_vimipad\privacy\provider;
 
 /**
@@ -109,5 +110,65 @@ final class privacy_test extends \core_privacy\tests\provider_testcase {
 
         provider::delete_data_for_all_users_in_context($context);
         $this->assertSame(0, $DB->count_records('vimipad_workspace', ['vimipadid' => $instance->id]));
+    }
+
+    /**
+     * A user who only contributes to a shared workspace (as submitter, annotator
+     * or grader) is discovered, and deleting them anonymises rather than removes
+     * those shared contributions.
+     *
+     * @return void
+     */
+    public function test_shared_contributor_discovery_and_anonymisation(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module(
+            'vimipad',
+            ['course' => $course->id, 'collaborationmode' => 2]
+        );
+        $owner = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $grader = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $cm = get_coursemodule_from_instance('vimipad', $instance->id);
+        $context = \context_module::instance($cm->id);
+        $now = time();
+
+        $wsid = $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
+            'currentrevision' => 1, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $snapshotid = $DB->insert_record('vimipad_snapshot', (object) [
+            'workspaceid' => $wsid, 'revision' => 1, 'snapshotjson' => '{}',
+            'submittedby' => $grader->id, 'status' => 1, 'timecreated' => $now,
+        ]);
+        $annotationid = $DB->insert_record('vimipad_annotation', (object) [
+            'snapshotid' => $snapshotid, 'targettype' => 'map', 'targetstableid' => null,
+            'commenttext' => 'note', 'commentformat' => 0, 'userid' => $grader->id,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('vimipad_grade', (object) [
+            'vimipadid' => $instance->id, 'userid' => $owner->id, 'grade' => 80.0,
+            'feedback' => '', 'feedbackformat' => 0, 'snapshotid' => $snapshotid,
+            'grader' => $grader->id, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        // The grader is discovered although they own no workspace.
+        $contextids = array_map('intval', provider::get_contexts_for_userid((int) $grader->id)->get_contextids());
+        $this->assertContains((int) $context->id, $contextids);
+
+        $userlist = new userlist($context, 'mod_vimipad');
+        provider::get_users_in_context($userlist);
+        $this->assertContains((int) $grader->id, $userlist->get_userids());
+
+        // Deleting the grader keeps the shared records but scrubs their identity.
+        provider::delete_data_for_user(new approved_contextlist($grader, 'mod_vimipad', [$context->id]));
+
+        $this->assertSame(1, $DB->count_records('vimipad_workspace', ['id' => $wsid]));
+        $this->assertEquals(0, (int) $DB->get_field('vimipad_snapshot', 'submittedby', ['id' => $snapshotid]));
+        $this->assertEquals(0, (int) $DB->get_field('vimipad_annotation', 'userid', ['id' => $annotationid]));
+        $this->assertNull(
+            $DB->get_field('vimipad_grade', 'grader', ['vimipadid' => $instance->id, 'userid' => $owner->id])
+        );
     }
 }

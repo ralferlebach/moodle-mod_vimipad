@@ -132,30 +132,48 @@ class snapshot_service {
     public function create_submission(stdClass $workspace, string $profile, int $userid): stdClass {
         global $DB;
 
-        $normalized = $this->build_normalized($workspace, $profile);
+        // Serialize submissions per workspace so two concurrent submits cannot
+        // both create a snapshot (double submission).
+        $lockfactory = \core\lock\lock_config::get_lock_factory('mod_vimipad_workspace');
+        $lock = $lockfactory->get_lock('submit_' . (int) $workspace->id, 10);
+        if (!$lock) {
+            throw new \moodle_exception('error:workspacelocked', 'mod_vimipad');
+        }
 
-        $transaction = $DB->start_delegated_transaction();
+        try {
+            // Re-read under the lock: a concurrent submit may have locked it.
+            $fresh = $DB->get_record('vimipad_workspace', ['id' => (int) $workspace->id], '*', MUST_EXIST);
+            if ((int) $fresh->locked === 1) {
+                throw new \moodle_exception('error:alreadysubmitted', 'mod_vimipad');
+            }
 
-        $snapshot = (object) [
-            'workspaceid' => (int) $workspace->id,
-            'revision' => (int) $workspace->currentrevision,
-            'snapshotjson' => json_encode($normalized),
-            'submittedby' => $userid,
-            'status' => self::STATUS_SUBMITTED,
-            'timecreated' => time(),
-        ];
-        $snapshot->id = $DB->insert_record('vimipad_snapshot', $snapshot);
+            $normalized = $this->build_normalized($fresh, $profile);
 
-        $DB->update_record('vimipad_workspace', (object) [
-            'id' => (int) $workspace->id,
-            'submittedsnapshotid' => $snapshot->id,
-            'locked' => 1,
-            'timemodified' => time(),
-        ]);
+            $transaction = $DB->start_delegated_transaction();
 
-        $transaction->allow_commit();
+            $snapshot = (object) [
+                'workspaceid' => (int) $fresh->id,
+                'revision' => (int) $fresh->currentrevision,
+                'snapshotjson' => json_encode($normalized),
+                'submittedby' => $userid,
+                'status' => self::STATUS_SUBMITTED,
+                'timecreated' => time(),
+            ];
+            $snapshot->id = $DB->insert_record('vimipad_snapshot', $snapshot);
 
-        return $snapshot;
+            $DB->update_record('vimipad_workspace', (object) [
+                'id' => (int) $fresh->id,
+                'submittedsnapshotid' => $snapshot->id,
+                'locked' => 1,
+                'timemodified' => time(),
+            ]);
+
+            $transaction->allow_commit();
+
+            return $snapshot;
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

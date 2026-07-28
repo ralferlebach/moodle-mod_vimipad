@@ -128,26 +128,67 @@ class provider implements
      */
     public static function get_contexts_for_userid(int $userid): contextlist {
         $contextlist = new contextlist();
+        $mod = ['modlevel' => CONTEXT_MODULE, 'modname' => 'vimipad'];
 
-        $sql = "SELECT ctx.id
-                  FROM {context} ctx
-                  JOIN {course_modules} cm ON cm.id = ctx.instanceid AND ctx.contextlevel = :modlevel
-                  JOIN {modules} m ON m.id = cm.module AND m.name = :modname
-                  JOIN {vimipad} v ON v.id = cm.instance
-                  JOIN {vimipad_workspace} ws ON ws.vimipadid = v.id
-             LEFT JOIN {vimipad_node} n ON n.workspaceid = ws.id
-             LEFT JOIN {vimipad_operation} op ON op.workspaceid = ws.id
-             LEFT JOIN {vimipad_journalentry} j ON j.workspaceid = ws.id
-                 WHERE ws.userid = :u1
-                    OR n.createdby = :u2
-                    OR op.userid = :u3
-                    OR j.userid = :u4";
-        $params = [
-            'modlevel' => CONTEXT_MODULE,
-            'modname' => 'vimipad',
-            'u1' => $userid, 'u2' => $userid, 'u3' => $userid, 'u4' => $userid,
-        ];
-        $contextlist->add_from_sql($sql, $params);
+        $base = "SELECT ctx.id
+                   FROM {context} ctx
+                   JOIN {course_modules} cm ON cm.id = ctx.instanceid AND ctx.contextlevel = :modlevel
+                   JOIN {modules} m ON m.id = cm.module AND m.name = :modname
+                   JOIN {vimipad} v ON v.id = cm.instance ";
+        $ws = "JOIN {vimipad_workspace} ws ON ws.vimipadid = v.id ";
+        $snap = $ws . "JOIN {vimipad_snapshot} s ON s.workspaceid = ws.id ";
+
+        // Workspace owner.
+        $contextlist->add_from_sql($base . $ws . "WHERE ws.userid = :u", $mod + ['u' => $userid]);
+        // Nodes authored or modified.
+        $contextlist->add_from_sql(
+            $base . $ws . "JOIN {vimipad_node} n ON n.workspaceid = ws.id
+                           WHERE n.createdby = :u1 OR n.modifiedby = :u2",
+            $mod + ['u1' => $userid, 'u2' => $userid]
+        );
+        // Relations authored or modified.
+        $contextlist->add_from_sql(
+            $base . $ws . "JOIN {vimipad_relation} r ON r.workspaceid = ws.id
+                           WHERE r.createdby = :u1 OR r.modifiedby = :u2",
+            $mod + ['u1' => $userid, 'u2' => $userid]
+        );
+        // Operations.
+        $contextlist->add_from_sql(
+            $base . $ws . "JOIN {vimipad_operation} op ON op.workspaceid = ws.id WHERE op.userid = :u",
+            $mod + ['u' => $userid]
+        );
+        // Journal entries.
+        $contextlist->add_from_sql(
+            $base . $ws . "JOIN {vimipad_journalentry} j ON j.workspaceid = ws.id WHERE j.userid = :u",
+            $mod + ['u' => $userid]
+        );
+        // Layout modifications.
+        $contextlist->add_from_sql(
+            $base . $ws . "JOIN {vimipad_layout} l ON l.workspaceid = ws.id WHERE l.modifiedby = :u",
+            $mod + ['u' => $userid]
+        );
+        // Element locks.
+        $contextlist->add_from_sql(
+            $base . $ws . "JOIN {vimipad_lock} lk ON lk.workspaceid = ws.id WHERE lk.userid = :u",
+            $mod + ['u' => $userid]
+        );
+        // Snapshots submitted.
+        $contextlist->add_from_sql($base . $snap . "WHERE s.submittedby = :u", $mod + ['u' => $userid]);
+        // Annotations authored.
+        $contextlist->add_from_sql(
+            $base . $snap . "JOIN {vimipad_annotation} a ON a.snapshotid = s.id WHERE a.userid = :u",
+            $mod + ['u' => $userid]
+        );
+        // AI feedback authored (grader).
+        $contextlist->add_from_sql(
+            $base . $snap . "JOIN {vimipad_aifeedback} af ON af.snapshotid = s.id WHERE af.graderid = :u",
+            $mod + ['u' => $userid]
+        );
+        // Grades received or given (attached to the instance directly).
+        $contextlist->add_from_sql(
+            $base . "JOIN {vimipad_grade} g ON g.vimipadid = v.id WHERE g.userid = :u1 OR g.grader = :u2",
+            $mod + ['u1' => $userid, 'u2' => $userid]
+        );
 
         return $contextlist;
     }
@@ -165,32 +206,44 @@ class provider implements
         }
 
         $params = ['cmid' => $context->instanceid, 'modname' => 'vimipad'];
+        $ws = "FROM {course_modules} cm
+               JOIN {modules} m ON m.id = cm.module AND m.name = :modname
+               JOIN {vimipad} v ON v.id = cm.instance
+               JOIN {vimipad_workspace} ws ON ws.vimipadid = v.id ";
+        $snap = $ws . "JOIN {vimipad_snapshot} s ON s.workspaceid = ws.id ";
+        $grade = "FROM {course_modules} cm
+                  JOIN {modules} m ON m.id = cm.module AND m.name = :modname
+                  JOIN {vimipad} v ON v.id = cm.instance
+                  JOIN {vimipad_grade} g ON g.vimipadid = v.id ";
 
-        $userlist->add_from_sql('userid', "
-            SELECT ws.userid
-              FROM {course_modules} cm
-              JOIN {modules} m ON m.id = cm.module AND m.name = :modname
-              JOIN {vimipad} v ON v.id = cm.instance
-              JOIN {vimipad_workspace} ws ON ws.vimipadid = v.id
-             WHERE cm.id = :cmid AND ws.userid IS NOT NULL", $params);
-
-        $userlist->add_from_sql('createdby', "
-            SELECT n.createdby
-              FROM {course_modules} cm
-              JOIN {modules} m ON m.id = cm.module AND m.name = :modname
-              JOIN {vimipad} v ON v.id = cm.instance
-              JOIN {vimipad_workspace} ws ON ws.vimipadid = v.id
-              JOIN {vimipad_node} n ON n.workspaceid = ws.id
-             WHERE cm.id = :cmid AND n.createdby IS NOT NULL", $params);
-
-        $userlist->add_from_sql('userid', "
-            SELECT op.userid
-              FROM {course_modules} cm
-              JOIN {modules} m ON m.id = cm.module AND m.name = :modname
-              JOIN {vimipad} v ON v.id = cm.instance
-              JOIN {vimipad_workspace} ws ON ws.vimipadid = v.id
-              JOIN {vimipad_operation} op ON op.workspaceid = ws.id
-             WHERE cm.id = :cmid", $params);
+        $userlist->add_from_sql('userid', "SELECT ws.userid $ws
+            WHERE cm.id = :cmid AND ws.userid IS NOT NULL", $params);
+        $userlist->add_from_sql('createdby', "SELECT n.createdby $ws
+            JOIN {vimipad_node} n ON n.workspaceid = ws.id WHERE cm.id = :cmid AND n.createdby IS NOT NULL", $params);
+        $userlist->add_from_sql('modifiedby', "SELECT n.modifiedby $ws
+            JOIN {vimipad_node} n ON n.workspaceid = ws.id WHERE cm.id = :cmid AND n.modifiedby IS NOT NULL", $params);
+        $userlist->add_from_sql('createdby', "SELECT r.createdby $ws
+            JOIN {vimipad_relation} r ON r.workspaceid = ws.id WHERE cm.id = :cmid AND r.createdby IS NOT NULL", $params);
+        $userlist->add_from_sql('modifiedby', "SELECT r.modifiedby $ws
+            JOIN {vimipad_relation} r ON r.workspaceid = ws.id WHERE cm.id = :cmid AND r.modifiedby IS NOT NULL", $params);
+        $userlist->add_from_sql('userid', "SELECT op.userid $ws
+            JOIN {vimipad_operation} op ON op.workspaceid = ws.id WHERE cm.id = :cmid", $params);
+        $userlist->add_from_sql('userid', "SELECT j.userid $ws
+            JOIN {vimipad_journalentry} j ON j.workspaceid = ws.id WHERE cm.id = :cmid", $params);
+        $userlist->add_from_sql('modifiedby', "SELECT l.modifiedby $ws
+            JOIN {vimipad_layout} l ON l.workspaceid = ws.id WHERE cm.id = :cmid AND l.modifiedby IS NOT NULL", $params);
+        $userlist->add_from_sql('userid', "SELECT lk.userid $ws
+            JOIN {vimipad_lock} lk ON lk.workspaceid = ws.id WHERE cm.id = :cmid", $params);
+        $userlist->add_from_sql('submittedby', "SELECT s.submittedby $snap
+            WHERE cm.id = :cmid AND s.submittedby IS NOT NULL", $params);
+        $userlist->add_from_sql('userid', "SELECT a.userid $snap
+            JOIN {vimipad_annotation} a ON a.snapshotid = s.id WHERE cm.id = :cmid", $params);
+        $userlist->add_from_sql('graderid', "SELECT af.graderid $snap
+            JOIN {vimipad_aifeedback} af ON af.snapshotid = s.id WHERE cm.id = :cmid AND af.graderid IS NOT NULL", $params);
+        $userlist->add_from_sql('userid', "SELECT g.userid $grade
+            WHERE cm.id = :cmid AND g.userid IS NOT NULL", $params);
+        $userlist->add_from_sql('grader', "SELECT g.grader $grade
+            WHERE cm.id = :cmid AND g.grader IS NOT NULL", $params);
     }
 
     /**
@@ -247,6 +300,66 @@ class provider implements
                 writer::with_context($context)->export_data(
                     [get_string('privacy:path:workspace', 'mod_vimipad') . ' ' . $ws->id],
                     $data
+                );
+            }
+
+            // Grades the user received in this activity.
+            $grades = $DB->get_records('vimipad_grade', ['vimipadid' => $cm->instance, 'userid' => $userid]);
+            if ($grades) {
+                writer::with_context($context)->export_data(
+                    [get_string('privacy:path:grades', 'mod_vimipad')],
+                    (object) ['grades' => array_values(array_map(static function ($g) {
+                        return [
+                            'grade' => $g->grade,
+                            'feedback' => $g->feedback,
+                            'timemodified' => $g->timemodified,
+                        ];
+                    }, $grades))]
+                );
+            }
+
+            // The user's authored contributions across every workspace of the
+            // activity, including shared group/course workspaces.
+            $vid = $cm->instance;
+            $cnodes = $DB->get_records_sql(
+                "SELECT n.* FROM {vimipad_node} n JOIN {vimipad_workspace} ws ON ws.id = n.workspaceid
+                  WHERE ws.vimipadid = :vid AND (n.createdby = :u1 OR n.modifiedby = :u2)",
+                ['vid' => $vid, 'u1' => $userid, 'u2' => $userid]
+            );
+            $crelations = $DB->get_records_sql(
+                "SELECT r.* FROM {vimipad_relation} r JOIN {vimipad_workspace} ws ON ws.id = r.workspaceid
+                  WHERE ws.vimipadid = :vid AND (r.createdby = :u1 OR r.modifiedby = :u2)",
+                ['vid' => $vid, 'u1' => $userid, 'u2' => $userid]
+            );
+            $cjournal = $DB->get_records_sql(
+                "SELECT j.* FROM {vimipad_journalentry} j JOIN {vimipad_workspace} ws ON ws.id = j.workspaceid
+                  WHERE ws.vimipadid = :vid AND j.userid = :u",
+                ['vid' => $vid, 'u' => $userid]
+            );
+            $cannotations = $DB->get_records_sql(
+                "SELECT a.* FROM {vimipad_annotation} a
+                   JOIN {vimipad_snapshot} s ON s.id = a.snapshotid
+                   JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
+                  WHERE ws.vimipadid = :vid AND a.userid = :u",
+                ['vid' => $vid, 'u' => $userid]
+            );
+            if ($cnodes || $crelations || $cjournal || $cannotations) {
+                writer::with_context($context)->export_data(
+                    [get_string('privacy:path:contributions', 'mod_vimipad')],
+                    (object) [
+                        'nodes' => array_values(array_map(static function ($n) {
+                            return ['stableid' => $n->stableid, 'label' => $n->label];
+                        }, $cnodes)),
+                        'relations' => array_values(array_map(static function ($r) {
+                            return ['stableid' => $r->stableid, 'label' => $r->label];
+                        }, $crelations)),
+                        'journal' => array_values(array_map(static function ($j) {
+                            return ['entrytext' => $j->entrytext, 'timecreated' => $j->timecreated];
+                        }, $cjournal)),
+                        'annotations' => array_values(array_map(static function ($a) {
+                            return ['commenttext' => $a->commenttext, 'timecreated' => $a->timecreated];
+                        }, $cannotations)),
+                    ]
                 );
             }
         }
@@ -371,6 +484,17 @@ class provider implements
     private static function anonymise_shared_contributions(int $vimipadid, int $userid): void {
         global $DB;
 
+        // The user acted as grader on grades belonging to others: keep the grade
+        // but drop the grader identity. (Grades the user received are deleted in
+        // the caller.) This is instance-scoped, independent of shared workspaces.
+        $DB->set_field_select(
+            'vimipad_grade',
+            'grader',
+            null,
+            'vimipadid = :vid AND grader = :userid',
+            ['vid' => $vimipadid, 'userid' => $userid]
+        );
+
         $sharedids = $DB->get_fieldset_select(
             'vimipad_workspace',
             'id',
@@ -424,6 +548,40 @@ class provider implements
             'modifiedby',
             0,
             "workspaceid $insql AND modifiedby = :userid",
+            array_merge($params, ['userid' => $userid])
+        );
+
+        // Snapshots submitted by the user in shared workspaces: keep the
+        // immutable snapshot, drop the submitter identity.
+        $DB->set_field_select(
+            'vimipad_snapshot',
+            'submittedby',
+            0,
+            "workspaceid $insql AND submittedby = :userid",
+            array_merge($params, ['userid' => $userid])
+        );
+
+        // Annotations and AI-feedback the user authored on shared snapshots.
+        $snapsubquery = "SELECT s.id FROM {vimipad_snapshot} s WHERE s.workspaceid $insql";
+        $DB->set_field_select(
+            'vimipad_annotation',
+            'userid',
+            0,
+            "userid = :userid AND snapshotid IN ($snapsubquery)",
+            array_merge($params, ['userid' => $userid])
+        );
+        $DB->set_field_select(
+            'vimipad_aifeedback',
+            'graderid',
+            0,
+            "graderid = :userid AND snapshotid IN ($snapsubquery)",
+            array_merge($params, ['userid' => $userid])
+        );
+
+        // Element locks are transient: remove the user's leases in shared workspaces.
+        $DB->delete_records_select(
+            'vimipad_lock',
+            "workspaceid $insql AND userid = :userid",
             array_merge($params, ['userid' => $userid])
         );
 

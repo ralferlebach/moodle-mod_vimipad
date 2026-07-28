@@ -96,6 +96,24 @@ final class snapshot_grading_test extends \advanced_testcase {
     }
 
     /**
+     * A second submission of an already-locked workspace is rejected, so a
+     * double click cannot create two snapshots.
+     *
+     * @return void
+     */
+    public function test_double_submission_is_rejected(): void {
+        global $DB;
+        $workspace = $DB->get_record('vimipad_workspace', ['id' => $this->workspaceid]);
+        $service = new snapshot_service();
+
+        $service->create_submission($workspace, 'conceptmap', $this->studentid);
+
+        // The caller still holds the pre-submission workspace record.
+        $this->expectException(\moodle_exception::class);
+        $service->create_submission($workspace, 'conceptmap', $this->studentid);
+    }
+
+    /**
      * A snapshot is immutable: later edits do not change it.
      *
      * @return void

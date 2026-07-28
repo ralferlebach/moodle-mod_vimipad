@@ -81,7 +81,7 @@ class workspace_service {
             return $existing;
         }
 
-        return $this->create($instance->id, $criteria['userid'], $criteria['groupid']);
+        return $this->create_unique($instance->id, $criteria['userid'], $criteria['groupid']);
     }
 
     /**
@@ -117,6 +117,43 @@ class workspace_service {
         }
 
         return $groupid;
+    }
+
+    /**
+     * Create a workspace for an owner, serialized so concurrent first-access
+     * cannot produce duplicate workspaces.
+     *
+     * Uses the core lock API keyed per owner. If the lock cannot be obtained in
+     * time, a best-effort create is performed (the race window is tiny).
+     *
+     * @param int $vimipadid The vimipad instance id.
+     * @param int|null $userid Owner user id (individual mode) or null.
+     * @param int|null $groupid Owner group id (group mode) or null.
+     * @return stdClass The existing or newly created workspace record.
+     */
+    private function create_unique(int $vimipadid, ?int $userid, ?int $groupid): stdClass {
+        global $DB;
+
+        $criteria = ['vimipadid' => $vimipadid, 'userid' => $userid, 'groupid' => $groupid];
+
+        $lockfactory = \core\lock\lock_config::get_lock_factory('mod_vimipad_workspace');
+        $lockkey = $vimipadid . ':u' . ($userid ?? 0) . ':g' . ($groupid ?? 0);
+        $lock = $lockfactory->get_lock($lockkey, 10);
+
+        if (!$lock) {
+            return $this->create($vimipadid, $userid, $groupid);
+        }
+
+        try {
+            // Another request may have created it while we waited for the lock.
+            $existing = $DB->get_record('vimipad_workspace', $criteria);
+            if ($existing) {
+                return $existing;
+            }
+            return $this->create($vimipadid, $userid, $groupid);
+        } finally {
+            $lock->release();
+        }
     }
 
     /**
