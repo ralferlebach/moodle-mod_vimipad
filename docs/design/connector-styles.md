@@ -43,5 +43,10 @@ liefert die hier genannten Eigenschaften selbst.
   abgeleitet aus dem Profil.
 - **Kanten-Clipping:** Verbinder enden am Node-Rand, damit Pfeilspitzen sichtbar
   sind.
-- **Bifurkations-Routing (gemeinsame Abzweige/Sammelbusse):** offen — nächster
-  Schritt, zusammen mit der Auslagerung in `vimipad_form`-Subplugins.
+- **Bifurkations-Routing:**
+  - `tree` (gemeinsam, vertikal): umgesetzt — Kinder eines Elternknotens teilen
+    einen gemeinsamen Stamm und einen horizontalen Sammelbus (Organigramm-Stil).
+  - übrige MVP-Typen: individuell (bereits über den Verbinderstil abgedeckt).
+  - spätere Formen (Argument/Fishbone/Timeline gemeinsam, Systems individuell):
+    offen, kommt mit den jeweiligen Subplugins.
+- **Auslagerung in `vimipad_form`-Subplugins:** offen — nächster Schritt.

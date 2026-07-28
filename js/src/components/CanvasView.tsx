@@ -166,6 +166,29 @@ function edgePoint(center: Point, size: Size, towards: Point): Point {
 }
 
 /**
+ * Orthogonal "org-chart" routing for a tree edge: parent bottom → shared bus →
+ * child top. Because every child of a parent uses the same bus offset, the
+ * vertical trunk and the horizontal bus overlap into one shared bifurcation.
+ *
+ * @param sc Source (parent) centre.
+ * @param ss Source size.
+ * @param tc Target (child) centre.
+ * @param ts Target size.
+ * @returns A path `d` string.
+ */
+function treeBusPath(sc: Point, ss: Size, tc: Point, ts: Size): string {
+    const fromX = sc.x;
+    const fromY = sc.y + ss.h / 2;
+    const toX = tc.x;
+    const toY = tc.y - ts.h / 2;
+    let busY = fromY + 24;
+    if (busY > toY - 8) {
+        busY = (fromY + toY) / 2;
+    }
+    return `M ${fromX} ${fromY} L ${fromX} ${busY} L ${toX} ${busY} L ${toX} ${toY}`;
+}
+
+/**
  * SVG path for a connector, or null when a straight <line> should be used.
  *
  * @param from Source point.
@@ -760,11 +783,14 @@ export function CanvasView(props: Props): React.ReactElement {
                 const toC = positionOf(rel.targetid);
                 const fromSize = srcNode ? sizeOf(srcNode.stableid, srcNode.label) : {w: 70, h: 40};
                 const toSize = tgtNode ? sizeOf(tgtNode.stableid, tgtNode.label) : {w: 70, h: 40};
-                const from = edgePoint(fromC, fromSize, toC);
-                const to = edgePoint(toC, toSize, fromC);
+                const isTree = profile === 'tree';
+                const from = isTree ? {x: fromC.x, y: fromC.y + fromSize.h / 2} : edgePoint(fromC, fromSize, toC);
+                const to = isTree ? {x: toC.x, y: toC.y - toSize.h / 2} : edgePoint(toC, toSize, fromC);
                 const selected = isSelected(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
-                const path = relLinePath(from, to, profileLine(profile));
+                const path = isTree
+                    ? treeBusPath(fromC, fromSize, toC, toSize)
+                    : relLinePath(from, to, profileLine(profile));
                 const stroke = selected ? selColor : 'currentColor';
                 const strokeWidth = selected ? 2.5 : 1.5;
                 const markerStart = d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
