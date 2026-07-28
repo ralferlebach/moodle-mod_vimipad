@@ -78,6 +78,8 @@ function relationCreateSpec(rel: VimiRelation): OpSpec {
 interface Props {
     api: ApiClient;
     t: (key: string) => string;
+    /** Active group id for group collaboration mode (0 = auto-select). */
+    groupid?: number;
 }
 
 type ViewMode = 'canvas' | 'list';
@@ -95,7 +97,7 @@ const EMPTY: EditorState = {
  * @returns The rendered editor.
  */
 export function EditorApp(props: Props): React.ReactElement {
-    const {api, t} = props;
+    const {api, t, groupid = 0} = props;
     const [state, dispatch] = useReducer(reduce, EMPTY);
     const [view, setView] = useState<ViewMode>('canvas');
     const [stored, setStored] = useState<LayoutMap>({});
@@ -141,7 +143,7 @@ export function EditorApp(props: Props): React.ReactElement {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const ws = await api.getWorkspace();
+            const ws = await api.getWorkspace(groupid);
             dispatch({kind: 'load', state: ws});
             const decoded = decodeLayout(ws.layoutjson);
             setStored(decoded.positions);
@@ -154,7 +156,7 @@ export function EditorApp(props: Props): React.ReactElement {
         } finally {
             setLoading(false);
         }
-    }, [api, syncHistory]);
+    }, [api, groupid, syncHistory]);
 
     useEffect(() => {
         load();

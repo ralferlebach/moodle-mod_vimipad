@@ -54,6 +54,16 @@ $cangrade = has_capability('mod/vimipad:grade', $context);
 $canedit = has_capability('mod/vimipad:editown', $context)
     || has_capability('mod/vimipad:editgroup', $context);
 
+// In group collaboration mode, respect the activity's Moodle group mode
+// (separate/visible). groups_get_activity_group() reflects the group-menu
+// selection and validates it for the user; the editor loads that group's map.
+$activegroupid = 0;
+$showgroupmenu = false;
+if ((int) $instance->collaborationmode === \mod_vimipad\local\service\workspace_service::MODE_GROUP) {
+    $activegroupid = (int) groups_get_activity_group($cm, true);
+    $showgroupmenu = groups_get_activity_groupmode($cm) != NOGROUPS;
+}
+
 // Load the editor through the idiomatic AMD entry point. The thin ES6 module
 // resolves strings (core/str) and an AJAX transport (core/ajax), then loads and
 // mounts the separately bundled React editor. Strings are still registered for
@@ -66,6 +76,11 @@ echo $OUTPUT->header();
 
 if (!empty($instance->intro)) {
     echo $OUTPUT->box(format_module_intro('vimipad', $instance, $cm->id), 'generalbox', 'intro');
+}
+
+// Group switcher (group collaboration mode with a Moodle group mode set).
+if ($showgroupmenu) {
+    groups_print_activity_menu($cm, new moodle_url('/mod/vimipad/view.php', ['id' => $cm->id]));
 }
 
 // Teacher view: list submissions to grade.
@@ -123,7 +138,12 @@ if ($canedit) {
     echo html_writer::div(
         get_string('editorloading', 'mod_vimipad'),
         'vimipad-editor-placeholder',
-        ['id' => 'vimipad-editor-root', 'data-instanceid' => $instance->id, 'data-cmid' => $cm->id]
+        [
+            'id' => 'vimipad-editor-root',
+            'data-instanceid' => $instance->id,
+            'data-cmid' => $cm->id,
+            'data-groupid' => $activegroupid,
+        ]
     );
 } else if (!$cangrade) {
     echo html_writer::tag('p', get_string('noaccess', 'mod_vimipad'), ['class' => 'text-muted']);

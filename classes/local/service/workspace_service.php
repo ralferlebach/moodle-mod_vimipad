@@ -94,13 +94,17 @@ class workspace_service {
      * @throws \moodle_exception If the user is not a member of the group.
      */
     private function resolve_group(context_module $context, int $userid, ?int $groupid): int {
+        $courseid = $context->get_course_context()->instanceid;
         $canaccessall = has_capability('moodle/site:accessallgroups', $context, $userid);
 
         if ($groupid === null || $groupid === 0) {
-            $usergroups = groups_get_all_groups(
-                $context->get_course_context()->instanceid,
-                $userid
-            );
+            // Auto-pick the user's own first group. Users who may access all
+            // groups but belong to none (typically teachers) fall back to the
+            // first group defined in the course.
+            $usergroups = groups_get_all_groups($courseid, $userid);
+            if (empty($usergroups) && $canaccessall) {
+                $usergroups = groups_get_all_groups($courseid);
+            }
             if (empty($usergroups)) {
                 throw new \moodle_exception('error:nogroup', 'mod_vimipad');
             }

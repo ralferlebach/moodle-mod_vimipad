@@ -119,6 +119,7 @@ export const init = async(cmid, selector = 'vimipad-editor-root') => {
         const [strings, editor] = await Promise.all([loadStrings(), loadEditor()]);
         editor.mount(element, {
             cmid,
+            groupid: parseInt(element.dataset.groupid || '0', 10),
             callService: buildTransport(),
             getString: (key) => strings[key] ?? key,
         });

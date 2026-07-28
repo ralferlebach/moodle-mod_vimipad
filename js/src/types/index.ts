@@ -140,6 +140,8 @@ export type ServiceTransport = (methodname: string, args: Record<string, unknown
 /** Configuration handed to mount() by the host page. */
 export interface MountConfig {
     cmid: number;
+    /** Active group id for group collaboration mode (0 = auto-select). */
+    groupid?: number;
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */
