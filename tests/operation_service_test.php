@@ -131,6 +131,59 @@ final class operation_service_test extends \advanced_testcase {
     }
 
     /**
+     * Re-creating a soft-deleted node with the same stable id revives it rather
+     * than violating the unique index, which is what undo of a deletion needs.
+     *
+     * @return void
+     */
+    public function test_recreate_with_same_stableid_revives_node(): void {
+        global $DB;
+        $service = new operation_service();
+
+        $created = $service->apply(
+            $this->workspaceid,
+            0,
+            operation_type::NODE_CREATE,
+            ['type' => 'concept', 'label' => 'Energy'],
+            $this->userid
+        );
+        $stableid = $created['stableid'];
+
+        $service->apply(
+            $this->workspaceid,
+            1,
+            operation_type::NODE_DELETE,
+            ['stableid' => $stableid],
+            $this->userid
+        );
+        $this->assertSame(1, (int) $DB->get_field(
+            'vimipad_node',
+            'deleted',
+            ['workspaceid' => $this->workspaceid, 'stableid' => $stableid]
+        ));
+
+        // Re-create with the same stable id (as an undo would).
+        $service->apply(
+            $this->workspaceid,
+            2,
+            operation_type::NODE_CREATE,
+            ['stableid' => $stableid, 'type' => 'concept', 'label' => 'Energy'],
+            $this->userid
+        );
+
+        // Exactly one row, now live again (no unique-index violation, no duplicate).
+        $this->assertSame(1, $DB->count_records(
+            'vimipad_node',
+            ['workspaceid' => $this->workspaceid, 'stableid' => $stableid]
+        ));
+        $this->assertSame(0, (int) $DB->get_field(
+            'vimipad_node',
+            'deleted',
+            ['workspaceid' => $this->workspaceid, 'stableid' => $stableid]
+        ));
+    }
+
+    /**
      * A stale base revision is rejected as a conflict.
      *
      * @return void

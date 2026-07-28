@@ -26,17 +26,53 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import React, {useCallback, useEffect, useMemo, useReducer, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
 import {EditorState, reduce} from '../store/reducer';
+import {History, HistoryEntry, OpSpec} from '../store/history';
 import {CanvasView} from './CanvasView';
 import {RelationListView} from './RelationListView';
 import {FA, Icon} from '../canvas/icons';
-import {LayoutMap, Point, PolledOperation, Size, SizeMap} from '../types';
+import {LayoutMap, Point, PolledOperation, Size, SizeMap, VimiNode, VimiRelation} from '../types';
 import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
 import {useCollaboration} from '../collab/use_collaboration';
 import {operationToAction} from '../collab/apply_remote';
+
+/**
+ * Operation that recreates a node (used to undo a deletion / redo a creation).
+ *
+ * @param node The node to reconstruct.
+ * @returns The node_create op spec.
+ */
+function nodeCreateSpec(node: VimiNode): OpSpec {
+    const payload: Record<string, unknown> = {
+        stableid: node.stableid, type: node.type, label: node.label,
+    };
+    if (node.content !== undefined) {
+        payload.content = node.content;
+    }
+    if (node.metadatajson !== undefined) {
+        payload.metadatajson = node.metadatajson;
+    }
+    return {type: 'node_create', payload};
+}
+
+/**
+ * Operation that recreates a relation (used to undo a deletion).
+ *
+ * @param rel The relation to reconstruct.
+ * @returns The relation_create op spec.
+ */
+function relationCreateSpec(rel: VimiRelation): OpSpec {
+    return {
+        type: 'relation_create',
+        payload: {
+            stableid: rel.stableid, sourceid: rel.sourceid, targetid: rel.targetid,
+            type: rel.type, label: rel.label, direction: rel.direction,
+        },
+    };
+}
 
 interface Props {
     api: ApiClient;
@@ -71,6 +107,20 @@ export function EditorApp(props: Props): React.ReactElement {
     const [relTarget, setRelTarget] = useState('');
     const [relLabel, setRelLabel] = useState('');
 
+    // Undo/redo. In a server-authoritative editor an undo is the inverse
+    // operation sent to the server, not a local rollback (see store/history).
+    const historyRef = useRef(new History());
+    const [canUndo, setCanUndo] = useState(false);
+    const [canRedo, setCanRedo] = useState(false);
+    const syncHistory = useCallback(() => {
+        setCanUndo(historyRef.current.canUndo());
+        setCanRedo(historyRef.current.canRedo());
+    }, []);
+    const pushHistory = useCallback((entry: HistoryEntry) => {
+        historyRef.current.push(entry);
+        syncHistory();
+    }, [syncHistory]);
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
@@ -79,13 +129,15 @@ export function EditorApp(props: Props): React.ReactElement {
             const decoded = decodeLayout(ws.layoutjson);
             setStored(decoded.positions);
             setSizes(decoded.sizes);
+            historyRef.current.clear();
+            syncHistory();
             setError(null);
         } catch (e) {
             setError((e as Error).message);
         } finally {
             setLoading(false);
         }
-    }, [api]);
+    }, [api, syncHistory]);
 
     useEffect(() => {
         load();
@@ -164,6 +216,91 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [api, state.workspaceid, state.revision, load]);
 
+    // Latest state/revision for the replay executor, without widening deps.
+    const stateRef = useRef(state);
+    stateRef.current = state;
+    const revisionRef = useRef(state.revision);
+    revisionRef.current = state.revision;
+
+    // Apply a sequence of operations to the server and locally (used by undo and
+    // redo). Not recorded in history; the stack is managed by undo()/redo().
+    const runOps = useCallback(async (specs: OpSpec[]): Promise<void> => {
+        setBusy(true);
+        let revision = revisionRef.current;
+        try {
+            for (const spec of specs) {
+                const res = await api.applyOperation(
+                    stateRef.current.workspaceid, revision, spec.type, spec.payload
+                );
+                revision = res.revision;
+                const action = operationToAction({
+                    operationtype: spec.type,
+                    payloadjson: JSON.stringify(spec.payload),
+                    revision: res.revision,
+                    userid: currentUserId,
+                });
+                if (action) {
+                    dispatch(action);
+                }
+            }
+            revisionRef.current = revision;
+            dispatch({kind: 'setRevision', revision});
+            setError(null);
+        } catch (e) {
+            setError((e as Error).message);
+            await load();
+        } finally {
+            setBusy(false);
+        }
+    }, [api, currentUserId, load]);
+
+    const undo = useCallback(async () => {
+        const entry = historyRef.current.takeUndo();
+        syncHistory();
+        if (entry) {
+            await runOps(entry.undo);
+        }
+    }, [runOps, syncHistory]);
+
+    const redo = useCallback(async () => {
+        const entry = historyRef.current.takeRedo();
+        syncHistory();
+        if (entry) {
+            await runOps(entry.redo);
+        }
+    }, [runOps, syncHistory]);
+
+    // Keyboard: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redo. Skipped
+    // while a text field or contentEditable has focus so native text undo keeps
+    // working during label/relation editing.
+    useEffect(() => {
+        const onKey = (event: KeyboardEvent): void => {
+            if (!(event.ctrlKey || event.metaKey)) {
+                return;
+            }
+            const target = document.activeElement as HTMLElement | null;
+            if (target && (target.isContentEditable
+                || target.tagName === 'INPUT'
+                || target.tagName === 'TEXTAREA'
+                || target.tagName === 'SELECT')) {
+                return;
+            }
+            if (stateRef.current.locked === 1) {
+                return;
+            }
+            const key = event.key.toLowerCase();
+            if (key === 'z' && !event.shiftKey) {
+                event.preventDefault();
+                void undo();
+            } else if ((key === 'z' && event.shiftKey) || key === 'y') {
+                event.preventDefault();
+                void redo();
+            }
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [undo, redo]);
+
     const addNode = useCallback(async () => {
         const label = nodeLabel.trim();
         if (!label) {
@@ -172,9 +309,13 @@ export function EditorApp(props: Props): React.ReactElement {
         const res = await runOperation('node_create', {type: 'concept', label}, () => undefined);
         if (res) {
             dispatch({kind: 'addNode', node: {stableid: res.stableid, type: 'concept', label}});
+            pushHistory({
+                undo: [{type: 'node_delete', payload: {stableid: res.stableid}}],
+                redo: [{type: 'node_create', payload: {stableid: res.stableid, type: 'concept', label}}],
+            });
             setNodeLabel('');
         }
-    }, [runOperation, nodeLabel]);
+    }, [runOperation, nodeLabel, pushHistory]);
 
     const addRelation = useCallback(async () => {
         if (!relSource || !relTarget || relSource === relTarget) {
@@ -191,9 +332,16 @@ export function EditorApp(props: Props): React.ReactElement {
                     type: 'related', label, direction: 1,
                 },
             });
+            pushHistory({
+                undo: [{type: 'relation_delete', payload: {stableid: res.stableid}}],
+                redo: [relationCreateSpec({
+                    stableid: res.stableid, sourceid: relSource, targetid: relTarget,
+                    type: 'related', label, direction: 1,
+                })],
+            });
             setRelLabel('');
         }
-    }, [runOperation, relSource, relTarget, relLabel]);
+    }, [runOperation, relSource, relTarget, relLabel, pushHistory]);
 
     const createRelation = useCallback(async (sourceid: string, targetid: string) => {
         if (sourceid === targetid) {
@@ -208,43 +356,99 @@ export function EditorApp(props: Props): React.ReactElement {
                     stableid: res.stableid, sourceid, targetid, type: 'related', label: '', direction: 1,
                 },
             });
+            pushHistory({
+                undo: [{type: 'relation_delete', payload: {stableid: res.stableid}}],
+                redo: [relationCreateSpec({
+                    stableid: res.stableid, sourceid, targetid, type: 'related', label: '', direction: 1,
+                })],
+            });
         }
-    }, [runOperation]);
+    }, [runOperation, pushHistory]);
 
-    const deleteRelation = useCallback(async (stableid: string) => {        await runOperation('relation_delete', {stableid},
+    const deleteRelation = useCallback(async (stableid: string) => {
+        const rel = stateRef.current.relations.find(r => r.stableid === stableid);
+        const res = await runOperation('relation_delete', {stableid},
             () => dispatch({kind: 'deleteRelation', stableid}));
-    }, [runOperation]);
+        if (res && rel) {
+            pushHistory({
+                undo: [relationCreateSpec(rel)],
+                redo: [{type: 'relation_delete', payload: {stableid}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
 
     const deleteNode = useCallback(async (stableid: string) => {
-        await runOperation('node_delete', {stableid},
+        const node = stateRef.current.nodes.find(n => n.stableid === stableid);
+        const attached = stateRef.current.relations.filter(
+            r => r.sourceid === stableid || r.targetid === stableid
+        );
+        const res = await runOperation('node_delete', {stableid},
             () => dispatch({kind: 'deleteNode', stableid}));
-    }, [runOperation]);
+        if (res && node) {
+            // Undo recreates the node first, then its relations (endpoints must
+            // exist); redo deletes the node (which cascades its relations).
+            pushHistory({
+                undo: [nodeCreateSpec(node), ...attached.map(relationCreateSpec)],
+                redo: [{type: 'node_delete', payload: {stableid}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
 
     const renameNode = useCallback(async (stableid: string, label: string) => {
         const trimmed = label.trim();
         if (!trimmed) {
             return;
         }
-        await runOperation('node_update', {stableid, label: trimmed},
+        const prev = stateRef.current.nodes.find(n => n.stableid === stableid)?.label ?? '';
+        const res = await runOperation('node_update', {stableid, label: trimmed},
             () => dispatch({kind: 'updateNode', stableid, label: trimmed}));
-    }, [runOperation]);
+        if (res && prev !== trimmed) {
+            pushHistory({
+                undo: [{type: 'node_update', payload: {stableid, label: prev}}],
+                redo: [{type: 'node_update', payload: {stableid, label: trimmed}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
 
     const changeNodeStyle = useCallback(async (stableid: string, metadatajson: string) => {
-        await runOperation('node_update', {stableid, metadatajson},
+        const prev = stateRef.current.nodes.find(n => n.stableid === stableid)?.metadatajson ?? '';
+        const res = await runOperation('node_update', {stableid, metadatajson},
             () => dispatch({kind: 'updateNode', stableid, metadatajson}));
-    }, [runOperation]);
+        if (res) {
+            pushHistory({
+                undo: [{type: 'node_update', payload: {stableid, metadatajson: prev}}],
+                redo: [{type: 'node_update', payload: {stableid, metadatajson}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
 
     const renameRelation = useCallback(async (stableid: string, label: string) => {
-        await runOperation('relation_update', {stableid, label: label.trim()},
-            () => dispatch({kind: 'updateRelation', stableid, label: label.trim()}));
-    }, [runOperation]);
+        const trimmed = label.trim();
+        const prev = stateRef.current.relations.find(r => r.stableid === stableid)?.label ?? '';
+        const res = await runOperation('relation_update', {stableid, label: trimmed},
+            () => dispatch({kind: 'updateRelation', stableid, label: trimmed}));
+        if (res && prev !== trimmed) {
+            pushHistory({
+                undo: [{type: 'relation_update', payload: {stableid, label: prev}}],
+                redo: [{type: 'relation_update', payload: {stableid, label: trimmed}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
 
     const changeDirection = useCallback(async (stableid: string, direction: number) => {
-        await runOperation('relation_update', {stableid, direction},
+        const prev = stateRef.current.relations.find(r => r.stableid === stableid)?.direction ?? 1;
+        const res = await runOperation('relation_update', {stableid, direction},
             () => dispatch({kind: 'updateRelation', stableid, direction}));
-    }, [runOperation]);
+        if (res && prev !== direction) {
+            pushHistory({
+                undo: [{type: 'relation_update', payload: {stableid, direction: prev}}],
+                redo: [{type: 'relation_update', payload: {stableid, direction}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
 
     const retarget = useCallback(async (stableid: string, change: {sourceid?: string; targetid?: string}) => {
+        const prev = stateRef.current.relations.find(r => r.stableid === stableid);
         const payload: Record<string, unknown> = {stableid};
         if (change.sourceid) {
             payload.newsource = change.sourceid;
@@ -252,9 +456,22 @@ export function EditorApp(props: Props): React.ReactElement {
         if (change.targetid) {
             payload.newtarget = change.targetid;
         }
-        await runOperation('relation_retarget', payload,
+        const res = await runOperation('relation_retarget', payload,
             () => dispatch({kind: 'retargetRelation', stableid, ...change}));
-    }, [runOperation]);
+        if (res && prev) {
+            const undoPayload: Record<string, unknown> = {stableid};
+            if (change.sourceid) {
+                undoPayload.newsource = prev.sourceid;
+            }
+            if (change.targetid) {
+                undoPayload.newtarget = prev.targetid;
+            }
+            pushHistory({
+                undo: [{type: 'relation_retarget', payload: undoPayload}],
+                redo: [{type: 'relation_retarget', payload}],
+            });
+        }
+    }, [runOperation, pushHistory]);
 
     const onNodeMoved = useCallback(async (stableid: string, point: Point) => {
         const nextPos = {...stored, [stableid]: point};
@@ -442,6 +659,29 @@ export function EditorApp(props: Props): React.ReactElement {
                     </button>
                 </li>
             </ul>
+
+            <div className="vimipad-history-toolbar mb-2" role="group" aria-label={t('editor:undo')}>
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={undo}
+                    disabled={disabled || !canUndo}
+                    title={t('editor:undo')}
+                    aria-label={t('editor:undo')}
+                >
+                    <Icon name={FA.undo} /> {t('editor:undo')}
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={redo}
+                    disabled={disabled || !canRedo}
+                    title={t('editor:redo')}
+                    aria-label={t('editor:redo')}
+                >
+                    <Icon name={FA.redo} /> {t('editor:redo')}
+                </button>
+            </div>
 
             {view === 'canvas' ? (
                 <>

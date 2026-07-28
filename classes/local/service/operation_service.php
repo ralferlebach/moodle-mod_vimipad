@@ -142,7 +142,7 @@ class operation_service {
         switch ($type) {
             case operation_type::NODE_CREATE:
                 $stableid = $this->pick_stable_id($payload, 'node');
-                $DB->insert_record('vimipad_node', (object) [
+                $record = [
                     'workspaceid' => $workspaceid,
                     'stableid' => $stableid,
                     'type' => $payload['type'],
@@ -150,12 +150,24 @@ class operation_service {
                     'content' => $payload['content'] ?? null,
                     'contentformat' => FORMAT_HTML,
                     'metadatajson' => $payload['metadatajson'] ?? null,
-                    'createdby' => $userid,
                     'modifiedby' => $userid,
-                    'timecreated' => $now,
                     'timemodified' => $now,
                     'deleted' => 0,
+                ];
+                // Reuse any existing row with this stable id (revives a
+                // soft-deleted node), so undo of a deletion / redo of a creation
+                // does not violate the unique (workspaceid, stableid) index.
+                $existing = $DB->get_record('vimipad_node', [
+                    'workspaceid' => $workspaceid, 'stableid' => $stableid,
                 ]);
+                if ($existing) {
+                    $record['id'] = $existing->id;
+                    $DB->update_record('vimipad_node', (object) $record);
+                } else {
+                    $record['createdby'] = $userid;
+                    $record['timecreated'] = $now;
+                    $DB->insert_record('vimipad_node', (object) $record);
+                }
                 return $stableid;
 
             case operation_type::NODE_UPDATE:
@@ -182,7 +194,7 @@ class operation_service {
                 $this->assert_node_exists($workspaceid, $payload['sourceid']);
                 $this->assert_node_exists($workspaceid, $payload['targetid']);
                 $stableid = $this->pick_stable_id($payload, 'relation');
-                $DB->insert_record('vimipad_relation', (object) [
+                $record = [
                     'workspaceid' => $workspaceid,
                     'stableid' => $stableid,
                     'sourceid' => $payload['sourceid'],
@@ -191,12 +203,23 @@ class operation_service {
                     'label' => $payload['label'] ?? null,
                     'direction' => isset($payload['direction']) ? (int) $payload['direction'] : 1,
                     'metadatajson' => $payload['metadatajson'] ?? null,
-                    'createdby' => $userid,
                     'modifiedby' => $userid,
-                    'timecreated' => $now,
                     'timemodified' => $now,
                     'deleted' => 0,
+                ];
+                // Reuse any existing row with this stable id (revives a
+                // soft-deleted relation), unique-index safe as for nodes.
+                $existing = $DB->get_record('vimipad_relation', [
+                    'workspaceid' => $workspaceid, 'stableid' => $stableid,
                 ]);
+                if ($existing) {
+                    $record['id'] = $existing->id;
+                    $DB->update_record('vimipad_relation', (object) $record);
+                } else {
+                    $record['createdby'] = $userid;
+                    $record['timecreated'] = $now;
+                    $DB->insert_record('vimipad_relation', (object) $record);
+                }
                 return $stableid;
 
             case operation_type::RELATION_UPDATE:

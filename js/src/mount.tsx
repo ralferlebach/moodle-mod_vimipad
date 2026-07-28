@@ -78,6 +78,7 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:norelations': 'No relations yet. Add concepts, then connect them.',
     'editor:object': 'Object',
     'editor:rearrange': 'Re-arrange layout',
+    'editor:redo': 'Redo',
     'editor:relation': 'Relation',
     'editor:relations': 'Relations',
     'editor:reledit': 'Edit relation',
@@ -87,6 +88,7 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:subject': 'Subject',
     'editor:submit': 'Submit for grading',
     'editor:submitconfirm': 'Once submitted, the map is locked and can no longer be edited. Continue?',
+    'editor:undo': 'Undo',
 };
 
 /**
