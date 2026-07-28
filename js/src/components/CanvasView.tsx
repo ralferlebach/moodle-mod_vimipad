@@ -94,6 +94,7 @@ interface Props {
     onReArrange?: () => void;
     onExportSvg?: () => void;
     onExportPng?: () => void;
+    onExportPdf?: () => void;
     exportJsonUrl?: string;
     exportXmlUrl?: string;
 }
@@ -334,7 +335,8 @@ export function CanvasView(props: Props): React.ReactElement {
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
         onCreateRelation, onChangeDirection,
-        onUndo, onRedo, canUndo, canRedo, onReArrange, onExportSvg, onExportPng, exportJsonUrl, exportXmlUrl,
+        onUndo, onRedo, canUndo, canRedo, onReArrange,
+        onExportSvg, onExportPng, onExportPdf, exportJsonUrl, exportXmlUrl,
     } = props;
     // Rendering rules for the active display type: prefer the backend form config,
     // fall back to the built-in profile defaults when it is absent.
@@ -360,6 +362,31 @@ export function CanvasView(props: Props): React.ReactElement {
     const [nativeFs, setNativeFs] = useState(false);
     const [fallbackFs, setFallbackFs] = useState(false);
     const expanded = nativeFs || fallbackFs;
+
+    // Export dropdown (controlled; robust across browsers, unlike <details>).
+    const [exportOpen, setExportOpen] = useState(false);
+    const exportRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!exportOpen) {
+            return undefined;
+        }
+        const onDown = (event: MouseEvent): void => {
+            if (exportRef.current && !exportRef.current.contains(event.target as Node)) {
+                setExportOpen(false);
+            }
+        };
+        const onKey = (event: KeyboardEvent): void => {
+            if (event.key === 'Escape') {
+                setExportOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [exportOpen]);
 
     useEffect(() => {
         const onChange = (): void => setNativeFs(Boolean(document.fullscreenElement));
@@ -841,7 +868,7 @@ export function CanvasView(props: Props): React.ReactElement {
             <div className="vimipad-canvas-actions" role="toolbar" aria-label={t('editor:actions')}>
                 <button
                     type="button"
-                    className="btn btn-sm btn-light"
+                    className="btn btn-light vimipad-canvas-action"
                     onClick={() => onUndo?.()}
                     disabled={disabled || !canUndo}
                     title={t('editor:undo')}
@@ -851,7 +878,7 @@ export function CanvasView(props: Props): React.ReactElement {
                 </button>
                 <button
                     type="button"
-                    className="btn btn-sm btn-light"
+                    className="btn btn-light vimipad-canvas-action"
                     onClick={() => onRedo?.()}
                     disabled={disabled || !canRedo}
                     title={t('editor:redo')}
@@ -861,7 +888,7 @@ export function CanvasView(props: Props): React.ReactElement {
                 </button>
                 <button
                     type="button"
-                    className="btn btn-sm btn-light"
+                    className="btn btn-light vimipad-canvas-action"
                     onClick={() => onReArrange?.()}
                     disabled={disabled}
                     title={t('editor:rearrange')}
@@ -870,48 +897,64 @@ export function CanvasView(props: Props): React.ReactElement {
                     <Icon name={FA.reArrange} />
                 </button>
                 {!expanded && (
-                    <details className="vimipad-export">
-                        <summary
-                            className="btn btn-sm btn-light"
+                    <div className="vimipad-export" ref={exportRef}>
+                        <button
+                            type="button"
+                            className="btn btn-light vimipad-canvas-action"
+                            onClick={() => setExportOpen((o) => !o)}
+                            aria-haspopup="menu"
+                            aria-expanded={exportOpen}
                             title={t('editor:export')}
                             aria-label={t('editor:export')}
                         >
                             <Icon name={FA.export} />
-                        </summary>
-                        <div className="vimipad-export-menu" role="menu">
-                            {exportJsonUrl && (
-                                <a role="menuitem" href={exportJsonUrl} target="_blank" rel="noopener noreferrer">
-                                    JSON
-                                </a>
-                            )}
-                            {exportXmlUrl && (
-                                <a role="menuitem" href={exportXmlUrl} target="_blank" rel="noopener noreferrer">
-                                    XML
-                                </a>
-                            )}
-                            <button
-                                type="button"
-                                role="menuitem"
-                                className="vimipad-export-item"
-                                onClick={() => onExportSvg?.()}
-                            >
-                                SVG
-                            </button>
-                            <button
-                                type="button"
-                                role="menuitem"
-                                className="vimipad-export-item"
-                                onClick={() => onExportPng?.()}
-                            >
-                                PNG
-                            </button>
-                        </div>
-                    </details>
+                        </button>
+                        {exportOpen && (
+                            <div className="vimipad-export-menu" role="menu">
+                                {exportJsonUrl && (
+                                    <a
+                                        role="menuitem"
+                                        href={exportJsonUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={() => setExportOpen(false)}
+                                    >JSON</a>
+                                )}
+                                {exportXmlUrl && (
+                                    <a
+                                        role="menuitem"
+                                        href={exportXmlUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={() => setExportOpen(false)}
+                                    >XML</a>
+                                )}
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="vimipad-export-item"
+                                    onClick={() => { onExportSvg?.(); setExportOpen(false); }}
+                                >SVG</button>
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="vimipad-export-item"
+                                    onClick={() => { onExportPng?.(); setExportOpen(false); }}
+                                >PNG</button>
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="vimipad-export-item"
+                                    onClick={() => { onExportPdf?.(); setExportOpen(false); }}
+                                >PDF</button>
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
             <button
                 type="button"
-                className="btn btn-sm btn-light vimipad-canvas-fullview"
+                className="btn btn-light vimipad-canvas-fullview vimipad-canvas-action"
                 onClick={() => { void toggleFullview(); }}
                 title={expanded ? t('editor:normalview') : t('editor:fullview')}
                 aria-label={expanded ? t('editor:normalview') : t('editor:fullview')}

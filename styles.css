@@ -408,32 +408,42 @@
     position: absolute;
     top: 0.5rem;
     left: 0.5rem;
-    z-index: 2;
+    z-index: 3;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: 0.35rem;
     align-items: center;
+    padding: 0.35rem;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid var(--vimipad-border, #ced4da);
+    border-radius: 0.4rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .vimipad-canvas-fullview {
     position: absolute;
     top: 0.5rem;
     right: 0.5rem;
-    z-index: 2;
+    z-index: 3;
 }
 
-.vimipad-canvas-actions .btn,
-.vimipad-canvas-actions summary,
-.vimipad-canvas-fullview {
-    opacity: 0.9;
+/* Comfortable, clearly-sized icon buttons for the canvas overlays. */
+.vimipad-canvas-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 1.05rem;
+    line-height: 1;
     border: 1px solid var(--vimipad-border, #ced4da);
+    background: var(--vimipad-toolbar-bg, #fff);
 }
 
-.vimipad-canvas-actions .btn:hover,
-.vimipad-canvas-actions .btn:focus-visible,
-.vimipad-canvas-fullview:hover,
-.vimipad-canvas-fullview:focus-visible {
-    opacity: 1;
+.vimipad-canvas-action:hover:not(:disabled),
+.vimipad-canvas-action:focus-visible {
+    background: var(--vimipad-hover-bg, #e9ecef);
 }
 
 /* Native fullscreen: the canvas alone fills the screen, no chrome, no margins. */

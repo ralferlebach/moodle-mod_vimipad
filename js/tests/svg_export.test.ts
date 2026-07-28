@@ -21,7 +21,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {computeContentBounds, Bounds} from '../src/canvas/svg_export';
+import {computeContentBounds, buildImagePdf, Bounds} from '../src/canvas/svg_export';
 import {VimiNode} from '../src/types';
 
 const node = (id: string): VimiNode => ({stableid: id, type: 'concept', label: id});
@@ -54,5 +54,27 @@ describe('computeContentBounds', () => {
         // Default node size 120x44 → half 60x22; with pad 10 → x -70, y -32.
         expect(bounds.x).toBe(-70);
         expect(bounds.y).toBe(-32);
+    });
+});
+
+describe('buildImagePdf', () => {
+    const decode = (bytes: Uint8Array): string =>
+        Array.from(bytes).map((b) => String.fromCharCode(b)).join('');
+
+    test('produces a structurally valid single-image PDF', () => {
+        const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]); // minimal JPEG-ish bytes
+        const pdf = buildImagePdf(jpeg, 200, 100, 200, 100);
+        const text = decode(pdf);
+
+        expect(text.startsWith('%PDF-1.3')).toBe(true);
+        expect(text.trimEnd().endsWith('%%EOF')).toBe(true);
+        expect(text).toContain('/Type /Catalog');
+        expect(text).toContain('/Filter /DCTDecode');
+        expect(text).toContain('/MediaBox [0 0 200 100]');
+        expect(text).toContain('startxref');
+        // The xref table declares six entries (free + five objects).
+        expect(text).toContain('xref\n0 6');
+        // The embedded JPEG length is declared correctly.
+        expect(text).toContain(`/Length ${jpeg.length}`);
     });
 });
