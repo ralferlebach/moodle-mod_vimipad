@@ -58,6 +58,7 @@ export const FA = {
     reverse: 'fa-solid fa-right-left',
     edit: 'fa-solid fa-pen-to-square',
     confirm: 'fa-solid fa-check',
+    cancel: 'fa-solid fa-xmark',
 } as const;
 
 /**

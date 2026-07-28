@@ -33,6 +33,7 @@ import React, {useState} from 'react';
 import {allowedShapes, clampShape, NodeShape} from '../canvas/shape_catalog';
 import {NodeStyle, parseNodeStyle, serialiseNodeStyle, withNodeStyle} from '../canvas/node_style';
 import {FA, Icon, ShapeGlyph} from '../canvas/icons';
+import {ColorField} from './ColorField';
 
 interface Props {
     /** Element kind: nodes get the full toolset, relations a reduced one. */
@@ -154,16 +155,15 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
 
             {isNode && panel === 'fill' && (
                 <div className="vimipad-node-dock-panel">
-                    <label className="vimipad-format-color" title={t('editor:fmt_fill')}>
-                        <Icon name={FA.fill} />
-                        <input
-                            type="color"
-                            aria-label={t('editor:fmt_fill')}
-                            disabled={disabled}
-                            value={style.fill ?? DEFAULT_FILL}
-                            onChange={e => apply({fill: e.target.value})}
-                        />
-                    </label>
+                    <ColorField
+                        value={style.fill}
+                        fallback={DEFAULT_FILL}
+                        disabled={disabled}
+                        icon={FA.fill}
+                        label={t('editor:fmt_fill')}
+                        onChange={c => apply({fill: c})}
+                        t={t}
+                    />
                     <button
                         type="button"
                         className="vimipad-dock-btn"

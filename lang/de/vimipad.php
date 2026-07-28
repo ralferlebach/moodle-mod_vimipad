@@ -61,6 +61,7 @@ $string['editor:add'] = 'Hinzufügen';
 $string['editor:addnode'] = 'Begriff hinzufügen';
 $string['editor:addrelation'] = 'Relation hinzufügen';
 $string['editor:beingedited'] = 'Wird bearbeitet';
+$string['editor:cancel'] = 'Abbrechen';
 $string['editor:canvasaria'] = 'Map-Zeichenfläche mit verschiebbaren Begriffen';
 $string['editor:canvasplaceholder'] = 'Die grafische Zeichenfläche erscheint hier in einer späteren Version.';
 $string['editor:canvasview'] = 'Zeichenfläche';

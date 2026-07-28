@@ -29,6 +29,7 @@
 import React from 'react';
 import {FontFamily, NodeStyle, nextSizeStep, parseNodeStyle, withNodeStyle} from '../canvas/node_style';
 import {FA, Icon} from '../canvas/icons';
+import {ColorField} from './ColorField';
 
 interface Props {
     /** Current metadatajson of the edited element, or undefined for style-less ones. */
@@ -100,26 +101,24 @@ export function TextEditMenu(props: Props): React.ReactElement {
                             aria-label={t('editor:fmt_bigger')}
                             onClick={() => apply({text: {size: nextSizeStep(style.text?.size, 1)}})}
                         >A<Icon name={FA.fontSizeUp} /></button>
-                        <label className="vimipad-format-color" title={t('editor:fmt_textcolor')}>
-                            <Icon name={FA.textColor} />
-                            <input
-                                type="color"
-                                aria-label={t('editor:fmt_textcolor')}
-                                disabled={disabled}
-                                value={style.text?.color ?? DEFAULT_TEXT}
-                                onChange={e => apply({text: {color: e.target.value}})}
-                            />
-                        </label>
-                        <label className="vimipad-format-color" title={t('editor:fmt_highlight')}>
-                            <Icon name={FA.highlight} />
-                            <input
-                                type="color"
-                                aria-label={t('editor:fmt_highlight')}
-                                disabled={disabled}
-                                value={style.text?.background ?? DEFAULT_HIGHLIGHT}
-                                onChange={e => apply({text: {background: e.target.value}})}
-                            />
-                        </label>
+                        <ColorField
+                            value={style.text?.color}
+                            fallback={DEFAULT_TEXT}
+                            disabled={disabled}
+                            icon={FA.textColor}
+                            label={t('editor:fmt_textcolor')}
+                            onChange={c => apply({text: {color: c}})}
+                            t={t}
+                        />
+                        <ColorField
+                            value={style.text?.background}
+                            fallback={DEFAULT_HIGHLIGHT}
+                            disabled={disabled}
+                            icon={FA.highlight}
+                            label={t('editor:fmt_highlight')}
+                            onChange={c => apply({text: {background: c}})}
+                            t={t}
+                        />
                     </>
                 )}
             </div>

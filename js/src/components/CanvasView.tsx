@@ -245,13 +245,19 @@ export function CanvasView(props: Props): React.ReactElement {
             return;
         }
         el.textContent = editValueRef.current;
-        el.focus();
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        range.collapse(false);
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
+        const focusEnd = (): void => {
+            el.focus();
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            range.collapse(false);
+            const sel = window.getSelection();
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+            vdbg('node-editor focus-applied');
+        };
+        focusEnd();
+        // Re-grab focus on the next frame in case a default action stole it.
+        requestAnimationFrame(focusEnd);
     }, []);
     // Dragging a new connection out of a node's connector dock.
     const [connectFrom, setConnectFrom] = useState<string | null>(null);
@@ -316,6 +322,9 @@ export function CanvasView(props: Props): React.ReactElement {
         if (isDouble && !disabled) {
             lastNodeClick.current = {id: '', t: 0};
             event.stopPropagation();
+            // Stop the browser's default focus action (it would focus the SVG and
+            // blur our editor a few ms after it mounts — the diagnosed race).
+            event.preventDefault();
             vdbg('node-startEditing', stableid);
             setDragId(null);
             setDragPos(null);

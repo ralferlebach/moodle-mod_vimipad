@@ -37,6 +37,7 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:addnode': 'Add concept',
     'editor:addrelation': 'Add relation',
     'editor:actions': 'Actions',
+    'editor:cancel': 'Cancel',
     'editor:canvasaria': 'Map canvas with draggable concepts',
     'editor:canvasview': 'Canvas',
     'editor:canvasplaceholder': 'The graphical canvas will appear here in a later version.',
