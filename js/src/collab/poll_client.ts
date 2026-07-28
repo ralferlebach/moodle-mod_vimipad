@@ -40,6 +40,8 @@ export interface PollClientOptions {
     onPresence?: (leases: Lease[]) => void;
     /** Called with the current layout JSON each poll (positions + sizes). */
     onLayout?: (layoutjson: string) => void;
+    /** Called each poll with workspace-level state (lock status, active profile). */
+    onWorkspaceState?: (state: {locked: number; profile: string}) => void;
     onError?: (error: Error) => void;
     /** Clock, injectable for tests. Defaults to Date.now. */
     now?: () => number;
@@ -144,6 +146,11 @@ export class PollClient {
             // resizes reconcile live; dedup/merge happens upstream.
             if (this.opts.onLayout) {
                 this.opts.onLayout(poll.layoutjson);
+            }
+            // Forward workspace-level state (lock/profile) so a submission lock or
+            // a display-type change reaches collaborators without a reload.
+            if (this.opts.onWorkspaceState) {
+                this.opts.onWorkspaceState({locked: poll.locked, profile: poll.profile});
             }
 
             // Advance the revision monotonically.

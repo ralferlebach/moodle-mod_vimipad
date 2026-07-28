@@ -87,6 +87,7 @@ export function useCollaboration(
     collab: CollabConfig | undefined,
     onOperations: (operations: PolledOperation[]) => void,
     onLayout?: (layoutjson: string) => void,
+    onWorkspaceState?: (state: {locked: number; profile: string}) => void,
     onError?: (error: Error) => void
 ): Collaboration {
     const [presence, setPresence] = useState<PresenceMap>({});
@@ -102,6 +103,12 @@ export function useCollaboration(
     const layoutHandler = useRef(onLayout);
     layoutHandler.current = onLayout;
     const lastLayout = useRef<string>('');
+
+    // Workspace-level state (lock/profile), deduped so the handler only fires on
+    // an actual change.
+    const wsStateHandler = useRef(onWorkspaceState);
+    wsStateHandler.current = onWorkspaceState;
+    const lastWsState = useRef<string>('');
 
     // Keep the latest error handler behind a stable wrapper, so passing a fresh
     // inline onError each render does not tear down and recreate the poll loop.
@@ -142,6 +149,15 @@ export function useCollaboration(
                     lastLayout.current = layoutjson;
                     if (layoutHandler.current) {
                         layoutHandler.current(layoutjson);
+                    }
+                }
+            },
+            onWorkspaceState: (s: {locked: number; profile: string}) => {
+                const key = `${s.locked}|${s.profile}`;
+                if (key !== lastWsState.current) {
+                    lastWsState.current = key;
+                    if (wsStateHandler.current) {
+                        wsStateHandler.current(s);
                     }
                 }
             },

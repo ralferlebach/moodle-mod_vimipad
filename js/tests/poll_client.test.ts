@@ -19,6 +19,8 @@ import {PollResult} from '../src/types';
 /** Build a poll result with sensible defaults. */
 const result = (over: Partial<PollResult> = {}): PollResult => ({
     revision: 0,
+    locked: 0,
+    profile: 'conceptmap',
     operations: [],
     layoutjson: '',
     leases: [],
@@ -67,6 +69,18 @@ describe('PollClient', () => {
         });
         await client.pollOnce();
         expect(seen).toEqual(leases);
+    });
+
+    test('emits workspace state (lock/profile) to onWorkspaceState', async () => {
+        const transport = jest.fn(async () => result({locked: 1, profile: 'mindmap'}));
+        let seen: {locked: number; profile: string} | null = null;
+        const client = new PollClient({
+            cmid: 1, workspaceid: 2, transport,
+            adaptive: {min: 1000, max: 10000, base: 1000, adaptive: true},
+            onWorkspaceState: (s) => { seen = s; },
+        });
+        await client.pollOnce();
+        expect(seen).toEqual({locked: 1, profile: 'mindmap'});
     });
 
     test('emits the layout json to the onLayout callback', async () => {

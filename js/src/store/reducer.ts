@@ -40,7 +40,9 @@ export type EditorAction =
     | {kind: 'updateRelation'; stableid: string; label?: string; type?: string; direction?: number;
         metadatajson?: string}
     | {kind: 'deleteRelation'; stableid: string}
-    | {kind: 'retargetRelation'; stableid: string; sourceid?: string; targetid?: string};
+    | {kind: 'retargetRelation'; stableid: string; sourceid?: string; targetid?: string}
+    | {kind: 'setLocked'; locked: number}
+    | {kind: 'setProfile'; profile: string};
 
 /**
  * Produce the next state for an action. Pure and side-effect free.
@@ -60,6 +62,10 @@ export function reduce(state: EditorState, action: EditorState | EditorAction): 
             return act.state;
         case 'setRevision':
             return {...state, revision: act.revision};
+        case 'setLocked':
+            return state.locked === act.locked ? state : {...state, locked: act.locked};
+        case 'setProfile':
+            return state.profile === act.profile ? state : {...state, profile: act.profile};
         case 'addNode':
             // Idempotent: applying the same create twice (e.g. the author's own
             // operation echoed back by the poll feed) must not duplicate it.

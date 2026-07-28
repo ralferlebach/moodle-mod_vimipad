@@ -103,6 +103,9 @@ const HANDLE_HIT = 26;
 const MIN_VIEW_W = CANVAS_WIDTH * 0.25;
 const MAX_VIEW_W = CANVAS_WIDTH;
 const VIEW_ASPECT = CANVAS_HEIGHT / CANVAS_WIDTH;
+// Open on a comfortable window centred on the canvas middle (where new content is
+// placed) rather than the whole large canvas, which would appear zoomed far out.
+const INITIAL_VIEW_W = Math.min(CANVAS_WIDTH, 1100);
 
 /** Keep the viewport within the canvas bounds. */
 function clampView(v: {x: number; y: number; w: number; h: number}): {x: number; y: number; w: number; h: number} {
@@ -330,7 +333,12 @@ export function CanvasView(props: Props): React.ReactElement {
     // Manual double-click detection: pointer capture on nodes swallows native dblclick.
     const lastNodeClick = useRef<{id: string; t: number}>({id: '', t: 0});
     // Pan/zoom viewport (SVG viewBox) plus a ref mirror for use inside gesture handlers.
-    const [view, setView] = useState({x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT});
+    const [view, setView] = useState({
+        x: (CANVAS_WIDTH - INITIAL_VIEW_W) / 2,
+        y: (CANVAS_HEIGHT - INITIAL_VIEW_W * VIEW_ASPECT) / 2,
+        w: INITIAL_VIEW_W,
+        h: INITIAL_VIEW_W * VIEW_ASPECT,
+    });
     const viewRef = useRef(view);
     useEffect(() => { viewRef.current = view; }, [view]);
     // Active pointers on the background, for one-finger pan and two-finger pinch.

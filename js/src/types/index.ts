@@ -127,6 +127,8 @@ export interface PolledOperation {
 /** The payload returned by the poll_changes external function. */
 export interface PollResult {
     revision: number;
+    locked: number;
+    profile: string;
     operations: PolledOperation[];
     layoutjson: string;
     leases: Lease[];

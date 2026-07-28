@@ -102,6 +102,8 @@ class poll_changes extends external_api {
 
         return [
             'revision' => (int) $workspace->currentrevision,
+            'locked' => (int) $workspace->locked,
+            'profile' => $instance->defaultprofile,
             'operations' => $operationsout,
             'layoutjson' => $layoutjson,
             'leases' => $leases,
@@ -116,6 +118,8 @@ class poll_changes extends external_api {
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
             'revision' => new external_value(PARAM_INT, 'The workspace current revision'),
+            'locked' => new external_value(PARAM_INT, '1 if the workspace is locked (submitted)'),
+            'profile' => new external_value(PARAM_ALPHANUMEXT, 'Active diagram profile'),
             'operations' => new external_multiple_structure(new external_single_structure([
                 'revision' => new external_value(PARAM_INT, 'Operation revision'),
                 'operationtype' => new external_value(PARAM_TEXT, 'Operation type'),

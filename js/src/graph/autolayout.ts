@@ -27,8 +27,8 @@
 
 import {LayoutMap, Point, VimiNode, VimiRelation} from '../types';
 
-export const CANVAS_WIDTH = 800;
-export const CANVAS_HEIGHT = 520;
+export const CANVAS_WIDTH = 2400;
+export const CANVAS_HEIGHT = 1600;
 
 /** Vertical distance between tree levels. */
 const TREE_LEVEL_GAP = 110;
@@ -92,8 +92,11 @@ function circleLayout(nodes: VimiNode[], stored: LayoutMap): LayoutMap {
 
     const centreX = CANVAS_WIDTH / 2;
     const centreY = CANVAS_HEIGHT / 2;
-    const radius = Math.min(CANVAS_WIDTH, CANVAS_HEIGHT) / 2 - 90;
     const count = Math.max(unplaced.length, 1);
+    // Space nodes ~110px apart along the ring, but keep the layout compact within
+    // the (now large) canvas rather than spreading to its edges.
+    const maxRadius = Math.min(CANVAS_WIDTH, CANVAS_HEIGHT) / 2 - 90;
+    const radius = Math.min(maxRadius, Math.max(170, (count * 110) / (2 * Math.PI)));
 
     unplaced.forEach((node, index) => {
         const angle = (2 * Math.PI * index) / count - Math.PI / 2;

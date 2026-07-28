@@ -106,6 +106,8 @@ export function EditorApp(props: Props): React.ReactElement {
     const [relSource, setRelSource] = useState('');
     const [relTarget, setRelTarget] = useState('');
     const [relLabel, setRelLabel] = useState('');
+    // Full-page canvas view: expands the editor to a full-viewport overlay.
+    const [expanded, setExpanded] = useState(false);
 
     // Undo/redo. In a server-authoritative editor an undo is the inverse
     // operation sent to the server, not a local rollback (see store/history).
@@ -195,6 +197,10 @@ export function EditorApp(props: Props): React.ReactElement {
         state.collab,
         applyRemoteOperations,
         onRemoteLayout,
+        (s) => {
+            dispatch({kind: 'setLocked', locked: s.locked});
+            dispatch({kind: 'setProfile', profile: s.profile});
+        },
         (e) => setError(e.message)
     );
 
@@ -321,6 +327,20 @@ export function EditorApp(props: Props): React.ReactElement {
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
     }, [undo, redo]);
+
+    // Leave the full-page canvas view on Escape.
+    useEffect(() => {
+        if (!expanded) {
+            return undefined;
+        }
+        const onKey = (event: KeyboardEvent): void => {
+            if (event.key === 'Escape') {
+                setExpanded(false);
+            }
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [expanded]);
 
     const addNode = useCallback(async () => {
         const label = nodeLabel.trim();
@@ -666,7 +686,7 @@ export function EditorApp(props: Props): React.ReactElement {
     ) : null;
 
     return (
-        <div className="vimipad-editor">
+        <div className={`vimipad-editor${expanded ? ' vimipad-editor--expanded' : ''}`}>
             <div className="vimipad-sr-only" role="status" aria-live="polite">{status}</div>
             {error && <div className="alert alert-danger" role="alert">{error}</div>}
             {state.locked === 1 && (
@@ -732,6 +752,17 @@ export function EditorApp(props: Props): React.ReactElement {
                 >
                     <Icon name={FA.export} /> {t('editor:export')}
                 </a>
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() => setExpanded((v) => !v)}
+                    title={expanded ? t('editor:normalview') : t('editor:fullview')}
+                    aria-label={expanded ? t('editor:normalview') : t('editor:fullview')}
+                    aria-pressed={expanded}
+                >
+                    <Icon name={expanded ? FA.compress : FA.expand} />{' '}
+                    {expanded ? t('editor:normalview') : t('editor:fullview')}
+                </button>
             </div>
 
             <div

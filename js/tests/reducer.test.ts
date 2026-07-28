@@ -107,4 +107,24 @@ describe('reducer node style/content', () => {
         expect(a?.label).toBe('A2');
         expect(a?.metadatajson).toBe('{"shape":"rect"}');
     });
+
+    it('setLocked updates the lock state', () => {
+        const locked = reduce(base, {kind: 'setLocked', locked: 1});
+        expect(locked.locked).toBe(1);
+    });
+
+    it('setLocked is a no-op (same reference) when unchanged', () => {
+        const same = reduce(base, {kind: 'setLocked', locked: base.locked});
+        expect(same).toBe(base);
+    });
+
+    it('setProfile switches the active profile', () => {
+        const next = reduce(base, {kind: 'setProfile', profile: 'mindmap'});
+        expect(next.profile).toBe('mindmap');
+    });
+
+    it('setProfile is a no-op (same reference) when unchanged', () => {
+        const same = reduce(base, {kind: 'setProfile', profile: base.profile});
+        expect(same).toBe(base);
+    });
 });

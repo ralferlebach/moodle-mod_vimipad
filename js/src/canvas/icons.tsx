@@ -60,6 +60,8 @@ export const FA = {
     undo: 'fa-solid fa-rotate-left',
     redo: 'fa-solid fa-rotate-right',
     export: 'fa-solid fa-file-export',
+    expand: 'fa-solid fa-expand',
+    compress: 'fa-solid fa-compress',
     edit: 'fa-solid fa-pen-to-square',
     confirm: 'fa-solid fa-check',
     cancel: 'fa-solid fa-xmark',

@@ -75,14 +75,14 @@
        prefer reduced motion. Node move/resize tweens are additionally gated in
        JS (see canvas/tween). */
     .vimipad-canvas * {
-        transition: none !important;
+        transition: none;
     }
 }
 
 /* Visually hidden but available to assistive technology. Plugin-scoped so it
    does not depend on the theme shipping a .sr-only / .visually-hidden class. */
 .vimipad-sr-only {
-    position: absolute !important;
+    position: absolute;
     width: 1px;
     height: 1px;
     padding: 0;
@@ -139,7 +139,7 @@
     padding: 0.3rem 0.4rem;
     border: 1px solid var(--vimipad-border, #dee2e6);
     border-radius: 999px;
-    background: var(--vimipad-toolbar-bg, #ffffff);
+    background: var(--vimipad-toolbar-bg, #fff);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
 }
 
@@ -253,7 +253,7 @@
     padding: 0.3rem 0.5rem;
     border: 1px solid var(--vimipad-border, #dee2e6);
     border-radius: 1.4rem;
-    background: var(--vimipad-toolbar-bg, #ffffff);
+    background: var(--vimipad-toolbar-bg, #fff);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
     pointer-events: auto;
 }
@@ -325,7 +325,7 @@
     text-align: center;
     border: 1px solid var(--vimipad-border, #ced4da);
     border-radius: 0.25rem;
-    background: var(--vimipad-input-bg, #ffffff);
+    background: var(--vimipad-input-bg, #fff);
 }
 
 .vimipad-format-color {
@@ -394,4 +394,24 @@
         flex-direction: column;
         align-items: stretch;
     }
+}
+
+/* -------------------------------------------------------------------------
+   Full-page canvas view
+   ------------------------------------------------------------------------- */
+
+/* Expand the whole editor to a full-viewport overlay so large maps have room. */
+.vimipad-editor--expanded {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    margin: 0;
+    padding: 1rem 1.25rem;
+    overflow: auto;
+    background: var(--vimipad-canvas-bg, #fff);
+}
+
+/* Let the canvas use most of the viewport height in full-page view. */
+.vimipad-editor--expanded .vimipad-canvas {
+    height: calc(100vh - 9rem);
 }

@@ -140,6 +140,7 @@ export class ApiClient {
             onOperations?: (operations: PolledOperation[]) => void;
             onPresence?: (leases: Lease[]) => void;
             onLayout?: (layoutjson: string) => void;
+            onWorkspaceState?: (state: {locked: number; profile: string}) => void;
             onError?: (error: Error) => void;
         }
     ): PollClient {
