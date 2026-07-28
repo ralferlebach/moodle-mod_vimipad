@@ -31,12 +31,14 @@
 
 import React, {useState} from 'react';
 import {EditorState, labelFor} from '../store/reducer';
+import {FA, Icon} from '../canvas/icons';
 
 interface Props {
     state: EditorState;
     disabled: boolean;
     onDeleteRelation: (stableid: string) => void;
     onRetarget: (stableid: string, change: {sourceid?: string; targetid?: string}) => void;
+    onRenameRelation: (stableid: string, label: string) => void;
     t: (key: string) => string;
 }
 
@@ -49,7 +51,7 @@ const DND_MIME = 'application/x-vimipad-node';
  * @returns The rendered list view.
  */
 export function RelationListView(props: Props): React.ReactElement {
-    const {state, disabled, onDeleteRelation, onRetarget, t} = props;
+    const {state, disabled, onDeleteRelation, onRetarget, onRenameRelation, t} = props;
     const [editing, setEditing] = useState<string | null>(null);
 
     if (state.relations.length === 0) {
@@ -120,9 +122,22 @@ export function RelationListView(props: Props): React.ReactElement {
                                         className="btn btn-sm btn-outline-secondary mr-1"
                                         disabled={disabled}
                                         aria-expanded={editing === rel.stableid}
+                                        title={t('editor:reledit')}
+                                        aria-label={t('editor:reledit')}
                                         onClick={() => setEditing(editing === rel.stableid ? null : rel.stableid)}
                                     >
-                                        {t('editor:retarget')}
+                                        <Icon name={FA.edit} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary mr-1"
+                                        disabled={disabled}
+                                        title={t('editor:reverse')}
+                                        aria-label={t('editor:reverse')}
+                                        onClick={() => onRetarget(rel.stableid,
+                                            {sourceid: rel.targetid, targetid: rel.sourceid})}
+                                    >
+                                        <Icon name={FA.reverse} />
                                     </button>
                                     <button
                                         type="button"
@@ -139,6 +154,22 @@ export function RelationListView(props: Props): React.ReactElement {
                                 <tr className="vimipad-retarget-editor">
                                     <td colSpan={4}>
                                         <div className="form-inline">
+                                            <label className="mr-1" htmlFor={`lbl-${rel.stableid}`}>
+                                                {t('editor:relation')}
+                                            </label>
+                                            <input
+                                                id={`lbl-${rel.stableid}`}
+                                                type="text"
+                                                className="form-control form-control-sm mr-3"
+                                                defaultValue={rel.label}
+                                                disabled={disabled}
+                                                placeholder={t('editor:relation')}
+                                                onBlur={e => {
+                                                    if (e.target.value !== rel.label) {
+                                                        onRenameRelation(rel.stableid, e.target.value);
+                                                    }
+                                                }}
+                                            />
                                             <label className="mr-1" htmlFor={`src-${rel.stableid}`}>
                                                 {t('editor:subject')}
                                             </label>

@@ -62,6 +62,9 @@ export const FA = {
     bold: 'fa-solid fa-bold',
     italic: 'fa-solid fa-italic',
     underline: 'fa-solid fa-underline',
+    lineStraight: 'fa-solid fa-minus',
+    lineCurved: 'fa-solid fa-bezier-curve',
+    lineOrthogonal: 'fa-solid fa-stairs',
 } as const;
 
 /**

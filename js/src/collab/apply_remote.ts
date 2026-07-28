@@ -100,8 +100,22 @@ export function operationToAction(op: PolledOperation): EditorAction | null {
                     direction: num('direction', 1),
                 },
             };
-        case 'relation_update':
-            return {kind: 'updateRelation', stableid: str('stableid'), label: str('label'), type: str('type')};
+        case 'relation_update': {
+            const action: EditorAction = {kind: 'updateRelation', stableid: str('stableid')};
+            if ('label' in payload) {
+                action.label = str('label');
+            }
+            if ('type' in payload) {
+                action.type = str('type');
+            }
+            if ('direction' in payload) {
+                action.direction = num('direction', 1);
+            }
+            if ('metadatajson' in payload) {
+                action.metadatajson = str('metadatajson');
+            }
+            return action;
+        }
         case 'relation_delete':
             return {kind: 'deleteRelation', stableid: str('stableid')};
         case 'relation_retarget': {

@@ -16,10 +16,10 @@
 /**
  * Inline text-edit menu.
  *
- * A single row shown below a node while its label is being edited: a green
- * confirm button plus typography controls (font, size, colour, highlight).
- * Kept to one row so it always appears in the same, predictable place. For
- * elements without persisted style (relations) only the confirm button shows.
+ * Two rows of typography controls with a green confirm button on the right
+ * (vertically centred): row one has font and size; row two has bold/italic/
+ * underline plus text and highlight colour. For elements without persisted
+ * style (relations) only the confirm button shows.
  *
  * @module     mod_vimipad/components/TextEditMenu
  * @copyright  2026 Ralf Erlebach
@@ -60,95 +60,107 @@ export function TextEditMenu(props: Props): React.ReactElement {
         }
     };
 
-    return (
-        <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:fmt_text')}>
-            <div className="vimipad-node-dock-row">
-                {onChangeStyle && (
-                    <>
-                        <select
-                            className="vimipad-dock-select form-control form-control-sm"
-                            aria-label={t('editor:fmt_font')}
-                            title={t('editor:fmt_font')}
-                            disabled={disabled}
-                            value={style.text?.font ?? ''}
-                            onChange={e => apply({text: {font: (e.target.value || undefined) as FontFamily | undefined}})}
-                        >
-                            <option value="">{t('editor:fmt_fontdefault')}</option>
-                            <option value="sans">Sans</option>
-                            <option value="serif">Serif</option>
-                            <option value="mono">Mono</option>
-                        </select>
-                        <button
-                            type="button"
-                            className="vimipad-dock-btn"
-                            disabled={disabled}
-                            title={t('editor:fmt_smaller')}
-                            aria-label={t('editor:fmt_smaller')}
-                            onClick={() => apply({text: {size: nextSizeStep(style.text?.size, -1)}})}
-                        >A<Icon name={FA.fontSizeDown} /></button>
-                        <button
-                            type="button"
-                            className="vimipad-dock-btn"
-                            disabled={disabled}
-                            title={t('editor:fmt_bigger')}
-                            aria-label={t('editor:fmt_bigger')}
-                            onClick={() => apply({text: {size: nextSizeStep(style.text?.size, 1)}})}
-                        >A<Icon name={FA.fontSizeUp} /></button>
-                        <button
-                            type="button"
-                            className={`vimipad-dock-btn${style.text?.bold ? ' active' : ''}`}
-                            aria-pressed={!!style.text?.bold}
-                            disabled={disabled}
-                            title={t('editor:fmt_bold')}
-                            aria-label={t('editor:fmt_bold')}
-                            onClick={() => apply({text: {bold: !style.text?.bold}})}
-                        ><Icon name={FA.bold} /></button>
-                        <button
-                            type="button"
-                            className={`vimipad-dock-btn${style.text?.italic ? ' active' : ''}`}
-                            aria-pressed={!!style.text?.italic}
-                            disabled={disabled}
-                            title={t('editor:fmt_italic')}
-                            aria-label={t('editor:fmt_italic')}
-                            onClick={() => apply({text: {italic: !style.text?.italic}})}
-                        ><Icon name={FA.italic} /></button>
-                        <button
-                            type="button"
-                            className={`vimipad-dock-btn${style.text?.underline ? ' active' : ''}`}
-                            aria-pressed={!!style.text?.underline}
-                            disabled={disabled}
-                            title={t('editor:fmt_underline')}
-                            aria-label={t('editor:fmt_underline')}
-                            onClick={() => apply({text: {underline: !style.text?.underline}})}
-                        ><Icon name={FA.underline} /></button>
-                        <ColorField
-                            value={style.text?.color}
-                            fallback={DEFAULT_TEXT}
-                            disabled={disabled}
-                            icon={FA.textColor}
-                            label={t('editor:fmt_textcolor')}
-                            onChange={c => apply({text: {color: c}})}
-                            t={t}
-                        />
-                        <ColorField
-                            value={style.text?.background}
-                            fallback={DEFAULT_HIGHLIGHT}
-                            disabled={disabled}
-                            icon={FA.highlight}
-                            label={t('editor:fmt_highlight')}
-                            onChange={c => apply({text: {background: c}})}
-                            t={t}
-                        />
-                    </>
-                )}
-                <button
-                    type="button"
-                    className="vimipad-dock-btn vimipad-dock-confirm"
-                    title={t('editor:confirm')}
-                    aria-label={t('editor:confirm')}
-                    onClick={onConfirm}
-                ><Icon name={FA.confirm} /></button>
+    const confirmButton = (
+        <button
+            type="button"
+            className="vimipad-dock-btn vimipad-dock-confirm"
+            title={t('editor:confirm')}
+            aria-label={t('editor:confirm')}
+            onClick={onConfirm}
+        ><Icon name={FA.confirm} /></button>
+    );
+
+    if (!onChangeStyle) {
+        return (
+            <div className="vimipad-text-menu" role="toolbar" aria-label={t('editor:fmt_text')}>
+                {confirmButton}
             </div>
+        );
+    }
+
+    return (
+        <div className="vimipad-text-menu" role="toolbar" aria-label={t('editor:fmt_text')}>
+            <div className="vimipad-text-menu-rows">
+                <div className="vimipad-text-menu-row">
+                    <select
+                        className="vimipad-dock-select form-control form-control-sm"
+                        aria-label={t('editor:fmt_font')}
+                        title={t('editor:fmt_font')}
+                        disabled={disabled}
+                        value={style.text?.font ?? ''}
+                        onChange={e => apply({text: {font: (e.target.value || undefined) as FontFamily | undefined}})}
+                    >
+                        <option value="">{t('editor:fmt_fontdefault')}</option>
+                        <option value="sans">Sans</option>
+                        <option value="serif">Serif</option>
+                        <option value="mono">Mono</option>
+                    </select>
+                    <button
+                        type="button"
+                        className="vimipad-dock-btn"
+                        disabled={disabled}
+                        title={t('editor:fmt_smaller')}
+                        aria-label={t('editor:fmt_smaller')}
+                        onClick={() => apply({text: {size: nextSizeStep(style.text?.size, -1)}})}
+                    ><span className="vimipad-az">A<Icon name={FA.fontSizeDown} /></span></button>
+                    <button
+                        type="button"
+                        className="vimipad-dock-btn"
+                        disabled={disabled}
+                        title={t('editor:fmt_bigger')}
+                        aria-label={t('editor:fmt_bigger')}
+                        onClick={() => apply({text: {size: nextSizeStep(style.text?.size, 1)}})}
+                    ><span className="vimipad-az">A<Icon name={FA.fontSizeUp} /></span></button>
+                </div>
+                <div className="vimipad-text-menu-row">
+                    <button
+                        type="button"
+                        className={`vimipad-dock-btn${style.text?.bold ? ' active' : ''}`}
+                        aria-pressed={!!style.text?.bold}
+                        disabled={disabled}
+                        title={t('editor:fmt_bold')}
+                        aria-label={t('editor:fmt_bold')}
+                        onClick={() => apply({text: {bold: !style.text?.bold}})}
+                    ><Icon name={FA.bold} /></button>
+                    <button
+                        type="button"
+                        className={`vimipad-dock-btn${style.text?.italic ? ' active' : ''}`}
+                        aria-pressed={!!style.text?.italic}
+                        disabled={disabled}
+                        title={t('editor:fmt_italic')}
+                        aria-label={t('editor:fmt_italic')}
+                        onClick={() => apply({text: {italic: !style.text?.italic}})}
+                    ><Icon name={FA.italic} /></button>
+                    <button
+                        type="button"
+                        className={`vimipad-dock-btn${style.text?.underline ? ' active' : ''}`}
+                        aria-pressed={!!style.text?.underline}
+                        disabled={disabled}
+                        title={t('editor:fmt_underline')}
+                        aria-label={t('editor:fmt_underline')}
+                        onClick={() => apply({text: {underline: !style.text?.underline}})}
+                    ><Icon name={FA.underline} /></button>
+                    <ColorField
+                        value={style.text?.color}
+                        fallback={DEFAULT_TEXT}
+                        disabled={disabled}
+                        icon={FA.textColor}
+                        label={t('editor:fmt_textcolor')}
+                        onChange={c => apply({text: {color: c}})}
+                        t={t}
+                    />
+                    <ColorField
+                        value={style.text?.background}
+                        fallback={DEFAULT_HIGHLIGHT}
+                        disabled={disabled}
+                        icon={FA.highlight}
+                        label={t('editor:fmt_highlight')}
+                        onChange={c => apply({text: {background: c}})}
+                        t={t}
+                    />
+                </div>
+            </div>
+            {confirmButton}
         </div>
     );
 }

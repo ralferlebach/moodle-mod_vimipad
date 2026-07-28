@@ -27,6 +27,7 @@
 
 import React, {useState} from 'react';
 import {FA, Icon} from '../canvas/icons';
+import {vdbg} from '../debug';
 
 interface Props {
     /** Current colour, or undefined if unset. */
@@ -62,14 +63,19 @@ export function ColorField(props: Props): React.ReactElement {
     const [draft, setDraft] = useState(value ?? fallback);
 
     const openPopover = (): void => {
+        vdbg('color open', label, 'value=' + (value ?? fallback));
         setDraft(value ?? fallback);
         setOpen(true);
     };
     const ok = (): void => {
+        vdbg('color OK ->', label, draft);
         onChange(draft);
         setOpen(false);
     };
-    const cancel = (): void => setOpen(false);
+    const cancel = (): void => {
+        vdbg('color cancel', label);
+        setOpen(false);
+    };
 
     return (
         <span className="vimipad-colorfield">
@@ -90,7 +96,10 @@ export function ColorField(props: Props): React.ReactElement {
                         type="color"
                         aria-label={label}
                         value={draft}
-                        onChange={e => setDraft(e.target.value)}
+                        onChange={e => {
+                            vdbg('color input', label, e.target.value);
+                            setDraft(e.target.value);
+                        }}
                     />
                     <div className="vimipad-color-swatches">
                         {SWATCHES.map(c => (
@@ -100,7 +109,10 @@ export function ColorField(props: Props): React.ReactElement {
                                 className="vimipad-swatch"
                                 style={{background: c}}
                                 aria-label={c}
-                                onClick={() => setDraft(c)}
+                                onClick={() => {
+                                    vdbg('color swatch', label, c);
+                                    setDraft(c);
+                                }}
                             />
                         ))}
                     </div>

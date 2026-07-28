@@ -231,6 +231,11 @@ export function EditorApp(props: Props): React.ReactElement {
             () => dispatch({kind: 'updateRelation', stableid, direction}));
     }, [runOperation]);
 
+    const changeRelationStyle = useCallback(async (stableid: string, metadatajson: string) => {
+        await runOperation('relation_update', {stableid, metadatajson},
+            () => dispatch({kind: 'updateRelation', stableid, metadatajson}));
+    }, [runOperation]);
+
     const retarget = useCallback(async (stableid: string, change: {sourceid?: string; targetid?: string}) => {
         const payload: Record<string, unknown> = {stableid};
         if (change.sourceid) {
@@ -431,6 +436,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         onDuplicateNode={duplicateNode}
                         onCreateRelation={createRelation}
                         onChangeDirection={changeDirection}
+                        onChangeRelationStyle={changeRelationStyle}
                         onDeleteNode={deleteNode}
                         onDeleteRelation={deleteRelation}
                         onRenameNode={renameNode}
@@ -457,6 +463,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         disabled={disabled}
                         onDeleteRelation={deleteRelation}
                         onRetarget={retarget}
+                        onRenameRelation={renameRelation}
                         t={t}
                     />
                     {submitButton && <div className="vimipad-controls-submit mt-3">{submitButton}</div>}

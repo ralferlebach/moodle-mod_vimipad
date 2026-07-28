@@ -193,7 +193,7 @@ class operation_service {
             case operation_type::RELATION_UPDATE:
                 $relation = $this->get_live_relation($workspaceid, $payload['stableid']);
                 $update = ['id' => $relation->id, 'modifiedby' => $userid, 'timemodified' => $now];
-                foreach (['type', 'label'] as $field) {
+                foreach (['type', 'label', 'metadatajson'] as $field) {
                     if (array_key_exists($field, $payload)) {
                         $update[$field] = $payload[$field];
                     }

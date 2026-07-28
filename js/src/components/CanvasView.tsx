@@ -49,21 +49,7 @@ import {
     isSelected,
     Target,
 } from '../canvas/interaction';
-
-/**
- * Lightweight diagnostic logger. Enable in the browser console with
- * `window.VIMIPAD_DEBUG = true` (disable with `= false`). Logs the edit/selection
- * lifecycle so interaction bugs can be traced without a debugger.
- *
- * @param args Values to log.
- */
-function vdbg(...args: unknown[]): void {
-    const w = typeof window !== 'undefined' ? (window as unknown as {VIMIPAD_DEBUG?: boolean}) : undefined;
-    if (w && w.VIMIPAD_DEBUG) {
-        // eslint-disable-next-line no-console
-        console.log('[vimipad]', new Date().toISOString().slice(11, 23), ...args);
-    }
-}
+import {vdbg} from '../debug';
 
 interface Props {
     state: EditorState;
@@ -90,6 +76,8 @@ interface Props {
     onCreateRelation?: (sourceid: string, targetid: string) => void;
     /** Set a relation's arrow direction (0 none, 1 forward, -1 reverse, 2 both). */
     onChangeDirection?: (stableid: string, direction: number) => void;
+    /** Set a relation's line-style metadatajson (straight/curved/orthogonal). */
+    onChangeRelationStyle?: (stableid: string, metadatajson: string) => void;
     t: (key: string) => string;
     /** True if a node is held by another collaborator (renders as locked). */
     isLockedByOther?: (targettype: string, stableid: string) => boolean;
@@ -135,6 +123,57 @@ const BASE_FONT = 13;
  */
 /** Default width of a node box for the given label. */
 const nodeWidth = (label: string): number => Math.max(70, label.length * 8 + 20);
+
+/** Connector line rendering styles. */
+type LineStyle = 'straight' | 'curved' | 'orthogonal';
+
+/**
+ * Read a relation's line style from its metadata.
+ *
+ * @param metadatajson The relation metadata JSON.
+ * @returns The line style, defaulting to straight.
+ */
+function parseRelLine(metadatajson: string | undefined): LineStyle {
+    if (!metadatajson) {
+        return 'straight';
+    }
+    try {
+        const obj = JSON.parse(metadatajson) as {line?: unknown};
+        if (obj.line === 'curved' || obj.line === 'orthogonal') {
+            return obj.line;
+        }
+    } catch {
+        // Ignore malformed metadata.
+    }
+    return 'straight';
+}
+
+/**
+ * SVG path for a connector, or null when a straight <line> should be used.
+ *
+ * @param from Source point.
+ * @param to Target point.
+ * @param line The line style.
+ * @returns A path `d` string, or null for straight lines.
+ */
+function relLinePath(from: Point, to: Point, line: LineStyle): string | null {
+    if (line === 'curved') {
+        const mx = (from.x + to.x) / 2;
+        const my = (from.y + to.y) / 2;
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const off = Math.min(70, len * 0.25);
+        const cx = mx + (-dy / len) * off;
+        const cy = my + (dx / len) * off;
+        return `M ${from.x} ${from.y} Q ${cx} ${cy} ${to.x} ${to.y}`;
+    }
+    if (line === 'orthogonal') {
+        const mx = (from.x + to.x) / 2;
+        return `M ${from.x} ${from.y} L ${mx} ${from.y} L ${mx} ${to.y} L ${to.x} ${to.y}`;
+    }
+    return null;
+}
 
 /**
  * Shared CSS for the node label div and its inline editor, so switching into
@@ -217,7 +256,7 @@ export function CanvasView(props: Props): React.ReactElement {
         state, layout, profile, sizes, disabled, onNodeMoved, onNodeResized,
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
-        onCreateRelation, onChangeDirection,
+        onCreateRelation, onChangeDirection, onChangeRelationStyle,
     } = props;
     const svgRef = useRef<SVGSVGElement>(null);
     // Manual double-click detection: pointer capture on nodes swallows native dblclick.
@@ -571,7 +610,9 @@ export function CanvasView(props: Props): React.ReactElement {
         vdbg('editing-active', interaction.editing);
         const onDocDown = (event: PointerEvent): void => {
             const el = event.target as Element | null;
-            if (el && el.closest && el.closest('.vimipad-canvas-edit, .vimipad-canvas-relation-edit, .vimipad-node-dock')) {
+            if (el && el.closest && el.closest(
+                '.vimipad-canvas-edit, .vimipad-canvas-relation-edit, .vimipad-node-dock, .vimipad-text-menu'
+            )) {
                 return;
             }
             vdbg('outside-pointerdown -> commit');
@@ -700,28 +741,55 @@ export function CanvasView(props: Props): React.ReactElement {
                 const to = positionOf(rel.targetid);
                 const selected = isSelected(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
+                const path = relLinePath(from, to, parseRelLine(rel.metadatajson));
+                const stroke = selected ? selColor : 'currentColor';
+                const strokeWidth = selected ? 2.5 : 1.5;
+                const markerStart = d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
+                const markerEnd = d === 1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
                 return (
                     <g key={`line-${rel.stableid}`} className="vimipad-canvas-relation">
-                        <line
-                            x1={from.x}
-                            y1={from.y}
-                            x2={to.x}
-                            y2={to.y}
-                            stroke={selected ? selColor : 'currentColor'}
-                            strokeWidth={selected ? 2.5 : 1.5}
-                            markerStart={d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined}
-                            markerEnd={d === 1 || d === 2 ? 'url(#vimipad-arrow)' : undefined}
-                        />
-                        <line
-                            x1={from.x}
-                            y1={from.y}
-                            x2={to.x}
-                            y2={to.y}
-                            stroke="transparent"
-                            strokeWidth={12}
-                            style={{cursor: 'pointer'}}
-                            onPointerDown={e => selectRelation(e, rel.stableid)}
-                        />
+                        {path ? (
+                            <path
+                                d={path}
+                                fill="none"
+                                stroke={stroke}
+                                strokeWidth={strokeWidth}
+                                markerStart={markerStart}
+                                markerEnd={markerEnd}
+                            />
+                        ) : (
+                            <line
+                                x1={from.x}
+                                y1={from.y}
+                                x2={to.x}
+                                y2={to.y}
+                                stroke={stroke}
+                                strokeWidth={strokeWidth}
+                                markerStart={markerStart}
+                                markerEnd={markerEnd}
+                            />
+                        )}
+                        {path ? (
+                            <path
+                                d={path}
+                                fill="none"
+                                stroke="transparent"
+                                strokeWidth={12}
+                                style={{cursor: 'pointer'}}
+                                onPointerDown={e => selectRelation(e, rel.stableid)}
+                            />
+                        ) : (
+                            <line
+                                x1={from.x}
+                                y1={from.y}
+                                x2={to.x}
+                                y2={to.y}
+                                stroke="transparent"
+                                strokeWidth={12}
+                                style={{cursor: 'pointer'}}
+                                onPointerDown={e => selectRelation(e, rel.stableid)}
+                            />
+                        )}
                     </g>
                 );
             })}
@@ -949,7 +1017,7 @@ export function CanvasView(props: Props): React.ReactElement {
                             x={pos.x - 150}
                             y={pos.y + h / 2 + 12}
                             width={300}
-                            height={editing ? 120 : 170}
+                            height={editing ? 300 : 320}
                             style={{overflow: 'visible'}}
                         >
                             <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
@@ -987,12 +1055,13 @@ export function CanvasView(props: Props): React.ReactElement {
                 const midY = (from.y + to.y) / 2;
                 const editing = isEditing(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
+                const relLine = parseRelLine(rel.metadatajson);
                 return (
                     <foreignObject
                         x={midX - 150}
                         y={midY + 14}
                         width={300}
-                        height={70}
+                        height={editing ? 70 : 130}
                         style={{overflow: 'visible'}}
                     >
                         <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
@@ -1001,6 +1070,13 @@ export function CanvasView(props: Props): React.ReactElement {
                             ) : (onChangeDirection && (
                                 <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:relation')}>
                                     <div className="vimipad-node-dock-row">
+                                        <button
+                                            type="button"
+                                            className="vimipad-dock-btn"
+                                            title={t('editor:fmt_text')}
+                                            aria-label={t('editor:fmt_text')}
+                                            onClick={() => startRelationEdit(rel.stableid, rel.label)}
+                                        ><Icon name={FA.text} /></button>
                                         <button
                                             type="button"
                                             className={`vimipad-dock-btn${d === 0 ? ' active' : ''}`}
@@ -1043,6 +1119,37 @@ export function CanvasView(props: Props): React.ReactElement {
                                             ><Icon name={FA.delete} /></button>
                                         )}
                                     </div>
+                                    {onChangeRelationStyle && (
+                                        <div className="vimipad-node-dock-row">
+                                            <button
+                                                type="button"
+                                                className={`vimipad-dock-btn${relLine === 'straight' ? ' active' : ''}`}
+                                                aria-pressed={relLine === 'straight'}
+                                                title={t('editor:line_straight')}
+                                                aria-label={t('editor:line_straight')}
+                                                onClick={() => onChangeRelationStyle(rel.stableid,
+                                                    JSON.stringify({line: 'straight'}))}
+                                            ><Icon name={FA.lineStraight} /></button>
+                                            <button
+                                                type="button"
+                                                className={`vimipad-dock-btn${relLine === 'curved' ? ' active' : ''}`}
+                                                aria-pressed={relLine === 'curved'}
+                                                title={t('editor:line_curved')}
+                                                aria-label={t('editor:line_curved')}
+                                                onClick={() => onChangeRelationStyle(rel.stableid,
+                                                    JSON.stringify({line: 'curved'}))}
+                                            ><Icon name={FA.lineCurved} /></button>
+                                            <button
+                                                type="button"
+                                                className={`vimipad-dock-btn${relLine === 'orthogonal' ? ' active' : ''}`}
+                                                aria-pressed={relLine === 'orthogonal'}
+                                                title={t('editor:line_orthogonal')}
+                                                aria-label={t('editor:line_orthogonal')}
+                                                onClick={() => onChangeRelationStyle(rel.stableid,
+                                                    JSON.stringify({line: 'orthogonal'}))}
+                                            ><Icon name={FA.lineOrthogonal} /></button>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
