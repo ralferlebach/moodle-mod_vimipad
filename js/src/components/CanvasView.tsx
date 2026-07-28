@@ -93,6 +93,7 @@ interface Props {
     canRedo?: boolean;
     onReArrange?: () => void;
     onExportSvg?: () => void;
+    onExportPng?: () => void;
     exportJsonUrl?: string;
     exportXmlUrl?: string;
 }
@@ -333,7 +334,7 @@ export function CanvasView(props: Props): React.ReactElement {
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
         onCreateRelation, onChangeDirection,
-        onUndo, onRedo, canUndo, canRedo, onReArrange, onExportSvg, exportJsonUrl, exportXmlUrl,
+        onUndo, onRedo, canUndo, canRedo, onReArrange, onExportSvg, onExportPng, exportJsonUrl, exportXmlUrl,
     } = props;
     // Rendering rules for the active display type: prefer the backend form config,
     // fall back to the built-in profile defaults when it is absent.
@@ -895,6 +896,14 @@ export function CanvasView(props: Props): React.ReactElement {
                                 onClick={() => onExportSvg?.()}
                             >
                                 SVG
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="vimipad-export-item"
+                                onClick={() => onExportPng?.()}
+                            >
+                                PNG
                             </button>
                         </div>
                     </details>

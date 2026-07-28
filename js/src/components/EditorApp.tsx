@@ -29,7 +29,7 @@
 import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
-import {computeContentBounds, downloadCanvasSvg} from '../canvas/svg_export';
+import {computeContentBounds, downloadCanvasPng, downloadCanvasSvg} from '../canvas/svg_export';
 import {EditorState, reduce} from '../store/reducer';
 import {History, HistoryEntry, OpSpec} from '../store/history';
 import {CanvasView} from './CanvasView';
@@ -338,6 +338,18 @@ export function EditorApp(props: Props): React.ReactElement {
             x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
         });
         downloadCanvasSvg(svg, bounds, `vimipad-${state.profile}.svg`);
+    }, [state.nodes, state.profile, stored, sizes]);
+
+    // Export the current map as a rasterized PNG file (client-side).
+    const exportPng = useCallback(() => {
+        const svg = rootRef.current?.querySelector('svg.vimipad-canvas') as SVGSVGElement | null;
+        if (!svg) {
+            return;
+        }
+        const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
+            x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
+        });
+        downloadCanvasPng(svg, bounds, `vimipad-${state.profile}.png`);
     }, [state.nodes, state.profile, stored, sizes]);
 
     const addNode = useCallback(async () => {
@@ -750,6 +762,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         canRedo={canRedo}
                         onReArrange={reArrangeLayout}
                         onExportSvg={exportSvg}
+                        onExportPng={exportPng}
                         exportJsonUrl={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
                         exportXmlUrl={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
                         t={t}

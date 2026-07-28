@@ -131,6 +131,24 @@ export function serializeCanvasSvg(svg: SVGSVGElement, bounds: Bounds): string {
 }
 
 /**
+ * Trigger a browser download of a blob.
+ *
+ * @param blob The file contents.
+ * @param filename The download filename.
+ * @returns void
+ */
+function triggerDownload(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+/**
  * Trigger a browser download of the given SVG element as a standalone file.
  *
  * @param svg The live SVG element.
@@ -140,13 +158,48 @@ export function serializeCanvasSvg(svg: SVGSVGElement, bounds: Bounds): string {
  */
 export function downloadCanvasSvg(svg: SVGSVGElement, bounds: Bounds, filename: string): void {
     const doc = serializeCanvasSvg(svg, bounds);
-    const blob = new Blob([doc], {type: 'image/svg+xml;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    triggerDownload(new Blob([doc], {type: 'image/svg+xml;charset=utf-8'}), filename);
+}
+
+/**
+ * Rasterize the canvas SVG to a PNG and trigger a download.
+ *
+ * The standalone SVG is loaded into an image and drawn onto an off-screen canvas
+ * at a higher pixel density for a crisp result. Because the SVG is same-origin
+ * (an object URL), the canvas is not tainted and toBlob succeeds.
+ *
+ * @param svg The live SVG element.
+ * @param bounds The content bounds.
+ * @param filename The download filename.
+ * @param scale Pixel-density multiplier (default 2).
+ * @returns void
+ */
+export function downloadCanvasPng(svg: SVGSVGElement, bounds: Bounds, filename: string, scale = 2): void {
+    const doc = serializeCanvasSvg(svg, bounds);
+    const svgUrl = URL.createObjectURL(new Blob([doc], {type: 'image/svg+xml;charset=utf-8'}));
+    const image = new Image();
+
+    image.onload = (): void => {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(bounds.w * scale));
+        canvas.height = Math.max(1, Math.round(bounds.h * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            URL.revokeObjectURL(svgUrl);
+            return;
+        }
+        ctx.fillStyle = BACKGROUND;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+            URL.revokeObjectURL(svgUrl);
+            if (blob) {
+                triggerDownload(blob, filename);
+            }
+        }, 'image/png');
+    };
+    image.onerror = (): void => {
+        URL.revokeObjectURL(svgUrl);
+    };
+    image.src = svgUrl;
 }
