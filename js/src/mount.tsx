@@ -40,6 +40,7 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:canvasaria': 'Map canvas with draggable concepts',
     'editor:canvasview': 'Canvas',
     'editor:canvasplaceholder': 'The graphical canvas will appear here in a later version.',
+    'editor:confirm': 'Confirm',
     'editor:deleterelation': 'Delete relation',
     'editor:dir_both': 'Double arrow',
     'editor:dir_left': 'Arrow to source',

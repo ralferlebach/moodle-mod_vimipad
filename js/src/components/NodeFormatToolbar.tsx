@@ -31,7 +31,7 @@
 
 import React, {useState} from 'react';
 import {allowedShapes, clampShape, NodeShape} from '../canvas/shape_catalog';
-import {FontFamily, NodeStyle, nextSizeStep, parseNodeStyle, serialiseNodeStyle, withNodeStyle} from '../canvas/node_style';
+import {NodeStyle, parseNodeStyle, serialiseNodeStyle, withNodeStyle} from '../canvas/node_style';
 import {FA, Icon, ShapeGlyph} from '../canvas/icons';
 
 interface Props {
@@ -57,8 +57,6 @@ type Panel = 'none' | 'shape' | 'fill' | 'text';
 
 /** Default colours shown in the pickers before the user sets one. */
 const DEFAULT_FILL = '#eef2ff';
-const DEFAULT_TEXT = '#212529';
-const DEFAULT_HIGHLIGHT = '#fff3cd';
 
 /** Title string per shape, for the picker buttons. */
 const SHAPE_LABEL: Record<NodeShape, string> = {
@@ -111,12 +109,11 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                 )}
                 <button
                     type="button"
-                    className={`vimipad-dock-btn${isNode && panel === 'text' ? ' active' : ''}`}
-                    aria-pressed={isNode ? panel === 'text' : undefined}
+                    className="vimipad-dock-btn"
                     disabled={disabled}
                     title={t('editor:fmt_text')}
                     aria-label={t('editor:fmt_text')}
-                    onClick={() => (isNode ? toggle('text') : onEditText && onEditText())}
+                    onClick={() => onEditText && onEditText()}
                 ><Icon name={FA.text} /></button>
                 {isNode && onDuplicate && (
                     <button
@@ -178,59 +175,6 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                 </div>
             )}
 
-            {isNode && panel === 'text' && (
-                <div className="vimipad-node-dock-panel">
-                    <select
-                        className="form-control form-control-sm"
-                        aria-label={t('editor:fmt_font')}
-                        title={t('editor:fmt_font')}
-                        disabled={disabled}
-                        value={style.text?.font ?? ''}
-                        onChange={e => apply({text: {font: (e.target.value || undefined) as FontFamily | undefined}})}
-                    >
-                        <option value="">{t('editor:fmt_fontdefault')}</option>
-                        <option value="sans">Sans</option>
-                        <option value="serif">Serif</option>
-                        <option value="mono">Mono</option>
-                    </select>
-                    <button
-                        type="button"
-                        className="vimipad-dock-btn"
-                        disabled={disabled}
-                        title={t('editor:fmt_smaller')}
-                        aria-label={t('editor:fmt_smaller')}
-                        onClick={() => apply({text: {size: nextSizeStep(style.text?.size, -1)}})}
-                    >A<Icon name={FA.fontSizeDown} /></button>
-                    <button
-                        type="button"
-                        className="vimipad-dock-btn"
-                        disabled={disabled}
-                        title={t('editor:fmt_bigger')}
-                        aria-label={t('editor:fmt_bigger')}
-                        onClick={() => apply({text: {size: nextSizeStep(style.text?.size, 1)}})}
-                    >A<Icon name={FA.fontSizeUp} /></button>
-                    <label className="vimipad-format-color" title={t('editor:fmt_textcolor')}>
-                        <Icon name={FA.textColor} />
-                        <input
-                            type="color"
-                            aria-label={t('editor:fmt_textcolor')}
-                            disabled={disabled}
-                            value={style.text?.color ?? DEFAULT_TEXT}
-                            onChange={e => apply({text: {color: e.target.value}})}
-                        />
-                    </label>
-                    <label className="vimipad-format-color" title={t('editor:fmt_highlight')}>
-                        <Icon name={FA.highlight} />
-                        <input
-                            type="color"
-                            aria-label={t('editor:fmt_highlight')}
-                            disabled={disabled}
-                            value={style.text?.background ?? DEFAULT_HIGHLIGHT}
-                            onChange={e => apply({text: {background: e.target.value}})}
-                        />
-                    </label>
-                </div>
-            )}
         </div>
     );
 }

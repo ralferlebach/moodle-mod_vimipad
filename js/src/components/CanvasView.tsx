@@ -39,6 +39,7 @@ import {LayoutMap, Point, Size, SizeMap} from '../types';
 import {clampShape, NodeShape} from '../canvas/shape_catalog';
 import {parseNodeStyle, TextStyle} from '../canvas/node_style';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
+import {TextEditMenu} from './TextEditMenu';
 import {FA, Icon} from '../canvas/icons';
 import {
     deletableTarget,
@@ -132,23 +133,40 @@ const BASE_FONT = 13;
  * @param text The parsed text style, if any.
  * @returns Inline style properties for the label text element.
  */
-function labelFont(text: TextStyle | undefined): React.CSSProperties {
+/** Default width of a node box for the given label. */
+const nodeWidth = (label: string): number => Math.max(70, label.length * 8 + 20);
+
+/**
+ * Shared CSS for the node label div and its inline editor, so switching into
+ * edit mode does not move or recolour the text. Centred, wrapping, multi-line.
+ *
+ * @param text The text style, if any.
+ * @returns CSS properties for an HTML box.
+ */
+function labelBox(text: TextStyle | undefined): React.CSSProperties {
     const family = text?.font === 'serif' ? 'Georgia, "Times New Roman", serif'
         : text?.font === 'mono' ? 'ui-monospace, Menlo, Consolas, monospace'
             : text?.font === 'sans' ? 'system-ui, -apple-system, "Segoe UI", sans-serif'
-                : undefined;
-    const props: React.CSSProperties = {fontSize: `${BASE_FONT + (text?.size ?? 0) * 2}px`};
-    if (family) {
-        props.fontFamily = family;
-    }
-    if (text?.color) {
-        props.fill = text.color;
-    }
-    return props;
+                : 'inherit';
+    return {
+        boxSizing: 'border-box',
+        width: '100%',
+        height: '100%',
+        margin: 0,
+        padding: '2px 6px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        whiteSpace: 'pre-wrap',
+        overflowWrap: 'anywhere',
+        wordBreak: 'break-word',
+        lineHeight: 1.2,
+        fontFamily: family,
+        fontSize: `${BASE_FONT + (text?.size ?? 0) * 2}px`,
+        color: text?.color ?? 'var(--vimipad-node-text, #212529)',
+    };
 }
-
-/** Default width of a node box for the given label. */
-const nodeWidth = (label: string): number => Math.max(70, label.length * 8 + 20);
 
 /**
  * Clamp a candidate size to the accepted resize bounds.
@@ -217,6 +235,24 @@ export function CanvasView(props: Props): React.ReactElement {
     const [interaction, dispatchInteraction] = useReducer(interactionReduce, initialInteraction);
     const [editValue, setEditValue] = useState('');
     const [hoveredId, setHoveredId] = useState<string | null>(null);
+    // Live mirror of the edit value, and a callback ref that seeds/focuses the
+    // multi-line node editor once on mount (contentEditable is uncontrolled to
+    // keep the caret stable while typing).
+    const editValueRef = useRef('');
+    useEffect(() => { editValueRef.current = editValue; }, [editValue]);
+    const setEditRef = useCallback((el: HTMLDivElement | null) => {
+        if (!el) {
+            return;
+        }
+        el.textContent = editValueRef.current;
+        el.focus();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+    }, []);
     // Dragging a new connection out of a node's connector dock.
     const [connectFrom, setConnectFrom] = useState<string | null>(null);
     const [connectTo, setConnectTo] = useState<Point | null>(null);
@@ -556,16 +592,47 @@ export function CanvasView(props: Props): React.ReactElement {
     }, [interaction, disabled, onDeleteNode, onDeleteRelation]);
 
     // Text keys while editing: Enter commits, Shift+Enter inserts a newline.
-    const onEditKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+    const onEditKeyDown = useCallback((event: React.KeyboardEvent<HTMLElement>) => {
         event.stopPropagation();
-        if (event.key === 'Enter' && !event.shiftKey) {
+        // Enter now inserts a newline (multi-line labels); commit is via the
+        // green confirm button or a click outside. Escape cancels without saving.
+        if (event.key === 'Escape') {
             event.preventDefault();
-            commitEdit();
-        } else if (event.key === 'Escape') {
-            event.preventDefault();
+            vdbg('edit-escape-cancel');
             dispatchInteraction({kind: 'clear'});
         }
-    }, [commitEdit]);
+    }, []);
+
+    // Escape during a move/resize cancels it and restores the original state
+    // (we simply drop the in-progress drag without committing it).
+    useEffect(() => {
+        if (dragId === null && resizeId === null) {
+            return undefined;
+        }
+        const onKey = (event: KeyboardEvent): void => {
+            if (event.key !== 'Escape') {
+                return;
+            }
+            vdbg('operation-escape-cancel', {dragId, resizeId});
+            if (resizeId !== null) {
+                if (endEdit) {
+                    void endEdit('node', resizeId);
+                }
+                setResizeId(null);
+                setResizeSize(null);
+            }
+            if (dragId !== null) {
+                if (endEdit) {
+                    void endEdit('node', dragId);
+                }
+                setDragId(null);
+                setDragPos(null);
+                setMoved(false);
+            }
+        };
+        document.addEventListener('keydown', onKey, true);
+        return () => document.removeEventListener('keydown', onKey, true);
+    }, [dragId, resizeId, endEdit]);
 
     const selectRelation = useCallback((event: React.PointerEvent, stableid: string) => {
         event.stopPropagation();
@@ -657,18 +724,31 @@ export function CanvasView(props: Props): React.ReactElement {
                 return (
                     <g key={`lbl-${rel.stableid}`} className="vimipad-canvas-relation">
                         {editing ? (
-                            <foreignObject x={midX - 80} y={midY - 18} width={160} height={34}>
-                                <input
-                                    className="vimipad-canvas-relation-edit"
-                                    value={editValue}
-                                    autoFocus
-                                    onChange={e => setEditValue(e.target.value)}
-                                    onKeyDown={onEditKeyDown}
-                                    onFocus={() => vdbg('relation-input focus', rel.stableid)}
-                                    onBlur={() => vdbg('relation-input blur', rel.stableid)}
-                                    onPointerDown={e => e.stopPropagation()}
-                                />
-                            </foreignObject>
+                            <>
+                                <foreignObject x={midX - 80} y={midY - 18} width={160} height={34}>
+                                    <input
+                                        className="vimipad-canvas-relation-edit"
+                                        value={editValue}
+                                        autoFocus
+                                        onChange={e => setEditValue(e.target.value)}
+                                        onKeyDown={onEditKeyDown}
+                                        onFocus={() => vdbg('relation-input focus', rel.stableid)}
+                                        onBlur={() => vdbg('relation-input blur', rel.stableid)}
+                                        onPointerDown={e => e.stopPropagation()}
+                                    />
+                                </foreignObject>
+                                <foreignObject
+                                    x={midX - 150}
+                                    y={midY + 14}
+                                    width={300}
+                                    height={60}
+                                    style={{overflow: 'visible'}}
+                                >
+                                    <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
+                                        <TextEditMenu disabled={disabled} onConfirm={commitEdit} t={t} />
+                                    </div>
+                                </foreignObject>
+                            </>
                         ) : (rel.label && (
                             <text
                                 x={midX}
@@ -792,43 +872,34 @@ export function CanvasView(props: Props): React.ReactElement {
                         })}
                         {editing ? (
                             <foreignObject x={-w / 2} y={-h / 2} width={w} height={h}>
-                                <textarea
+                                <div
+                                    ref={setEditRef}
                                     className="vimipad-canvas-edit"
-                                    value={editValue}
-                                    autoFocus
-                                    onChange={e => setEditValue(e.target.value)}
+                                    contentEditable
+                                    suppressContentEditableWarning
+                                    onInput={e => setEditValue(e.currentTarget.textContent ?? '')}
                                     onKeyDown={onEditKeyDown}
-                                    onFocus={() => vdbg('node-textarea focus', node.stableid)}
-                                    onBlur={() => vdbg('node-textarea blur', node.stableid)}
+                                    onFocus={() => vdbg('node-editor focus', node.stableid)}
+                                    onBlur={() => vdbg('node-editor blur', node.stableid)}
                                     onPointerDown={e => e.stopPropagation()}
-                                    style={{width: '100%', height: '100%', resize: 'none', textAlign: 'center', border: 'none', background: 'transparent'}}
+                                    style={{
+                                        ...labelBox(style.text),
+                                        background: style.text?.background ?? 'transparent',
+                                        outline: 'none',
+                                        cursor: 'text',
+                                    }}
                                 />
                             </foreignObject>
                         ) : (
-                            <>
-                                {style.text?.background && (
-                                    <rect
-                                        className="vimipad-canvas-texthl"
-                                        x={-Math.min(w - 6, node.label.length
-                                            * (BASE_FONT + (style.text.size ?? 0) * 2) * 0.62 + 10) / 2}
-                                        y={-(BASE_FONT + (style.text.size ?? 0) * 2) * 0.8}
-                                        width={Math.min(w - 6, node.label.length
-                                            * (BASE_FONT + (style.text.size ?? 0) * 2) * 0.62 + 10)}
-                                        height={(BASE_FONT + (style.text.size ?? 0) * 2) * 1.6}
-                                        rx={3}
-                                        fill={style.text.background}
-                                    />
-                                )}
-                                <text
-                                    textAnchor="middle"
-                                    dominantBaseline="central"
-                                    className="vimipad-canvas-nodelabel"
-                                    style={labelFont(style.text)}
-                                    onDoubleClick={() => startNodeEdit(node.stableid, node.label)}
-                                >
-                                    {node.label}
-                                </text>
-                            </>
+                            <foreignObject x={-w / 2} y={-h / 2} width={w} height={h} style={{pointerEvents: 'none'}}>
+                                <div style={labelBox(style.text)}>
+                                    <span
+                                        style={style.text?.background
+                                            ? {background: style.text.background, padding: '0 3px', borderRadius: 3}
+                                            : undefined}
+                                    >{node.label}</span>
+                                </div>
+                            </foreignObject>
                         )}
                         {/* Four corner resize handles when the node is selected. */}
                         {canResize && ([
@@ -895,6 +966,26 @@ export function CanvasView(props: Props): React.ReactElement {
                                         onChangeStyle={m => onChangeStyle(node.stableid, m)}
                                         onDuplicate={() => onDuplicateNode && onDuplicateNode(node.stableid)}
                                         onDelete={() => onDeleteNode && onDeleteNode(node.stableid)}
+                                        onEditText={() => startNodeEdit(node.stableid, node.label)}
+                                        t={t}
+                                    />
+                                </div>
+                            </foreignObject>
+                        )}
+                        {editing && onChangeStyle && (
+                            <foreignObject
+                                x={-150}
+                                y={h / 2 + 12}
+                                width={300}
+                                height={120}
+                                style={{overflow: 'visible'}}
+                            >
+                                <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
+                                    <TextEditMenu
+                                        metadatajson={node.metadatajson}
+                                        disabled={disabled}
+                                        onChangeStyle={m => onChangeStyle(node.stableid, m)}
+                                        onConfirm={commitEdit}
                                         t={t}
                                     />
                                 </div>

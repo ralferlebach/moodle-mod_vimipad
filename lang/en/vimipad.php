@@ -64,6 +64,7 @@ $string['editor:beingedited'] = 'Being edited';
 $string['editor:canvasaria'] = 'Map canvas with draggable concepts';
 $string['editor:canvasplaceholder'] = 'The graphical canvas will appear here in a later version.';
 $string['editor:canvasview'] = 'Canvas';
+$string['editor:confirm'] = 'Confirm';
 $string['editor:deleterelation'] = 'Delete relation';
 $string['editor:dir_both'] = 'Double arrow';
 $string['editor:dir_left'] = 'Arrow to source';

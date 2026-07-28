@@ -57,6 +57,7 @@ export const FA = {
     dirBoth: 'fa-solid fa-left-right',
     reverse: 'fa-solid fa-right-left',
     edit: 'fa-solid fa-pen-to-square',
+    confirm: 'fa-solid fa-check',
 } as const;
 
 /**

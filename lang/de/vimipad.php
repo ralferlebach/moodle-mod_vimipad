@@ -64,6 +64,7 @@ $string['editor:beingedited'] = 'Wird bearbeitet';
 $string['editor:canvasaria'] = 'Map-Zeichenfläche mit verschiebbaren Begriffen';
 $string['editor:canvasplaceholder'] = 'Die grafische Zeichenfläche erscheint hier in einer späteren Version.';
 $string['editor:canvasview'] = 'Zeichenfläche';
+$string['editor:confirm'] = 'Übernehmen';
 $string['editor:deleterelation'] = 'Relation löschen';
 $string['editor:dir_both'] = 'Doppelpfeil';
 $string['editor:dir_left'] = 'Pfeil zur Quelle';
