@@ -57,6 +57,10 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
 
         if ($userinfo) {
             $paths[] = new restore_path_element(
+                'vimipad_grade',
+                '/activity/vimipad/grades/grade'
+            );
+            $paths[] = new restore_path_element(
                 'vimipad_workspace',
                 '/activity/vimipad/workspaces/workspace'
             );
@@ -359,6 +363,14 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
                     $newsnapshotid,
                     ['id' => $newworkspaceid]
                 );
+            }
+        }
+
+        // Resolve grade.snapshotid now that snapshots are mapped.
+        foreach ($this->pendinggradesnapshot as $newgradeid => $oldsnapshotid) {
+            $newsnapshotid = $this->get_mappingid('vimipad_snapshot', $oldsnapshotid);
+            if ($newsnapshotid) {
+                $DB->set_field('vimipad_grade', 'snapshotid', $newsnapshotid, ['id' => $newgradeid]);
             }
         }
     }

@@ -41,6 +41,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
         $vimipad = new backup_nested_element('vimipad', ['id'], [
             'name', 'intro', 'introformat', 'defaultprofile',
             'collaborationmode', 'gradingmode', 'aienabled', 'channelurl',
+            'grade', 'completionsubmit', 'completionminnodes', 'completiongraded',
             'timecreated', 'timemodified',
         ]);
 

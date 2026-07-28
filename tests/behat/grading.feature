@@ -47,6 +47,12 @@ Feature: Teachers grade submitted ViMi Pad snapshots
     Then I should see "Annotation added."
     And I should see "Consider adding a root concept."
 
+  Scenario: A teacher opens the edit-activity report
+    Given I am on the "Energy map" "vimipad activity" page logged in as teacher1
+    When I follow "Edit-activity report"
+    Then I should see "Edit activity"
+    And I should see "Sam Student"
+
   Scenario: A student cannot see the grading interface
     When I am on the "Energy map" "vimipad activity" page logged in as student1
     Then I should not see "Submissions"

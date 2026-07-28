@@ -235,17 +235,30 @@ class ai_feedback_service {
     }
 
     /**
-     * Accept (approve) an edited draft as the final feedback.
+     * Accept (store the teacher-approved text for) an AI feedback draft.
      *
-     * @param int $aifeedbackid The aifeedback record id.
-     * @param string $acceptedtext The teacher-edited, approved text.
+     * The draft is looked up scoped to the given snapshot, so a draft belonging
+     * to a different snapshot/workspace/activity cannot be modified even if its
+     * id is supplied. Callers must have already validated access to $snapshotid.
+     *
+     * @param int $aifeedbackid The draft id.
+     * @param int $snapshotid The snapshot the draft must belong to.
+     * @param string $acceptedtext The approved feedback text.
      * @return void
      */
-    public function accept_draft(int $aifeedbackid, string $acceptedtext): void {
+    public function accept_draft(int $aifeedbackid, int $snapshotid, string $acceptedtext): void {
         global $DB;
 
+        // Verify the draft belongs to the already access-checked snapshot.
+        $record = $DB->get_record(
+            'vimipad_aifeedback',
+            ['id' => $aifeedbackid, 'snapshotid' => $snapshotid],
+            '*',
+            MUST_EXIST
+        );
+
         $DB->update_record('vimipad_aifeedback', (object) [
-            'id' => $aifeedbackid,
+            'id' => $record->id,
             'acceptedtext' => $acceptedtext,
             'acceptedformat' => FORMAT_PLAIN,
             'timemodified' => time(),

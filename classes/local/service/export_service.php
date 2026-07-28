@@ -99,6 +99,7 @@ class export_service {
         $this->write_collection($writer, 'nodes', 'node', $data['nodes'] ?? []);
         $this->write_collection($writer, 'relations', 'relation', $data['relations'] ?? []);
         $this->write_collection($writer, 'containers', 'container', $data['containers'] ?? []);
+        $this->write_collection($writer, 'memberships', 'membership', $data['memberships'] ?? []);
 
         $writer->startElement('layout');
         if (!empty($data['layout'])) {

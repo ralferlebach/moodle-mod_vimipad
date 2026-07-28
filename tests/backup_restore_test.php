@@ -136,6 +136,24 @@ final class backup_restore_test extends \advanced_testcase {
             'userid' => $USER->id, 'timecreated' => $now, 'timemodified' => $now,
         ]);
 
+        // Activity configuration that must survive a restore.
+        $DB->update_record('vimipad', (object) [
+            'id' => $instance->id, 'grade' => 55,
+            'completionsubmit' => 1, 'completionminnodes' => 3, 'completiongraded' => 1,
+        ]);
+        // A grade (referencing the snapshot) and a journal entry.
+        $DB->insert_record('vimipad_grade', (object) [
+            'vimipadid' => $instance->id, 'userid' => $USER->id, 'grade' => 42.0,
+            'feedback' => 'Well structured', 'feedbackformat' => FORMAT_PLAIN,
+            'snapshotid' => $snapshotid, 'grader' => $USER->id,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('vimipad_journalentry', (object) [
+            'workspaceid' => $workspaceid, 'userid' => $USER->id, 'revisionref' => null,
+            'entrytext' => 'My reflection', 'entryformat' => FORMAT_PLAIN, 'visibility' => 1,
+            'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
         $newcourseid = $this->backup_and_restore($course, true);
 
         $newinstances = $DB->get_records('vimipad', ['course' => $newcourseid]);
@@ -160,6 +178,25 @@ final class backup_restore_test extends \advanced_testcase {
         $this->assertEquals($newsnapshot->id, $newworkspace->submittedsnapshotid);
 
         $this->assertSame(1, $DB->count_records('vimipad_annotation', ['snapshotid' => $newsnapshot->id]));
+
+        // Activity configuration survived.
+        $this->assertSame(55, (int) $newinstance->grade);
+        $this->assertSame(1, (int) $newinstance->completionsubmit);
+        $this->assertSame(3, (int) $newinstance->completionminnodes);
+        $this->assertSame(1, (int) $newinstance->completiongraded);
+
+        // The grade was restored and its snapshot reference remapped.
+        $newgrades = $DB->get_records('vimipad_grade', ['vimipadid' => $newinstance->id]);
+        $this->assertCount(1, $newgrades);
+        $newgrade = reset($newgrades);
+        $this->assertEquals(42.0, (float) $newgrade->grade);
+        $this->assertEquals($newsnapshot->id, (int) $newgrade->snapshotid);
+
+        // The journal entry was restored.
+        $this->assertSame(
+            1,
+            $DB->count_records('vimipad_journalentry', ['workspaceid' => $newworkspace->id])
+        );
     }
 
     /**

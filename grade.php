@@ -130,7 +130,7 @@ if ($acceptai && confirm_sesskey()) {
     $acceptedtext = required_param('acceptedtext', PARAM_TEXT);
 
     $aiservice = new ai_feedback_service();
-    $aiservice->accept_draft($aifeedbackid, $acceptedtext);
+    $aiservice->accept_draft($aifeedbackid, $snapshotid, $acceptedtext);
     redirect($pageurl, get_string('ai:draftaccepted', 'mod_vimipad'));
 }
 

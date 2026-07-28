@@ -64,6 +64,34 @@ class snapshot_service {
         $containers = $DB->get_records('vimipad_container', ['workspaceid' => $wsid, 'deleted' => 0]);
         $layout = $DB->get_record('vimipad_layout', ['workspaceid' => $wsid, 'profile' => $profile]);
 
+        // Container memberships, keyed to container stable ids so the snapshot is
+        // self-contained and independent of database ids.
+        $containerstable = [];
+        foreach ($containers as $container) {
+            $containerstable[(int) $container->id] = $container->stableid;
+        }
+        $membershiprows = $DB->get_records_sql(
+            "SELECT m.*
+               FROM {vimipad_membership} m
+               JOIN {vimipad_container} c ON c.id = m.containerid
+              WHERE c.workspaceid = :wsid",
+            ['wsid' => $wsid]
+        );
+        $memberships = [];
+        foreach ($membershiprows as $membership) {
+            $cid = (int) $membership->containerid;
+            if (!isset($containerstable[$cid])) {
+                continue;
+            }
+            $memberships[] = [
+                'containerstableid' => $containerstable[$cid],
+                'itemtype' => $membership->itemtype,
+                'itemstableid' => $membership->itemstableid,
+                'role' => $membership->role,
+                'sortorder' => (int) $membership->sortorder,
+            ];
+        }
+
         $mapfields = static function (array $records, array $fields): array {
             $out = [];
             foreach ($records as $record) {
@@ -85,6 +113,7 @@ class snapshot_service {
                 ['stableid', 'sourceid', 'targetid', 'type', 'label', 'direction', 'metadatajson']
             ),
             'containers' => $mapfields($containers, ['stableid', 'type', 'label', 'geometryjson', 'metadatajson']),
+            'memberships' => $memberships,
             'layout' => $layout && $layout->layoutjson !== null ? json_decode($layout->layoutjson, true) : null,
             'metadata' => [
                 'takenat' => time(),

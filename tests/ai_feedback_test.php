@@ -121,9 +121,23 @@ final class ai_feedback_test extends \advanced_testcase {
         $this->assertNull($record->promptcontextjson); // Not stored.
         $this->assertNull($record->acceptedtext);
 
-        $service->accept_draft($id, 'FINAL FEEDBACK');
+        $service->accept_draft($id, (int) $snapshotid, 'FINAL FEEDBACK');
         $record = $DB->get_record('vimipad_aifeedback', ['id' => $id]);
         $this->assertSame('FINAL FEEDBACK', $record->acceptedtext);
+
+        // A draft cannot be accepted against a different snapshot.
+        $othersnapshot = $DB->insert_record('vimipad_snapshot', (object) [
+            'workspaceid' => $workspaceid, 'revision' => 0, 'snapshotjson' => '{}',
+            'status' => 1, 'timecreated' => $now,
+        ]);
+        try {
+            $service->accept_draft($id, (int) $othersnapshot, 'HIJACK');
+            $this->fail('Expected accepting a draft against a foreign snapshot to fail.');
+        } catch (\dml_missing_record_exception $e) {
+            $this->assertNotEmpty($e->getMessage());
+        }
+        $record = $DB->get_record('vimipad_aifeedback', ['id' => $id]);
+        $this->assertSame('FINAL FEEDBACK', $record->acceptedtext); // Unchanged.
 
         // With prompt storage on, the prompt is persisted.
         set_config('storeprompts', '1', 'mod_vimipad');
