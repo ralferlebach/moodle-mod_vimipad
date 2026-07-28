@@ -59,6 +59,7 @@ export const FA = {
     reArrange: 'fa-solid fa-wand-magic-sparkles',
     undo: 'fa-solid fa-rotate-left',
     redo: 'fa-solid fa-rotate-right',
+    export: 'fa-solid fa-file-export',
     edit: 'fa-solid fa-pen-to-square',
     confirm: 'fa-solid fa-check',
     cancel: 'fa-solid fa-xmark',

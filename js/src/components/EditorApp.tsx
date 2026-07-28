@@ -723,6 +723,15 @@ export function EditorApp(props: Props): React.ReactElement {
                 >
                     <Icon name={FA.redo} /> {t('editor:redo')}
                 </button>
+                <a
+                    className="btn btn-outline-secondary btn-sm"
+                    href={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={t('editor:export')}
+                >
+                    <Icon name={FA.export} /> {t('editor:export')}
+                </a>
             </div>
 
             <div

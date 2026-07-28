@@ -49,6 +49,7 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:dir_none': 'No arrow',
     'editor:dir_right': 'Arrow to target',
     'editor:dragnodes': 'Drag a concept onto a subject or object cell to retarget a relation',
+    'editor:export': 'Export',
     'editor:fmt_bigger': 'Larger text',
     'editor:fmt_bold': 'Bold',
     'editor:fmt_italic': 'Italic',
