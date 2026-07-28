@@ -55,4 +55,10 @@ if ($format === 'json') {
     send_file($content, $filename, 0, 0, true, true, 'application/json');
 }
 
+if ($format === 'xml') {
+    $content = $exporter->export_xml($instance, $workspace, $profile);
+    $filename = $exporter->filename($instance, $profile, 'xml');
+    send_file($content, $filename, 0, 0, true, true, 'application/xml');
+}
+
 throw new moodle_exception('error:unknownexportformat', 'mod_vimipad', '', $format);

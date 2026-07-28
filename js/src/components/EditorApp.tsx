@@ -743,15 +743,25 @@ export function EditorApp(props: Props): React.ReactElement {
                 >
                     <Icon name={FA.redo} /> {t('editor:redo')}
                 </button>
-                <a
-                    className="btn btn-outline-secondary btn-sm"
-                    href={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={t('editor:export')}
-                >
-                    <Icon name={FA.export} /> {t('editor:export')}
-                </a>
+                <details className="vimipad-export">
+                    <summary className="btn btn-outline-secondary btn-sm" title={t('editor:export')}>
+                        <Icon name={FA.export} /> {t('editor:export')}
+                    </summary>
+                    <div className="vimipad-export-menu" role="menu">
+                        <a
+                            role="menuitem"
+                            href={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >JSON</a>
+                        <a
+                            role="menuitem"
+                            href={`export.php?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >XML</a>
+                    </div>
+                </details>
                 <button
                     type="button"
                     className="btn btn-outline-secondary btn-sm"

@@ -104,6 +104,30 @@ final class export_service_test extends \advanced_testcase {
     }
 
     /**
+     * The XML export is well-formed and carries the map contents.
+     *
+     * @return void
+     */
+    public function test_export_xml_wellformed(): void {
+        $exporter = new export_service();
+        $xml = $exporter->export_xml($this->instance, $this->workspace, 'conceptmap');
+
+        $doc = new \DOMDocument();
+        $this->assertTrue($doc->loadXML($xml), 'export_xml did not produce well-formed XML');
+
+        $root = $doc->documentElement;
+        $this->assertSame('vimipad', $root->nodeName);
+        $this->assertSame(
+            (string) export_service::FORMAT_VERSION,
+            $root->getAttribute('formatversion')
+        );
+        $this->assertSame(2, $doc->getElementsByTagName('node')->length);
+        $this->assertSame(1, $doc->getElementsByTagName('relation')->length);
+        $this->assertStringContainsString('produces', $xml);
+        $this->assertStringContainsString('conceptmap', $xml);
+    }
+
+    /**
      * The download filename is cleaned and carries the requested extension.
      *
      * @return void

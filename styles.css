@@ -415,3 +415,49 @@
 .vimipad-editor--expanded .vimipad-canvas {
     height: calc(100vh - 9rem);
 }
+
+/* -------------------------------------------------------------------------
+   Export format menu (native <details> dropdown)
+   ------------------------------------------------------------------------- */
+
+.vimipad-export {
+    position: relative;
+    display: inline-block;
+}
+
+/* Render the summary as a button and drop the default disclosure triangle. */
+.vimipad-export summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.vimipad-export summary::-webkit-details-marker {
+    display: none;
+}
+
+.vimipad-export-menu {
+    position: absolute;
+    z-index: 1060;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 6rem;
+    padding: 0.25rem;
+    background: var(--vimipad-toolbar-bg, #fff);
+    border: 1px solid var(--vimipad-border, #ced4da);
+    border-radius: 0.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.vimipad-export-menu a {
+    padding: 0.35rem 0.75rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0.2rem;
+}
+
+.vimipad-export-menu a:hover,
+.vimipad-export-menu a:focus-visible {
+    background: var(--vimipad-hover-bg, #e9ecef);
+}
