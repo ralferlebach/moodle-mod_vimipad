@@ -76,8 +76,6 @@ interface Props {
     onCreateRelation?: (sourceid: string, targetid: string) => void;
     /** Set a relation's arrow direction (0 none, 1 forward, -1 reverse, 2 both). */
     onChangeDirection?: (stableid: string, direction: number) => void;
-    /** Set a relation's line-style metadatajson (straight/curved/orthogonal). */
-    onChangeRelationStyle?: (stableid: string, metadatajson: string) => void;
     t: (key: string) => string;
     /** True if a node is held by another collaborator (renders as locked). */
     isLockedByOther?: (targettype: string, stableid: string) => boolean;
@@ -128,24 +126,43 @@ const nodeWidth = (label: string): number => Math.max(70, label.length * 8 + 20)
 type LineStyle = 'straight' | 'curved' | 'orthogonal';
 
 /**
- * Read a relation's line style from its metadata.
+ * The connector line style for a display type (profile). Line style is a
+ * property of the display form, not of the individual relation.
  *
- * @param metadatajson The relation metadata JSON.
- * @returns The line style, defaulting to straight.
+ * @param profile The display-type key.
+ * @returns The line style for that display type.
  */
-function parseRelLine(metadatajson: string | undefined): LineStyle {
-    if (!metadatajson) {
-        return 'straight';
+function profileLine(profile: string): LineStyle {
+    switch (profile) {
+        case 'tree':
+            return 'orthogonal';
+        case 'mindmap':
+        case 'bubblemap':
+            return 'curved';
+        default:
+            return 'straight';
     }
-    try {
-        const obj = JSON.parse(metadatajson) as {line?: unknown};
-        if (obj.line === 'curved' || obj.line === 'orthogonal') {
-            return obj.line;
-        }
-    } catch {
-        // Ignore malformed metadata.
+}
+
+/**
+ * Point on a node's box boundary in the direction of a target point, so
+ * connectors (and their arrowheads) start/end at the edge, not under the node.
+ *
+ * @param center The node centre.
+ * @param size The node size.
+ * @param towards The point to aim at.
+ * @returns The boundary point.
+ */
+function edgePoint(center: Point, size: Size, towards: Point): Point {
+    const dx = towards.x - center.x;
+    const dy = towards.y - center.y;
+    if (dx === 0 && dy === 0) {
+        return center;
     }
-    return 'straight';
+    const hw = size.w / 2 + 2;
+    const hh = size.h / 2 + 2;
+    const scale = 1 / Math.max(Math.abs(dx) / hw, Math.abs(dy) / hh);
+    return {x: center.x + dx * scale, y: center.y + dy * scale};
 }
 
 /**
@@ -256,7 +273,7 @@ export function CanvasView(props: Props): React.ReactElement {
         state, layout, profile, sizes, disabled, onNodeMoved, onNodeResized,
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
-        onCreateRelation, onChangeDirection, onChangeRelationStyle,
+        onCreateRelation, onChangeDirection,
     } = props;
     const svgRef = useRef<SVGSVGElement>(null);
     // Manual double-click detection: pointer capture on nodes swallows native dblclick.
@@ -737,11 +754,17 @@ export function CanvasView(props: Props): React.ReactElement {
 
             {/* Layer 1 (bottom): connector lines and their hit targets. */}
             {state.relations.map(rel => {
-                const from = positionOf(rel.sourceid);
-                const to = positionOf(rel.targetid);
+                const srcNode = state.nodes.find(n => n.stableid === rel.sourceid);
+                const tgtNode = state.nodes.find(n => n.stableid === rel.targetid);
+                const fromC = positionOf(rel.sourceid);
+                const toC = positionOf(rel.targetid);
+                const fromSize = srcNode ? sizeOf(srcNode.stableid, srcNode.label) : {w: 70, h: 40};
+                const toSize = tgtNode ? sizeOf(tgtNode.stableid, tgtNode.label) : {w: 70, h: 40};
+                const from = edgePoint(fromC, fromSize, toC);
+                const to = edgePoint(toC, toSize, fromC);
                 const selected = isSelected(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
-                const path = relLinePath(from, to, parseRelLine(rel.metadatajson));
+                const path = relLinePath(from, to, profileLine(profile));
                 const stroke = selected ? selColor : 'currentColor';
                 const strokeWidth = selected ? 2.5 : 1.5;
                 const markerStart = d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
@@ -1055,13 +1078,12 @@ export function CanvasView(props: Props): React.ReactElement {
                 const midY = (from.y + to.y) / 2;
                 const editing = isEditing(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
-                const relLine = parseRelLine(rel.metadatajson);
                 return (
                     <foreignObject
                         x={midX - 150}
                         y={midY + 14}
                         width={300}
-                        height={editing ? 70 : 130}
+                        height={70}
                         style={{overflow: 'visible'}}
                     >
                         <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
@@ -1119,37 +1141,6 @@ export function CanvasView(props: Props): React.ReactElement {
                                             ><Icon name={FA.delete} /></button>
                                         )}
                                     </div>
-                                    {onChangeRelationStyle && (
-                                        <div className="vimipad-node-dock-row">
-                                            <button
-                                                type="button"
-                                                className={`vimipad-dock-btn${relLine === 'straight' ? ' active' : ''}`}
-                                                aria-pressed={relLine === 'straight'}
-                                                title={t('editor:line_straight')}
-                                                aria-label={t('editor:line_straight')}
-                                                onClick={() => onChangeRelationStyle(rel.stableid,
-                                                    JSON.stringify({line: 'straight'}))}
-                                            ><Icon name={FA.lineStraight} /></button>
-                                            <button
-                                                type="button"
-                                                className={`vimipad-dock-btn${relLine === 'curved' ? ' active' : ''}`}
-                                                aria-pressed={relLine === 'curved'}
-                                                title={t('editor:line_curved')}
-                                                aria-label={t('editor:line_curved')}
-                                                onClick={() => onChangeRelationStyle(rel.stableid,
-                                                    JSON.stringify({line: 'curved'}))}
-                                            ><Icon name={FA.lineCurved} /></button>
-                                            <button
-                                                type="button"
-                                                className={`vimipad-dock-btn${relLine === 'orthogonal' ? ' active' : ''}`}
-                                                aria-pressed={relLine === 'orthogonal'}
-                                                title={t('editor:line_orthogonal')}
-                                                aria-label={t('editor:line_orthogonal')}
-                                                onClick={() => onChangeRelationStyle(rel.stableid,
-                                                    JSON.stringify({line: 'orthogonal'}))}
-                                            ><Icon name={FA.lineOrthogonal} /></button>
-                                        </div>
-                                    )}
                                 </div>
                             ))}
                         </div>
