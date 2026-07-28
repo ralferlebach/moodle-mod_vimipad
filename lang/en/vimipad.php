@@ -109,6 +109,7 @@ $string['editor:reverse'] = 'Reverse relation';
 $string['editor:revision'] = 'Revision';
 $string['editor:subject'] = 'Subject';
 $string['editor:submit'] = 'Submit for grading';
+$string['editor:submitconfirm'] = 'Once submitted, the map is locked and can no longer be edited. Continue?';
 $string['editor:submitted'] = 'Submitted for grading. The map is now locked.';
 $string['editorloading'] = 'Loading the ViMi Pad editor…';
 $string['editorplaceholder'] = 'The ViMi Pad editor will appear here. The editor is not part of this early development version yet.';

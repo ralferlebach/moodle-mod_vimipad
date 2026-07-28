@@ -109,6 +109,7 @@ $string['editor:reverse'] = 'Relation umkehren';
 $string['editor:revision'] = 'Revision';
 $string['editor:subject'] = 'Subjekt';
 $string['editor:submit'] = 'Zur Bewertung abgeben';
+$string['editor:submitconfirm'] = 'Nach dem Abgeben wird die Map gesperrt und kann nicht mehr bearbeitet werden. Fortfahren?';
 $string['editor:submitted'] = 'Zur Bewertung abgegeben. Die Map ist jetzt gesperrt.';
 $string['editorloading'] = 'Der ViMi-Pad-Editor wird geladen…';
 $string['editorplaceholder'] = 'Hier erscheint der ViMi-Pad-Editor. Der Editor ist in dieser frühen Entwicklungsversion noch nicht enthalten.';

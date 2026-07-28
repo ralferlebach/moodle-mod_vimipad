@@ -119,6 +119,11 @@ export function RelationListView(props: Props): React.ReactElement {
                             onRetarget(rel.stableid, reversed ? {targetid: id} : {sourceid: id});
                         const onTgt = (id: string) =>
                             onRetarget(rel.stableid, reversed ? {sourceid: id} : {targetid: id});
+                        // For a double arrow the relation spans both rows: the forward row
+                        // renders the merged, vertically centred cell; the reversed row omits it.
+                        const doubled = rel.direction === 2;
+                        const relSpan = doubled && !reversed;
+                        const relSkip = doubled && reversed;
                         return (
                             <tr key={`${rel.stableid}-${reversed ? 'r' : 'f'}`}>
                                 <td
@@ -135,24 +140,29 @@ export function RelationListView(props: Props): React.ReactElement {
                                         >{nodeOptions}</select>
                                     ) : labelFor(state, srcId)}
                                 </td>
-                                <td>
-                                    {isEd ? (
-                                        <input
-                                            key={rel.stableid}
-                                            type="text"
-                                            className="form-control form-control-sm"
-                                            defaultValue={rel.label}
-                                            disabled={disabled}
-                                            placeholder={t('editor:relation')}
-                                            aria-label={t('editor:relation')}
-                                            onBlur={e => {
-                                                if (e.target.value !== rel.label) {
-                                                    onRenameRelation(rel.stableid, e.target.value);
-                                                }
-                                            }}
-                                        />
-                                    ) : <em>{rel.label || rel.type}</em>}
-                                </td>
+                                {!relSkip && (
+                                    <td
+                                        rowSpan={relSpan ? 2 : undefined}
+                                        className={relSpan ? 'align-middle' : undefined}
+                                    >
+                                        {isEd ? (
+                                            <input
+                                                key={rel.stableid}
+                                                type="text"
+                                                className="form-control form-control-sm"
+                                                defaultValue={rel.label}
+                                                disabled={disabled}
+                                                placeholder={t('editor:relation')}
+                                                aria-label={t('editor:relation')}
+                                                onBlur={e => {
+                                                    if (e.target.value !== rel.label) {
+                                                        onRenameRelation(rel.stableid, e.target.value);
+                                                    }
+                                                }}
+                                            />
+                                        ) : <em>{rel.label || rel.type}</em>}
+                                    </td>
+                                )}
                                 <td
                                     onDragOver={allowDrop}
                                     onDrop={e => handleDrop(e, onTgt)}
