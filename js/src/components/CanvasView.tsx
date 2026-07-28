@@ -727,37 +727,22 @@ export function CanvasView(props: Props): React.ReactElement {
                 const to = positionOf(rel.targetid);
                 const midX = (from.x + to.x) / 2;
                 const midY = (from.y + to.y) / 2;
-                const selected = isSelected(interaction, 'relation', rel.stableid);
                 const editing = isEditing(interaction, 'relation', rel.stableid);
-                const d = rel.direction ?? 0;
                 return (
                     <g key={`lbl-${rel.stableid}`} className="vimipad-canvas-relation">
                         {editing ? (
-                            <>
-                                <foreignObject x={midX - 80} y={midY - 18} width={160} height={34}>
-                                    <input
-                                        className="vimipad-canvas-relation-edit"
-                                        value={editValue}
-                                        autoFocus
-                                        onChange={e => setEditValue(e.target.value)}
-                                        onKeyDown={onEditKeyDown}
-                                        onFocus={() => vdbg('relation-input focus', rel.stableid)}
-                                        onBlur={() => vdbg('relation-input blur', rel.stableid)}
-                                        onPointerDown={e => e.stopPropagation()}
-                                    />
-                                </foreignObject>
-                                <foreignObject
-                                    x={midX - 150}
-                                    y={midY + 14}
-                                    width={300}
-                                    height={60}
-                                    style={{overflow: 'visible'}}
-                                >
-                                    <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
-                                        <TextEditMenu disabled={disabled} onConfirm={commitEdit} t={t} />
-                                    </div>
-                                </foreignObject>
-                            </>
+                            <foreignObject x={midX - 80} y={midY - 18} width={160} height={34}>
+                                <input
+                                    className="vimipad-canvas-relation-edit"
+                                    value={editValue}
+                                    autoFocus
+                                    onChange={e => setEditValue(e.target.value)}
+                                    onKeyDown={onEditKeyDown}
+                                    onFocus={() => vdbg('relation-input focus', rel.stableid)}
+                                    onBlur={() => vdbg('relation-input blur', rel.stableid)}
+                                    onPointerDown={e => e.stopPropagation()}
+                                />
+                            </foreignObject>
                         ) : (rel.label && (
                             <text
                                 x={midX}
@@ -774,67 +759,11 @@ export function CanvasView(props: Props): React.ReactElement {
                                 {rel.label}
                             </text>
                         ))}
-                        {selected && !disabled && !editing && onChangeDirection && (
-                            <foreignObject
-                                x={midX - 150}
-                                y={midY + 10}
-                                width={300}
-                                height={70}
-                                style={{overflow: 'visible'}}
-                            >
-                                <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
-                                    <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:relation')}>
-                                        <div className="vimipad-node-dock-row">
-                                            <button
-                                                type="button"
-                                                className={`vimipad-dock-btn${d === 0 ? ' active' : ''}`}
-                                                aria-pressed={d === 0}
-                                                title={t('editor:dir_none')}
-                                                aria-label={t('editor:dir_none')}
-                                                onClick={() => onChangeDirection(rel.stableid, 0)}
-                                            ><Icon name={FA.dirNone} /></button>
-                                            <button
-                                                type="button"
-                                                className={`vimipad-dock-btn${d === -1 ? ' active' : ''}`}
-                                                aria-pressed={d === -1}
-                                                title={t('editor:dir_left')}
-                                                aria-label={t('editor:dir_left')}
-                                                onClick={() => onChangeDirection(rel.stableid, -1)}
-                                            ><Icon name={FA.dirLeft} /></button>
-                                            <button
-                                                type="button"
-                                                className={`vimipad-dock-btn${d === 1 ? ' active' : ''}`}
-                                                aria-pressed={d === 1}
-                                                title={t('editor:dir_right')}
-                                                aria-label={t('editor:dir_right')}
-                                                onClick={() => onChangeDirection(rel.stableid, 1)}
-                                            ><Icon name={FA.dirRight} /></button>
-                                            <button
-                                                type="button"
-                                                className={`vimipad-dock-btn${d === 2 ? ' active' : ''}`}
-                                                aria-pressed={d === 2}
-                                                title={t('editor:dir_both')}
-                                                aria-label={t('editor:dir_both')}
-                                                onClick={() => onChangeDirection(rel.stableid, 2)}
-                                            ><Icon name={FA.dirBoth} /></button>
-                                            {onDeleteRelation && (
-                                                <button
-                                                    type="button"
-                                                    className="vimipad-dock-btn vimipad-dock-danger"
-                                                    title={t('editor:fmt_delete')}
-                                                    aria-label={t('editor:fmt_delete')}
-                                                    onClick={() => onDeleteRelation(rel.stableid)}
-                                                ><Icon name={FA.delete} /></button>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </foreignObject>
-                        )}
                     </g>
                 );
             })}
 
+            {/* Layer 3 (top of the graph, below the menu overlay): nodes. */}
             {state.nodes.map(node => {
                 const pos = positionOf(node.stableid);
                 const {w, h} = sizeOf(node.stableid, node.label);
@@ -850,9 +779,6 @@ export function CanvasView(props: Props): React.ReactElement {
                 // Hover/selection reveals the quick affordances (resize corners, connector docks).
                 const affordances = (selected || hovered) && !disabled && !otherLock && !editing;
                 const canResize = !!onNodeResized && affordances;
-                // The format dock shows while selected; hidden during edit so the
-                // inline textarea keeps focus (matching the working relation editor).
-                const dockVisible = selected && !editing && !disabled && !otherLock;
                 return (
                     <g
                         key={node.stableid}
@@ -959,47 +885,6 @@ export function CanvasView(props: Props): React.ReactElement {
                                 onPointerDown={e => startConnect(e, node.stableid)}
                             />
                         ))}
-                        {dockVisible && onChangeStyle && (
-                            <foreignObject
-                                x={-150}
-                                y={h / 2 + 12}
-                                width={300}
-                                height={160}
-                                style={{overflow: 'visible'}}
-                            >
-                                <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
-                                    <NodeFormatToolbar
-                                        target={node}
-                                        profile={profile}
-                                        disabled={disabled}
-                                        onChangeStyle={m => onChangeStyle(node.stableid, m)}
-                                        onDuplicate={() => onDuplicateNode && onDuplicateNode(node.stableid)}
-                                        onDelete={() => onDeleteNode && onDeleteNode(node.stableid)}
-                                        onEditText={() => startNodeEdit(node.stableid, node.label)}
-                                        t={t}
-                                    />
-                                </div>
-                            </foreignObject>
-                        )}
-                        {editing && onChangeStyle && (
-                            <foreignObject
-                                x={-150}
-                                y={h / 2 + 12}
-                                width={300}
-                                height={120}
-                                style={{overflow: 'visible'}}
-                            >
-                                <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
-                                    <TextEditMenu
-                                        metadatajson={node.metadatajson}
-                                        disabled={disabled}
-                                        onChangeStyle={m => onChangeStyle(node.stableid, m)}
-                                        onConfirm={commitEdit}
-                                        t={t}
-                                    />
-                                </div>
-                            </foreignObject>
-                        )}
                         {otherLock && (
                             <text
                                 textAnchor="middle"
@@ -1028,6 +913,126 @@ export function CanvasView(props: Props): React.ReactElement {
                     style={{pointerEvents: 'none'}}
                 />
             )}
+
+            {/* Layer 4 (top): exactly one menu, for the active (selected/edited) element. */}
+            {(() => {
+                const active = interaction.editing ?? interaction.selected;
+                if (!active || disabled) {
+                    return null;
+                }
+                if (active.kind === 'node') {
+                    const node = state.nodes.find(n => n.stableid === active.id);
+                    if (!node || lockedByOther(node.stableid) || !onChangeStyle) {
+                        return null;
+                    }
+                    const pos = positionOf(node.stableid);
+                    const {h} = sizeOf(node.stableid, node.label);
+                    const editing = isEditing(interaction, 'node', node.stableid);
+                    return (
+                        <foreignObject
+                            x={pos.x - 150}
+                            y={pos.y + h / 2 + 12}
+                            width={300}
+                            height={editing ? 120 : 170}
+                            style={{overflow: 'visible'}}
+                        >
+                            <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
+                                {editing ? (
+                                    <TextEditMenu
+                                        metadatajson={node.metadatajson}
+                                        disabled={disabled}
+                                        onChangeStyle={m => onChangeStyle(node.stableid, m)}
+                                        onConfirm={commitEdit}
+                                        t={t}
+                                    />
+                                ) : (
+                                    <NodeFormatToolbar
+                                        target={node}
+                                        profile={profile}
+                                        disabled={disabled}
+                                        onChangeStyle={m => onChangeStyle(node.stableid, m)}
+                                        onDuplicate={() => onDuplicateNode && onDuplicateNode(node.stableid)}
+                                        onDelete={() => onDeleteNode && onDeleteNode(node.stableid)}
+                                        onEditText={() => startNodeEdit(node.stableid, node.label)}
+                                        t={t}
+                                    />
+                                )}
+                            </div>
+                        </foreignObject>
+                    );
+                }
+                const rel = state.relations.find(r => r.stableid === active.id);
+                if (!rel) {
+                    return null;
+                }
+                const from = positionOf(rel.sourceid);
+                const to = positionOf(rel.targetid);
+                const midX = (from.x + to.x) / 2;
+                const midY = (from.y + to.y) / 2;
+                const editing = isEditing(interaction, 'relation', rel.stableid);
+                const d = rel.direction ?? 0;
+                return (
+                    <foreignObject
+                        x={midX - 150}
+                        y={midY + 14}
+                        width={300}
+                        height={70}
+                        style={{overflow: 'visible'}}
+                    >
+                        <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
+                            {editing ? (
+                                <TextEditMenu disabled={disabled} onConfirm={commitEdit} t={t} />
+                            ) : (onChangeDirection && (
+                                <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:relation')}>
+                                    <div className="vimipad-node-dock-row">
+                                        <button
+                                            type="button"
+                                            className={`vimipad-dock-btn${d === 0 ? ' active' : ''}`}
+                                            aria-pressed={d === 0}
+                                            title={t('editor:dir_none')}
+                                            aria-label={t('editor:dir_none')}
+                                            onClick={() => onChangeDirection(rel.stableid, 0)}
+                                        ><Icon name={FA.dirNone} /></button>
+                                        <button
+                                            type="button"
+                                            className={`vimipad-dock-btn${d === -1 ? ' active' : ''}`}
+                                            aria-pressed={d === -1}
+                                            title={t('editor:dir_left')}
+                                            aria-label={t('editor:dir_left')}
+                                            onClick={() => onChangeDirection(rel.stableid, -1)}
+                                        ><Icon name={FA.dirLeft} /></button>
+                                        <button
+                                            type="button"
+                                            className={`vimipad-dock-btn${d === 1 ? ' active' : ''}`}
+                                            aria-pressed={d === 1}
+                                            title={t('editor:dir_right')}
+                                            aria-label={t('editor:dir_right')}
+                                            onClick={() => onChangeDirection(rel.stableid, 1)}
+                                        ><Icon name={FA.dirRight} /></button>
+                                        <button
+                                            type="button"
+                                            className={`vimipad-dock-btn${d === 2 ? ' active' : ''}`}
+                                            aria-pressed={d === 2}
+                                            title={t('editor:dir_both')}
+                                            aria-label={t('editor:dir_both')}
+                                            onClick={() => onChangeDirection(rel.stableid, 2)}
+                                        ><Icon name={FA.dirBoth} /></button>
+                                        {onDeleteRelation && (
+                                            <button
+                                                type="button"
+                                                className="vimipad-dock-btn vimipad-dock-danger"
+                                                title={t('editor:fmt_delete')}
+                                                aria-label={t('editor:fmt_delete')}
+                                                onClick={() => onDeleteRelation(rel.stableid)}
+                                            ><Icon name={FA.delete} /></button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </foreignObject>
+                );
+            })()}
         </svg>
     );
 }
