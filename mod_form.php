@@ -79,6 +79,15 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->setDefault('aienabled', 0);
         $mform->addHelpButton('aienabled', 'aienabled', 'mod_vimipad');
 
+        $mform->addElement(
+            'text',
+            'channelurl',
+            get_string('channelurl', 'mod_vimipad'),
+            ['size' => '64', 'placeholder' => 'https://']
+        );
+        $mform->setType('channelurl', PARAM_URL);
+        $mform->addHelpButton('channelurl', 'channelurl', 'mod_vimipad');
+
         $this->standard_grading_coursemodule_elements();
 
         $this->standard_coursemodule_elements();

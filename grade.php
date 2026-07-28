@@ -60,8 +60,17 @@ $PAGE->set_context($context);
 // Handle annotation submission.
 $addannotation = optional_param('addannotation', 0, PARAM_BOOL);
 if ($addannotation && confirm_sesskey()) {
-    $targettype = required_param('targettype', PARAM_ALPHA);
-    $targetstableid = optional_param('targetstableid', '', PARAM_ALPHANUMEXT);
+    // The target is a combined value: "map", "node:<stableid>" or "relation:<stableid>".
+    $rawtarget = optional_param('annotationtarget', 'map', PARAM_RAW);
+    $targettype = 'map';
+    $targetstableid = '';
+    if (strpos($rawtarget, ':') !== false) {
+        [$ttype, $tid] = explode(':', $rawtarget, 2);
+        if (in_array($ttype, ['node', 'relation'], true)) {
+            $targettype = $ttype;
+            $targetstableid = clean_param($tid, PARAM_ALPHANUMEXT);
+        }
+    }
     $commenttext = required_param('commenttext', PARAM_TEXT);
 
     if (trim($commenttext) !== '') {
@@ -202,12 +211,58 @@ if ($annotations) {
     echo html_writer::tag('ul', implode('', $list));
 }
 
+// Teacher-visible learner journal for this workspace.
+$journal = (new \mod_vimipad\local\service\journal_service())->get_teacher_visible((int) $snapshot->workspaceid);
+if ($journal) {
+    echo html_writer::tag('h4', get_string('journal:teacherheading', 'mod_vimipad'), ['class' => 'mt-4']);
+    $jitems = [];
+    foreach ($journal as $entry) {
+        $author = $DB->get_record('user', ['id' => $entry->userid]);
+        $meta = ($author ? fullname($author) : (string) $entry->userid) . ' · ' . userdate($entry->timecreated);
+        $jitems[] = html_writer::tag(
+            'li',
+            html_writer::tag('div', s($meta), ['class' => 'text-muted small']) .
+            html_writer::tag('div', s($entry->entrytext)),
+            ['class' => 'mb-2']
+        );
+    }
+    echo html_writer::tag('ul', implode('', $jitems), ['class' => 'list-unstyled']);
+}
+
 // Add annotation form.
 echo html_writer::tag('h4', get_string('addannotation', 'mod_vimipad'));
 echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'addannotation', 'value' => 1]);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'targettype', 'value' => 'map']);
+
+// Target selector: whole map, or a specific node or relation of the snapshot.
+$targetoptions = ['map' => get_string('annotationtarget_map', 'mod_vimipad')];
+foreach (($data['nodes'] ?? []) as $node) {
+    $targetoptions['node:' . $node['stableid']] =
+        get_string('annotationtarget_node', 'mod_vimipad', $node['label']);
+}
+foreach (($data['relations'] ?? []) as $rel) {
+    if (empty($rel['stableid'])) {
+        continue;
+    }
+    $rlabel = $rel['label'] !== ''
+        ? $rel['label']
+        : (($labels[$rel['sourceid']] ?? '?') . ' → ' . ($labels[$rel['targetid']] ?? '?'));
+    $targetoptions['relation:' . $rel['stableid']] =
+        get_string('annotationtarget_relation', 'mod_vimipad', $rlabel);
+}
+echo html_writer::tag(
+    'label',
+    get_string('annotationtarget', 'mod_vimipad'),
+    ['for' => 'vimipad-annotation-target']
+);
+echo html_writer::select(
+    $targetoptions,
+    'annotationtarget',
+    'map',
+    false,
+    ['id' => 'vimipad-annotation-target', 'class' => 'form-select mb-2']
+);
 echo html_writer::tag(
     'label',
     get_string('annotationtext', 'mod_vimipad'),

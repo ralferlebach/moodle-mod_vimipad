@@ -15,6 +15,7 @@
         <FIELD NAME="collaborationmode" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0=individual, 1=group, 2=course"/>
         <FIELD NAME="gradingmode" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0=none, 1=points, 2=rubric/guide (reserved)"/>
         <FIELD NAME="aienabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="AI feedback assistance enabled for this activity"/>
+        <FIELD NAME="channelurl" TYPE="char" LENGTH="1333" NOTNULL="false" SEQUENCE="false" COMMENT="Optional companion channel URL (forum/chat/BBB)"/>
         <FIELD NAME="grade" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="100" SEQUENCE="false" COMMENT="Maximum grade or negative scale id"/>
         <FIELD NAME="completionsubmit" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if submitting a snapshot completes the activity"/>
         <FIELD NAME="completionminnodes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Minimum number of concepts required to complete (0 = rule off)"/>

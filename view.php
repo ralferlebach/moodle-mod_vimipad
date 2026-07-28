@@ -78,6 +78,15 @@ if (!empty($instance->intro)) {
     echo $OUTPUT->box(format_module_intro('vimipad', $instance, $cm->id), 'generalbox', 'intro');
 }
 
+// Companion channel (optional forum/chat/BBB link).
+if (!empty($instance->channelurl)) {
+    echo html_writer::div(html_writer::link(
+        $instance->channelurl,
+        get_string('channel:open', 'mod_vimipad'),
+        ['class' => 'btn btn-outline-secondary', 'target' => '_blank', 'rel' => 'noopener noreferrer']
+    ), 'mb-3');
+}
+
 // Group switcher (group collaboration mode with a Moodle group mode set).
 if ($showgroupmenu) {
     groups_print_activity_menu($cm, new moodle_url('/mod/vimipad/view.php', ['id' => $cm->id]));

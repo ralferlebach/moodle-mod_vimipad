@@ -123,5 +123,25 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072655, 'vimipad');
     }
 
+    if ($oldversion < 2026072673) {
+        // Optional companion-channel URL (forum/chat/BBB) for the activity.
+        $table = new xmldb_table('vimipad');
+        $field = new xmldb_field(
+            'channelurl',
+            XMLDB_TYPE_CHAR,
+            '1333',
+            null,
+            null,
+            null,
+            null,
+            'aienabled'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026072673, 'vimipad');
+    }
+
     return true;
 }
