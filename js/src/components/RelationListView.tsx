@@ -31,6 +31,7 @@
 
 import React, {useState} from 'react';
 import {EditorState, labelFor} from '../store/reducer';
+import {VimiRelation} from '../types';
 import {FA, Icon} from '../canvas/icons';
 
 interface Props {
@@ -61,11 +62,21 @@ export function RelationListView(props: Props): React.ReactElement {
     const nodeOptions = state.nodes.map(n =>
         <option key={n.stableid} value={n.stableid}>{n.label}</option>);
 
-    const handleDrop = (event: React.DragEvent, stableid: string, end: 'source' | 'target') => {
+    // A double arrow (direction 2) shows as two connected entries (A->B and B->A)
+    // sharing one underlying relation and its label.
+    const rows: {rel: VimiRelation; reversed: boolean}[] = [];
+    state.relations.forEach(rel => {
+        rows.push({rel, reversed: false});
+        if (rel.direction === 2) {
+            rows.push({rel, reversed: true});
+        }
+    });
+
+    const handleDrop = (event: React.DragEvent, apply: (id: string) => void) => {
         event.preventDefault();
         const dropped = event.dataTransfer.getData(DND_MIME);
         if (dropped) {
-            onRetarget(stableid, end === 'source' ? {sourceid: dropped} : {targetid: dropped});
+            apply(dropped);
         }
     };
 
@@ -100,34 +111,86 @@ export function RelationListView(props: Props): React.ReactElement {
                     </tr>
                 </thead>
                 <tbody>
-                    {state.relations.map(rel => (
-                        <React.Fragment key={rel.stableid}>
-                            <tr>
+                    {rows.map(({rel, reversed}) => {
+                        const isEd = editing === rel.stableid;
+                        const srcId = reversed ? rel.targetid : rel.sourceid;
+                        const tgtId = reversed ? rel.sourceid : rel.targetid;
+                        const onSrc = (id: string) =>
+                            onRetarget(rel.stableid, reversed ? {targetid: id} : {sourceid: id});
+                        const onTgt = (id: string) =>
+                            onRetarget(rel.stableid, reversed ? {sourceid: id} : {targetid: id});
+                        return (
+                            <tr key={`${rel.stableid}-${reversed ? 'r' : 'f'}`}>
                                 <td
                                     onDragOver={allowDrop}
-                                    onDrop={e => handleDrop(e, rel.stableid, 'source')}
+                                    onDrop={e => handleDrop(e, onSrc)}
                                 >
-                                    {labelFor(state, rel.sourceid)}
+                                    {isEd ? (
+                                        <select
+                                            className="form-control form-control-sm"
+                                            aria-label={t('editor:subject')}
+                                            value={srcId}
+                                            disabled={disabled}
+                                            onChange={e => onSrc(e.target.value)}
+                                        >{nodeOptions}</select>
+                                    ) : labelFor(state, srcId)}
                                 </td>
-                                <td><em>{rel.label || rel.type}</em></td>
+                                <td>
+                                    {isEd ? (
+                                        <input
+                                            key={rel.stableid}
+                                            type="text"
+                                            className="form-control form-control-sm"
+                                            defaultValue={rel.label}
+                                            disabled={disabled}
+                                            placeholder={t('editor:relation')}
+                                            aria-label={t('editor:relation')}
+                                            onBlur={e => {
+                                                if (e.target.value !== rel.label) {
+                                                    onRenameRelation(rel.stableid, e.target.value);
+                                                }
+                                            }}
+                                        />
+                                    ) : <em>{rel.label || rel.type}</em>}
+                                </td>
                                 <td
                                     onDragOver={allowDrop}
-                                    onDrop={e => handleDrop(e, rel.stableid, 'target')}
+                                    onDrop={e => handleDrop(e, onTgt)}
                                 >
-                                    {labelFor(state, rel.targetid)}
+                                    {isEd ? (
+                                        <select
+                                            className="form-control form-control-sm"
+                                            aria-label={t('editor:object')}
+                                            value={tgtId}
+                                            disabled={disabled}
+                                            onChange={e => onTgt(e.target.value)}
+                                        >{nodeOptions}</select>
+                                    ) : labelFor(state, tgtId)}
                                 </td>
-                                <td className="text-right">
-                                    <button
-                                        type="button"
-                                        className="btn btn-sm btn-outline-secondary mr-1"
-                                        disabled={disabled}
-                                        aria-expanded={editing === rel.stableid}
-                                        title={t('editor:reledit')}
-                                        aria-label={t('editor:reledit')}
-                                        onClick={() => setEditing(editing === rel.stableid ? null : rel.stableid)}
-                                    >
-                                        <Icon name={FA.edit} />
-                                    </button>
+                                <td className="text-right vimipad-relation-actions">
+                                    {isEd ? (
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-success mr-1"
+                                            disabled={disabled}
+                                            title={t('editor:confirm')}
+                                            aria-label={t('editor:confirm')}
+                                            onClick={() => setEditing(null)}
+                                        >
+                                            <Icon name={FA.confirm} />
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-outline-secondary mr-1"
+                                            disabled={disabled}
+                                            title={t('editor:reledit')}
+                                            aria-label={t('editor:reledit')}
+                                            onClick={() => setEditing(rel.stableid)}
+                                        >
+                                            <Icon name={FA.edit} />
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         className="btn btn-sm btn-outline-secondary mr-1"
@@ -150,56 +213,8 @@ export function RelationListView(props: Props): React.ReactElement {
                                     </button>
                                 </td>
                             </tr>
-                            {editing === rel.stableid && (
-                                <tr className="vimipad-retarget-editor">
-                                    <td colSpan={4}>
-                                        <div className="form-inline">
-                                            <label className="mr-1" htmlFor={`lbl-${rel.stableid}`}>
-                                                {t('editor:relation')}
-                                            </label>
-                                            <input
-                                                id={`lbl-${rel.stableid}`}
-                                                type="text"
-                                                className="form-control form-control-sm mr-3"
-                                                defaultValue={rel.label}
-                                                disabled={disabled}
-                                                placeholder={t('editor:relation')}
-                                                onBlur={e => {
-                                                    if (e.target.value !== rel.label) {
-                                                        onRenameRelation(rel.stableid, e.target.value);
-                                                    }
-                                                }}
-                                            />
-                                            <label className="mr-1" htmlFor={`src-${rel.stableid}`}>
-                                                {t('editor:subject')}
-                                            </label>
-                                            <select
-                                                id={`src-${rel.stableid}`}
-                                                className="form-control form-control-sm mr-3"
-                                                value={rel.sourceid}
-                                                disabled={disabled}
-                                                onChange={e => onRetarget(rel.stableid, {sourceid: e.target.value})}
-                                            >
-                                                {nodeOptions}
-                                            </select>
-                                            <label className="mr-1" htmlFor={`tgt-${rel.stableid}`}>
-                                                {t('editor:object')}
-                                            </label>
-                                            <select
-                                                id={`tgt-${rel.stableid}`}
-                                                className="form-control form-control-sm"
-                                                value={rel.targetid}
-                                                disabled={disabled}
-                                                onChange={e => onRetarget(rel.stableid, {targetid: e.target.value})}
-                                            >
-                                                {nodeOptions}
-                                            </select>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
-                        </React.Fragment>
-                    ))}
+                        );
+                    })}
                 </tbody>
             </table>
         </>
