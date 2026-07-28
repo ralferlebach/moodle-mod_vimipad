@@ -118,6 +118,43 @@ function vimipad_prepare_completion_fields(stdClass $data): void {
 }
 
 /**
+ * Provide course module info, registering the custom completion rules so Moodle
+ * evaluates them.
+ *
+ * Without this, the completion subsystem does not know the activity's custom
+ * rules and refuses to evaluate them ("rule not used by this activity").
+ *
+ * @param \stdClass $coursemodule The course module record.
+ * @return \cached_cm_info|null The info, or null if the instance is missing.
+ */
+function vimipad_get_coursemodule_info($coursemodule) {
+    global $DB;
+
+    $fields = 'id, name, intro, introformat, completionsubmit, completionminnodes, completiongraded';
+    $instance = $DB->get_record('vimipad', ['id' => $coursemodule->instance], $fields);
+    if (!$instance) {
+        return null;
+    }
+
+    $info = new cached_cm_info();
+    $info->name = $instance->name;
+
+    if ($coursemodule->showdescription) {
+        $info->content = format_module_intro('vimipad', $instance, $coursemodule->id, false);
+    }
+
+    if ($coursemodule->completion == COMPLETION_TRACKING_AUTOMATIC) {
+        $info->customdata['customcompletionrules'] = [
+            'completionsubmit' => (int) $instance->completionsubmit,
+            'completionminnodes' => (int) $instance->completionminnodes,
+            'completiongraded' => (int) $instance->completiongraded,
+        ];
+    }
+
+    return $info;
+}
+
+/**
  * Delete a vimipad instance and all dependent data.
  *
  * @param int $id Id of the vimipad instance.

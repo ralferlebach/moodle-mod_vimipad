@@ -80,10 +80,16 @@ class create_snapshot extends external_api {
         $service = new snapshot_service();
         $snapshot = $service->create_submission($workspace, $instance->defaultprofile, (int) $USER->id);
 
-        // Update activity completion if completion-on-submit is enabled.
+        \mod_vimipad\event\snapshot_submitted::create([
+            'context' => $context,
+            'objectid' => (int) $snapshot->id,
+            'other' => ['workspaceid' => (int) $workspace->id],
+        ])->trigger();
+
+        // Re-evaluate activity completion (submit/graded/min-nodes custom rules).
         $completion = new \completion_info($course);
-        if ($completion->is_enabled($cm) && (int) $instance->completionsubmit === 1) {
-            $completion->update_state($cm, COMPLETION_COMPLETE, (int) $USER->id);
+        if ($completion->is_enabled($cm)) {
+            $completion->update_state($cm, COMPLETION_UNKNOWN, (int) $USER->id);
         }
 
         return ['snapshotid' => (int) $snapshot->id, 'status' => (int) $snapshot->status];

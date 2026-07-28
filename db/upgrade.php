@@ -93,14 +93,28 @@ function xmldb_vimipad_upgrade($oldversion) {
         $table = new xmldb_table('vimipad');
 
         $field = new xmldb_field(
-            'completionminnodes', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'completionsubmit'
+            'completionminnodes',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'completionsubmit'
         );
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
 
         $field = new xmldb_field(
-            'completiongraded', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'completionminnodes'
+            'completiongraded',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'completionminnodes'
         );
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);

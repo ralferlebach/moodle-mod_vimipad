@@ -30,7 +30,7 @@ final class custom_completion_test extends \advanced_testcase {
     /** @var \stdClass The vimipad instance. */
     private $instance;
 
-    /** @var \cm_info|\stdClass The course module. */
+    /** @var \cm_info The course module. */
     private $cm;
 
     /** @var int The workspace id. */
@@ -49,12 +49,20 @@ final class custom_completion_test extends \advanced_testcase {
         $this->resetAfterTest();
 
         global $DB;
-        $course = $this->getDataGenerator()->create_course();
+        $course = $this->getDataGenerator()->create_course(['enablecompletion' => 1]);
         $this->instance = $this->getDataGenerator()->create_module(
             'vimipad',
-            ['course' => $course->id, 'collaborationmode' => 0]
+            [
+                'course' => $course->id,
+                'collaborationmode' => 0,
+                'completion' => COMPLETION_TRACKING_AUTOMATIC,
+                'completionsubmit' => 1,
+                'completionminnodesenabled' => 1,
+                'completionminnodes' => 2,
+                'completiongraded' => 1,
+            ]
         );
-        $this->cm = get_coursemodule_from_instance('vimipad', $this->instance->id);
+        $this->cm = get_fast_modinfo($course)->get_cm($this->instance->cmid);
         $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
         $this->userid = (int) $user->id;
 

@@ -86,6 +86,14 @@ class grading_service {
 
         $snapshotservice = new snapshot_service();
         $snapshotservice->set_status($snapshotid, snapshot_service::STATUS_GRADED);
+
+        $cm = get_coursemodule_from_instance('vimipad', $instance->id, 0, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+        $eventdata = ['context' => $context, 'objectid' => (int) $snapshotid, 'userid' => $graderid];
+        if (!empty($workspace->userid)) {
+            $eventdata['relateduserid'] = (int) $workspace->userid;
+        }
+        \mod_vimipad\event\snapshot_graded::create($eventdata)->trigger();
     }
 
     /**

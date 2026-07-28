@@ -168,4 +168,56 @@ final class snapshot_grading_test extends \advanced_testcase {
         $item = reset($grades->items);
         $this->assertEquals(85.0, (float) $item->grades[$this->studentid]->grade);
     }
+
+    /**
+     * Submitting a snapshot via the external function fires the submitted event.
+     *
+     * @return void
+     * @covers \mod_vimipad\event\snapshot_submitted
+     */
+    public function test_submitting_fires_event(): void {
+        $this->setUser($this->studentid);
+        $cm = get_coursemodule_from_instance('vimipad', $this->instance->id);
+
+        $sink = $this->redirectEvents();
+        \mod_vimipad\external\create_snapshot::execute((int) $cm->id, $this->workspaceid);
+        $events = $sink->get_events();
+        $sink->close();
+
+        $found = false;
+        foreach ($events as $event) {
+            if ($event instanceof \mod_vimipad\event\snapshot_submitted) {
+                $found = true;
+            }
+        }
+        $this->assertTrue($found, 'snapshot_submitted event was not triggered');
+    }
+
+    /**
+     * Saving a grade fires the graded event.
+     *
+     * @return void
+     * @covers \mod_vimipad\event\snapshot_graded
+     */
+    public function test_grading_fires_event(): void {
+        global $DB;
+        $teacher = $this->getDataGenerator()->create_and_enrol($this->course, 'editingteacher');
+        $workspace = $DB->get_record('vimipad_workspace', ['id' => $this->workspaceid]);
+        $snapservice = new snapshot_service();
+        $snapshot = $snapservice->create_submission($workspace, 'conceptmap', $this->studentid);
+
+        $sink = $this->redirectEvents();
+        $grading = new grading_service();
+        $grading->save_grade($this->instance, $workspace, (int) $snapshot->id, 70.0, 'ok', FORMAT_PLAIN, (int) $teacher->id);
+        $events = $sink->get_events();
+        $sink->close();
+
+        $found = false;
+        foreach ($events as $event) {
+            if ($event instanceof \mod_vimipad\event\snapshot_graded) {
+                $found = true;
+            }
+        }
+        $this->assertTrue($found, 'snapshot_graded event was not triggered');
+    }
 }

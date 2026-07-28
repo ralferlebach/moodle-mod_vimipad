@@ -105,12 +105,19 @@ class mod_vimipad_mod_form extends moodleform_mod {
         // Minimum concepts: an enable checkbox plus a number.
         $group = [];
         $group[] =& $mform->createElement(
-            'checkbox', 'completionminnodesenabled', '', get_string('completionminnodes', 'mod_vimipad')
+            'checkbox',
+            'completionminnodesenabled',
+            '',
+            get_string('completionminnodes', 'mod_vimipad')
         );
         $group[] =& $mform->createElement('text', 'completionminnodes', '', ['size' => 3]);
         $mform->setType('completionminnodes', PARAM_INT);
         $mform->addGroup(
-            $group, 'completionminnodesgroup', get_string('completionminnodesgroup', 'mod_vimipad'), [' '], false
+            $group,
+            'completionminnodesgroup',
+            get_string('completionminnodesgroup', 'mod_vimipad'),
+            [' '],
+            false
         );
         $mform->addHelpButton('completionminnodesgroup', 'completionminnodesgroup', 'mod_vimipad');
         $mform->disabledIf('completionminnodes', 'completionminnodesenabled', 'notchecked');

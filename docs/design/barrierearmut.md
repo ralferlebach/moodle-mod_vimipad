@@ -40,7 +40,8 @@ Tastaturschicht zu überladen.
   `<caption>`, beschriftete Inline-Bedienelemente für Subjekt/Relation/Objekt,
   Aktions-Buttons mit `aria-label`).
 - Umschaltung Canvas/Liste als ARIA-Tabs (`role="tablist"`/`role="tab"`,
-  `aria-selected`).
+  `aria-selected`, mit `id`/`aria-controls` und verknüpftem `role="tabpanel"`
+  über `aria-labelledby`).
 
 ### Canvas (SVG)
 - `role="img"` mit nativem `<title>` (Name) und `<desc>` (Beschreibung),
@@ -80,8 +81,6 @@ Tastaturschicht zu überladen.
   oder warnen.
 - **Fokus-Management** beim Öffnen/Schließen von Menüs und Editoren (Fokus in
   das Menü setzen, danach sinnvoll zurückgeben).
-- **Tabpanel-Verknüpfung** (`aria-controls`/`role="tabpanel"`/`aria-labelledby`)
-  zwischen Umschaltern und Ansichtsinhalt vervollständigen.
 - **Touch-/Zoom-Bedienbarkeit** auf kleinen Geräten (Teil der Mobile-Politur).
 
 ## Offene Punkte — (noch) nicht rein technisch adressierbar

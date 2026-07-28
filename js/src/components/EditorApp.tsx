@@ -238,6 +238,16 @@ export function EditorApp(props: Props): React.ReactElement {
         let revision = revisionRef.current;
         try {
             for (const spec of specs) {
+                if (spec.type === '__layout') {
+                    // Non-revisioned layout change (node move/resize/re-arrange):
+                    // restore positions/sizes and persist on the layout channel.
+                    const positions = spec.payload.positions as LayoutMap;
+                    const layoutSizes = spec.payload.sizes as SizeMap;
+                    setStored(positions);
+                    setSizes(layoutSizes);
+                    await api.saveLayout(stateRef.current.workspaceid, encodeLayout(positions, layoutSizes));
+                    continue;
+                }
                 const res = await api.applyOperation(
                     stateRef.current.workspaceid, revision, spec.type, spec.payload
                 );
@@ -485,38 +495,53 @@ export function EditorApp(props: Props): React.ReactElement {
     }, [runOperation, pushHistory]);
 
     const onNodeMoved = useCallback(async (stableid: string, point: Point) => {
+        const prevPos = stored;
         const nextPos = {...stored, [stableid]: point};
         setStored(nextPos);
         try {
             await api.saveLayout(state.workspaceid, encodeLayout(nextPos, sizes));
+            pushHistory({
+                undo: [{type: '__layout', payload: {positions: prevPos, sizes}}],
+                redo: [{type: '__layout', payload: {positions: nextPos, sizes}}],
+            });
         } catch (e) {
             setError((e as Error).message);
         }
-    }, [api, state.workspaceid, stored, sizes]);
+    }, [api, state.workspaceid, stored, sizes, pushHistory]);
 
     // Discard the stored positions for the active profile and re-apply the
     // automatic layout (tidy tree for the tree profile, circle otherwise),
     // persisting the result so collaborators receive it too.
     const reArrangeLayout = useCallback(async () => {
+        const prevPos = stored;
         const auto = computeLayout(state.nodes, {}, state.relations, state.profile);
         setStored(auto);
         try {
             await api.saveLayout(state.workspaceid, encodeLayout(auto, sizes));
+            pushHistory({
+                undo: [{type: '__layout', payload: {positions: prevPos, sizes}}],
+                redo: [{type: '__layout', payload: {positions: auto, sizes}}],
+            });
             announce(t('editor:rearrange'));
         } catch (e) {
             setError((e as Error).message);
         }
-    }, [api, state.workspaceid, state.nodes, state.relations, state.profile, sizes, announce, t]);
+    }, [api, state.workspaceid, state.nodes, state.relations, state.profile, stored, sizes, pushHistory, announce, t]);
 
     const onNodeResized = useCallback(async (stableid: string, size: Size) => {
+        const prevSizes = sizes;
         const nextSizes = {...sizes, [stableid]: size};
         setSizes(nextSizes);
         try {
             await api.saveLayout(state.workspaceid, encodeLayout(stored, nextSizes));
+            pushHistory({
+                undo: [{type: '__layout', payload: {positions: stored, sizes: prevSizes}}],
+                redo: [{type: '__layout', payload: {positions: stored, sizes: nextSizes}}],
+            });
         } catch (e) {
             setError((e as Error).message);
         }
-    }, [api, state.workspaceid, stored, sizes]);
+    }, [api, state.workspaceid, stored, sizes, pushHistory]);
 
     const duplicateNode = useCallback(async (stableid: string) => {
         const src = state.nodes.find(n => n.stableid === stableid);
@@ -655,6 +680,8 @@ export function EditorApp(props: Props): React.ReactElement {
                         className={`nav-link ${view === 'canvas' ? 'active' : ''}`}
                         aria-selected={view === 'canvas'}
                         role="tab"
+                        id="vimipad-tab-canvas"
+                        aria-controls="vimipad-tabpanel"
                         onClick={() => setView('canvas')}
                     >
                         <Icon name={FA.canvasView} /> {t('editor:canvasview')}
@@ -666,6 +693,8 @@ export function EditorApp(props: Props): React.ReactElement {
                         className={`nav-link ${view === 'list' ? 'active' : ''}`}
                         aria-selected={view === 'list'}
                         role="tab"
+                        id="vimipad-tab-list"
+                        aria-controls="vimipad-tabpanel"
                         onClick={() => setView('list')}
                     >
                         <Icon name={FA.listView} /> {t('editor:listview')}
@@ -696,6 +725,11 @@ export function EditorApp(props: Props): React.ReactElement {
                 </button>
             </div>
 
+            <div
+                role="tabpanel"
+                id="vimipad-tabpanel"
+                aria-labelledby={view === 'canvas' ? 'vimipad-tab-canvas' : 'vimipad-tab-list'}
+            >
             {view === 'canvas' ? (
                 <>
                     <div className="vimipad-canvas-toolbar mb-2">
@@ -753,6 +787,7 @@ export function EditorApp(props: Props): React.ReactElement {
                     {submitButton && <div className="vimipad-controls-submit mt-3">{submitButton}</div>}
                 </>
             )}
+            </div>
 
             <p className="text-muted small mt-2">{t('editor:revision')}: {state.revision}</p>
         </div>
