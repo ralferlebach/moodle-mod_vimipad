@@ -266,6 +266,19 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [api, state.workspaceid, stored, sizes]);
 
+    // Discard the stored positions for the active profile and re-apply the
+    // automatic layout (tidy tree for the tree profile, circle otherwise),
+    // persisting the result so collaborators receive it too.
+    const reArrangeLayout = useCallback(async () => {
+        const auto = computeLayout(state.nodes, {}, state.relations, state.profile);
+        setStored(auto);
+        try {
+            await api.saveLayout(state.workspaceid, encodeLayout(auto, sizes));
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [api, state.workspaceid, state.nodes, state.relations, state.profile, sizes]);
+
     const onNodeResized = useCallback(async (stableid: string, size: Size) => {
         const nextSizes = {...sizes, [stableid]: size};
         setSizes(nextSizes);
@@ -432,6 +445,16 @@ export function EditorApp(props: Props): React.ReactElement {
 
             {view === 'canvas' ? (
                 <>
+                    <div className="vimipad-canvas-toolbar mb-2">
+                        <button
+                            type="button"
+                            className="btn btn-outline-secondary btn-sm"
+                            onClick={reArrangeLayout}
+                            disabled={disabled}
+                        >
+                            <Icon name={FA.reArrange} /> {t('editor:rearrange')}
+                        </button>
+                    </div>
                     <CanvasView
                         state={state}
                         layout={layout}

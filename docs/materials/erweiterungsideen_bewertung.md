@@ -1,5 +1,13 @@
 # Erweiterungsideen: Machbarkeit und Einordnung
 
+> **Hinweis (Stand nach 0.2.x):** Zentrales, versioniertes Planungsdokument ist
+> `docs/design/roadmap.md`. Die hier genannten Meilenstein-Marker (M1/M2/M4,
+> 1.0/1.1, 2.x, „nach 2.0") sind fachliche Einordnungen; die konkrete
+> Versionszuordnung (0.x → 1.0 und Post-1.0) steht in der Roadmap. Peer-Review-
+> Basis, Lernjournal und Begleitkanal sind dort in 0.4.x/0.5.x eingeplant; die
+> stabile öffentliche API und der einbettbare Editor (`mount()`/Adapter) für
+> `qtype_vimipad` in 0.7.x als Voraussetzung für 0.9.x.
+
 Stand: 25.07.2026 (Session 001, Nachtrag). Bewertet werden vier ergänzende
 Produktideen sowie der Wettbewerbsbefund. Grundlage: Lastenheft/Pflichtenheft,
 technisches Blueprint, Roadmap (alle in `docs/materials/`).

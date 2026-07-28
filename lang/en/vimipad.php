@@ -101,6 +101,7 @@ $string['editor:locked'] = 'This map is locked and can no longer be edited.';
 $string['editor:nodelabel'] = 'Concept label';
 $string['editor:norelations'] = 'No relations yet. Add concepts, then connect them.';
 $string['editor:object'] = 'Object';
+$string['editor:rearrange'] = 'Re-arrange layout';
 $string['editor:relation'] = 'Relation';
 $string['editor:relations'] = 'Relations';
 $string['editor:reledit'] = 'Edit relation';

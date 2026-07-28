@@ -35,6 +35,11 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 - Export **und** Import von ViMis als JSON/XML-Datei
 - Bearbeitungslogs (fachlich) + statistische Auswertung der Mitarbeit
 - Moodle-Events/Logging-API (viewed/updated/submitted/graded) fürs Standard-Reporting
+- Annotationen an Knoten und Relationen (Grundlage für Bewertung und Peer-Review)
+- Lernjournal im Workspace (eigene Tabelle, privat per Default, opt-in in den
+  KI-Kontext; Audio über Moodle-Kern `tiny_recordrtc`) — Datentabelle früh
+  einplanen, Privacy muss sie später vollständig abdecken
+- Begleitkanal-Verlinkung (Forum/Chat/BigBlueButton) als lose Kopplung
 
 ## 0.5.x — Bewertung gegen Musterlösung
 
@@ -47,6 +52,10 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 - Lehrende können eingereichte ViMis zur Weiterbearbeitung wieder freigeben
 - Gruppenkonsens zur Abgabe: jedes Gruppenmitglied muss auf „Einreichen" klicken
   (analog Gruppenabgaben in `mod_assign`)
+- Abgabe-/Nachfristlogik (Fristen, verspätete Abgaben)
+- Peer-Review-Basis: Phasenmodell (Einrichtung → Bearbeitung → Begutachtung →
+  Bewertung → geschlossen) auf Snapshots und der Annotationsebene, kein eigenes
+  Modul (Vollausbau `vimipadreview_peerplus` als Premium nach 1.0)
 - Relevante Events für Observer bereitstellen
 
 ## 0.6.x — Autoren-Werkzeuge & Import/Export-Integration
@@ -66,6 +75,11 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
   jetzt, da alle Nutzerdaten feststehen
 - Backup & Restore (`backup/moodle2/…`) inkl. Kurs-Import/-Duplizierung
 - Allgemeines Code-Hardening (Fehlerbehandlung, Performance, Determinismus)
+- Stabile öffentliche API als Voraussetzung für abgeleitete Plugins (0.9.x):
+  Namespace-Trennung `\mod_vimipad\api\*` / `\mod_vimipad\profile\*` (stabil,
+  öffentlich) gegenüber `\mod_vimipad\local\*` (intern), einbettbarer Editor mit
+  `mount(element, config)`-Entrypoint und austauschbarem Persistenz-Adapter,
+  kontextfrei aufrufbare Profilvalidierung
 
 ## 0.8.x — Feldtests & weitere Darstellungsformen
 
@@ -81,6 +95,47 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 ## Richtung 1.0
 
 Nach erfolgreichen Feldtests: Politur, vollständige Doku, Stabilität.
+
+## Nach 1.0 (Ausblick)
+
+Die strategische/geschäftliche Ausbauplanung liegt in
+`docs/materials/roadmap_zusatzplugins_knowledgemap.md` und
+`docs/materials/erweiterungsideen_bewertung.md`. Grobe Themenblöcke:
+
+- **1.1 — Bewertungs-/Feedbackausbau:** AI Feedback Studio für Lehrende,
+  Feedbackvorlagen (Tonalität/Fachkontext), strukturelle Auto-Checks, Teacher
+  Reference Model (light), Kommentar-Threads, Peer-Review-Vollausbau
+  (`vimipadreview_peerplus`).
+- **1.2 — weitere Diagrammprofile:** siehe 0.8.x (argument, process/flow,
+  fishbone, systems, vennsets, timeline, affinity) plus profilabhängige
+  Lehrerchecks.
+- **1.3 — Kollaboration & Kursanalyse:** Beitragsanalyse, Activity Events/
+  xAPI-nahe Verlaufsdaten, kursweite Heatmaps, Vergleich mehrerer Gruppen-Maps.
+- **2.0 — Plattform:** Knowledge Graph mit typisierten Knoten/Relationen,
+  Reference-Graph-Matching, KI-gestützte Fehlvorstellungsmarkierung, semantische
+  Import-/Exportprofile, erweiterte Subplugin-Schnittstellen, optionaler
+  Marketplace.
+- **Abgeleitete Plugins (auf Basis 0.9.x):** `qtype_vimipad` (Fragetyp,
+  wertvollster Ableger), `datafield_vimipad`, Block-/Kursformat-Viewer
+  (read-only); Moodle-App-Handler (`db/mobile.php`, Ionic) als eigener
+  Workstream.
+
+## Bezug zu weiteren Dokumenten
+
+Diese Roadmap (`docs/design/roadmap.md`) ist das **zentrale, versionierte
+Planungsdokument**. Sie ordnet die detaillierte Umsetzung bis 1.0 in `0.x`-Stufen
+und fasst den Post-1.0-Ausblick zusammen. Die übrigen Dokumente bleiben Quelle
+für Strategie, Machbarkeit und Fachanforderungen:
+
+- `docs/materials/roadmap_zusatzplugins_knowledgemap.md` — strategische
+  Ausbau-/Geschäftsplanung und Premium-Subplugin-Katalog (Meilensteine
+  MVP/1.0/1.1/1.2/1.3/2.0 als *fachliche* Schichtung; die *technische*
+  Versionsvergabe erfolgt hier).
+- `docs/materials/erweiterungsideen_bewertung.md` — Machbarkeit und Einordnung
+  ergänzender Produktideen (qtype, Peer-Review, Journal, Mobile).
+- `docs/materials/pflicht_lastenheft_knowledgemap.md`,
+  `docs/materials/technisches_blueprint_knowledgemap.md` — Fach- und
+  Technikanforderungen.
 
 ## Querschnittsthemen
 

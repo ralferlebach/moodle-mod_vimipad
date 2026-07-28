@@ -77,6 +77,7 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:nodelabel': 'Concept label',
     'editor:norelations': 'No relations yet. Add concepts, then connect them.',
     'editor:object': 'Object',
+    'editor:rearrange': 'Re-arrange layout',
     'editor:relation': 'Relation',
     'editor:relations': 'Relations',
     'editor:reledit': 'Edit relation',

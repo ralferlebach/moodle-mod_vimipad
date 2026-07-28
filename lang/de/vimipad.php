@@ -101,6 +101,7 @@ $string['editor:locked'] = 'Diese Map ist gesperrt und kann nicht mehr bearbeite
 $string['editor:nodelabel'] = 'Begriffsbezeichnung';
 $string['editor:norelations'] = 'Noch keine Relationen. Fügen Sie Begriffe hinzu und verbinden Sie sie.';
 $string['editor:object'] = 'Objekt';
+$string['editor:rearrange'] = 'Layout neu anordnen';
 $string['editor:relation'] = 'Relation';
 $string['editor:relations'] = 'Relationen';
 $string['editor:reledit'] = 'Relation bearbeiten';

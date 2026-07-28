@@ -8,11 +8,23 @@ bevor du antwortest.
 
 ### A) Lastenheft, Pflichtenheft und Blueprint
 
-Die aktuellen Dokumente liegen im Plugin-Repo:
+**Zentrales, versioniertes Planungsdokument (zuerst lesen, führend bei
+Reihenfolge und Versionsvergabe):**
+  docs/design/roadmap.md
+
+Weitere Planungs-/Entwurfsdokumente:
+  docs/design/backlog.md
+  docs/design/connector-styles.md
+
+Fach-, Technik- und Strategiedokumente liegen im Plugin-Repo:
   docs/materials/pflicht_lastenheft_knowledgemap.md
   docs/materials/technisches_blueprint_knowledgemap.md
   docs/materials/roadmap_zusatzplugins_knowledgemap.md
+  docs/materials/erweiterungsideen_bewertung.md
   docs/materials/knowledgemap_konzeption_businessmodel.pdf
+
+Bei Konflikten zur Versionsreihenfolge ist docs/design/roadmap.md führend;
+die materials/-Dokumente liefern Strategie, Machbarkeit und Fachanforderungen.
 
 ---
 

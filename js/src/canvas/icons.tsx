@@ -56,6 +56,7 @@ export const FA = {
     dirRight: 'fa-solid fa-arrow-right',
     dirBoth: 'fa-solid fa-left-right',
     reverse: 'fa-solid fa-right-left',
+    reArrange: 'fa-solid fa-wand-magic-sparkles',
     edit: 'fa-solid fa-pen-to-square',
     confirm: 'fa-solid fa-check',
     cancel: 'fa-solid fa-xmark',

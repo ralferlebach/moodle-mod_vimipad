@@ -1,3 +1,16 @@
+> **Hinweis (Stand nach 0.2.x):** Das zentrale, versionierte Planungsdokument
+> ist `docs/design/roadmap.md`. Dort erfolgt die technische Versionsvergabe
+> (0.x → 1.0 und Post-1.0-Ausblick). Die Meilensteine hier (MVP, 1.0, 1.1, 1.2,
+> 1.3, 2.0) sind die *fachlich-strategische* Schichtung und werden dort auf die
+> `0.x`-Stufen abgebildet: „MVP" verteilt sich auf 0.2.x–0.7.x (Weg zur 1.0),
+> die Blöcke 1.1/1.2/1.3/2.0 auf den Post-1.0-Ausblick.
+>
+> **Namensklärung:** Das Modul heißt `mod_vimipad`; Darstellungs-Subplugins
+> heißen `vimipadform_*`. Die in diesem älteren Strategiepapier verwendeten
+> Namen `mod_knowledgemap` bzw. `knowledgemapprofile_*`/`knowledgemap*_*` sind
+> der frühere Arbeitstitel und im Code durch die `vimipad`-Entsprechungen
+> ersetzt (z. B. `vimipadreview_peerplus`, `qtype_vimipad`).
+
 # Einordnung
 
 Das Vorhaben sollte nicht als einzelner Mindmap-Editor geplant werden, sondern als Moodle-Aktivitätsmodul für visuelle Wissenskonstruktion. Kern ist ein gemeinsames Datenmodell für Knoten, Relationen, Container, Mitgliedschaften, Revisionen, Snapshots, Annotationen und Bewertungen. Die unterschiedlichen Darstellungsformen sind darauf aufsetzende Profile mit eigenen Regeln, Layouts und Constraints.

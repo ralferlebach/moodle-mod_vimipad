@@ -31,6 +31,13 @@
 
 ---
 
+### Roadmap-Abgleich (zentrales Dokument)
+
+- [ ] docs/design/roadmap.md geprüft; bei Scope-/Reihenfolge-/Versionsänderung
+      aktualisiert (führendes Planungsdokument).
+
+---
+
 ### Testlauf-Ergebnis
 
 ```
