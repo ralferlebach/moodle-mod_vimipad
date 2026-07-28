@@ -88,5 +88,26 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072615, 'vimipad');
     }
 
+    if ($oldversion < 2026072655) {
+        // Completion detail rules: minimum concepts and "graded".
+        $table = new xmldb_table('vimipad');
+
+        $field = new xmldb_field(
+            'completionminnodes', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'completionsubmit'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field(
+            'completiongraded', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'completionminnodes'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026072655, 'vimipad');
+    }
+
     return true;
 }

@@ -349,3 +349,49 @@
 .vimipad-canvas-texthl {
     opacity: 0.85;
 }
+
+/* -------------------------------------------------------------------------
+   Mobile / touch polish
+   ------------------------------------------------------------------------- */
+
+/* Let the relation table scroll horizontally instead of overflowing on
+   narrow screens (the list view is the primary mobile editing surface). */
+.vimipad-relation-list {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Toolbars wrap rather than overflow on small viewports. */
+.vimipad-history-toolbar,
+.vimipad-canvas-toolbar,
+.vimipad-controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* On coarse (touch) pointers, guarantee comfortable tap targets and do not
+   rely on hover to reveal affordances. */
+@media (pointer: coarse) {
+    .vimipad-editor .btn,
+    .vimipad-editor button,
+    .vimipad-dock-btn {
+        min-height: 2.75rem;
+        min-width: 2.75rem;
+    }
+
+    .vimipad-dock-btn:hover:not(:disabled) {
+        /* Avoid sticky hover states on touch devices. */
+        filter: none;
+    }
+}
+
+/* Stack the editor controls on very narrow screens. */
+@media (max-width: 480px) {
+    .vimipad-controls-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

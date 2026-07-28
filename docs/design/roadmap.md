@@ -88,10 +88,15 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 - Ausweitung auf die weiteren bereits erfassten Formen (argument, process/flow,
   fishbone, timeline, vennsets, systems, affinity) — jeweils als `vimipadform`-Subplugin
 
-## 0.9.x — Kerncode für abgeleitete Zusatz-Plugins
+## 0.9.x — Kerncode für abgeleitete Zusatz-Plugins & Barrierefreiheits-Audit
 
 - Bereitstellung und Stabilisierung des Kerncodes (öffentliche APIs, Events,
   Contracts) für abgeleitete Zusatz-Plugins: Questiontype, Database, Peer-Review
+- **Barrierefreiheits-Audit** (Stand/Umsetzung siehe `barrierearmut.md`):
+  systematische Prüfung gegen WCAG 2.1 und 2.2, Stufe AA (wo sinnvoll AAA),
+  gegen EN 301 549 sowie Prüfung der Einhaltung der BITV 2.0; Prüfung mit echten
+  Hilfsmitteln (NVDA/JAWS/VoiceOver, Tastatur-only, Vergrößerung), Behebung der
+  Befunde und Dokumentation des Konformitätsstands
 
 ## Richtung 1.0
 

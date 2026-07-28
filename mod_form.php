@@ -99,9 +99,33 @@ class mod_vimipad_mod_form extends moodleform_mod {
             get_string('completionsubmit', 'mod_vimipad'),
             get_string('completionsubmit_label', 'mod_vimipad')
         );
+        $mform->addHelpButton('completionsubmit', 'completionsubmit', 'mod_vimipad');
         $mform->setDefault('completionsubmit', 0);
 
-        return ['completionsubmit'];
+        // Minimum concepts: an enable checkbox plus a number.
+        $group = [];
+        $group[] =& $mform->createElement(
+            'checkbox', 'completionminnodesenabled', '', get_string('completionminnodes', 'mod_vimipad')
+        );
+        $group[] =& $mform->createElement('text', 'completionminnodes', '', ['size' => 3]);
+        $mform->setType('completionminnodes', PARAM_INT);
+        $mform->addGroup(
+            $group, 'completionminnodesgroup', get_string('completionminnodesgroup', 'mod_vimipad'), [' '], false
+        );
+        $mform->addHelpButton('completionminnodesgroup', 'completionminnodesgroup', 'mod_vimipad');
+        $mform->disabledIf('completionminnodes', 'completionminnodesenabled', 'notchecked');
+        $mform->setDefault('completionminnodes', 3);
+
+        $mform->addElement(
+            'advcheckbox',
+            'completiongraded',
+            get_string('completiongraded', 'mod_vimipad'),
+            get_string('completiongraded_label', 'mod_vimipad')
+        );
+        $mform->addHelpButton('completiongraded', 'completiongraded', 'mod_vimipad');
+        $mform->setDefault('completiongraded', 0);
+
+        return ['completionsubmit', 'completionminnodesgroup', 'completiongraded'];
     }
 
     /**
@@ -111,6 +135,23 @@ class mod_vimipad_mod_form extends moodleform_mod {
      * @return bool
      */
     public function completion_rule_enabled($data): bool {
-        return !empty($data['completionsubmit']);
+        return !empty($data['completionsubmit'])
+            || !empty($data['completiongraded'])
+            || (!empty($data['completionminnodesenabled']) && (int) $data['completionminnodes'] > 0);
+    }
+
+    /**
+     * Validate the completion detail rules.
+     *
+     * @param array $data Submitted data.
+     * @param array $files Submitted files.
+     * @return array Validation errors keyed by element name.
+     */
+    public function validation($data, $files): array {
+        $errors = parent::validation($data, $files);
+        if (!empty($data['completionminnodesenabled']) && (int) $data['completionminnodes'] < 1) {
+            $errors['completionminnodesgroup'] = get_string('completionminnodes_error', 'mod_vimipad');
+        }
+        return $errors;
     }
 }

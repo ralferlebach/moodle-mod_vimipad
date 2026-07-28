@@ -68,6 +68,7 @@ function vimipad_add_instance(stdClass $data, ?mod_vimipad_mod_form $mform = nul
 
     $data->timecreated = time();
     $data->timemodified = $data->timecreated;
+    vimipad_prepare_completion_fields($data);
 
     $id = $DB->insert_record('vimipad', $data);
 
@@ -89,12 +90,31 @@ function vimipad_update_instance(stdClass $data, ?mod_vimipad_mod_form $mform = 
 
     $data->id = $data->instance;
     $data->timemodified = time();
+    vimipad_prepare_completion_fields($data);
 
     $result = $DB->update_record('vimipad', $data);
 
     vimipad_grade_item_update($data);
 
     return $result;
+}
+
+/**
+ * Normalise the completion detail rule fields from the settings form.
+ *
+ * The "minimum concepts" rule is entered as an enable checkbox plus a number;
+ * when the checkbox is off (or missing) the stored threshold is zeroed, which is
+ * how the rule is treated as "off".
+ *
+ * @param stdClass $data Form data (modified in place).
+ * @return void
+ */
+function vimipad_prepare_completion_fields(stdClass $data): void {
+    if (empty($data->completionminnodesenabled)) {
+        $data->completionminnodes = 0;
+    } else {
+        $data->completionminnodes = max(0, (int) ($data->completionminnodes ?? 0));
+    }
 }
 
 /**

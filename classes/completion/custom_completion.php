@@ -39,11 +39,31 @@ class custom_completion extends activity_custom_completion {
 
         $instance = $DB->get_record('vimipad', ['id' => $this->cm->instance], '*', MUST_EXIST);
 
+        switch ($rule) {
+            case 'completionsubmit':
+                return $this->state_submit($instance);
+            case 'completionminnodes':
+                return $this->state_min_nodes($instance);
+            case 'completiongraded':
+                return $this->state_graded($instance);
+            default:
+                return COMPLETION_INCOMPLETE;
+        }
+    }
+
+    /**
+     * State for the "submit a snapshot" rule.
+     *
+     * @param \stdClass $instance The activity instance.
+     * @return int COMPLETION_COMPLETE or COMPLETION_INCOMPLETE.
+     */
+    private function state_submit(\stdClass $instance): int {
+        global $DB;
+
         if ((int) $instance->completionsubmit === 0) {
             return COMPLETION_INCOMPLETE;
         }
 
-        // Complete once the user has submitted a snapshot in any of their workspaces.
         $sql = "SELECT 1
                   FROM {vimipad_snapshot} s
                   JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
@@ -53,9 +73,67 @@ class custom_completion extends activity_custom_completion {
             'userid' => $this->userid,
             'submitted' => \mod_vimipad\local\service\snapshot_service::STATUS_SUBMITTED,
         ];
-        $submitted = $DB->record_exists_sql($sql, $params);
 
-        return $submitted ? COMPLETION_COMPLETE : COMPLETION_INCOMPLETE;
+        return $DB->record_exists_sql($sql, $params) ? COMPLETION_COMPLETE : COMPLETION_INCOMPLETE;
+    }
+
+    /**
+     * State for the "minimum concepts" rule.
+     *
+     * @param \stdClass $instance The activity instance.
+     * @return int COMPLETION_COMPLETE or COMPLETION_INCOMPLETE.
+     */
+    private function state_min_nodes(\stdClass $instance): int {
+        global $DB;
+
+        $required = (int) $instance->completionminnodes;
+        if ($required <= 0) {
+            return COMPLETION_INCOMPLETE;
+        }
+
+        $sql = "SELECT COUNT(n.id)
+                  FROM {vimipad_node} n
+                  JOIN {vimipad_workspace} ws ON ws.id = n.workspaceid
+                 WHERE ws.vimipadid = :vid AND n.deleted = 0
+                   AND (ws.userid = :userid
+                        OR ws.groupid IN (SELECT gm.groupid
+                                            FROM {groups_members} gm
+                                           WHERE gm.userid = :userid2))";
+        $params = ['vid' => $instance->id, 'userid' => $this->userid, 'userid2' => $this->userid];
+        $count = (int) $DB->count_records_sql($sql, $params);
+
+        return $count >= $required ? COMPLETION_COMPLETE : COMPLETION_INCOMPLETE;
+    }
+
+    /**
+     * State for the "submission graded" rule.
+     *
+     * @param \stdClass $instance The activity instance.
+     * @return int COMPLETION_COMPLETE or COMPLETION_INCOMPLETE.
+     */
+    private function state_graded(\stdClass $instance): int {
+        global $DB;
+
+        if ((int) $instance->completiongraded === 0) {
+            return COMPLETION_INCOMPLETE;
+        }
+
+        $sql = "SELECT 1
+                  FROM {vimipad_snapshot} s
+                  JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
+                 WHERE ws.vimipadid = :vid AND s.status >= :graded
+                   AND (ws.userid = :userid
+                        OR ws.groupid IN (SELECT gm.groupid
+                                            FROM {groups_members} gm
+                                           WHERE gm.userid = :userid2))";
+        $params = [
+            'vid' => $instance->id,
+            'userid' => $this->userid,
+            'userid2' => $this->userid,
+            'graded' => \mod_vimipad\local\service\snapshot_service::STATUS_GRADED,
+        ];
+
+        return $DB->record_exists_sql($sql, $params) ? COMPLETION_COMPLETE : COMPLETION_INCOMPLETE;
     }
 
     /**
@@ -64,7 +142,7 @@ class custom_completion extends activity_custom_completion {
      * @return array
      */
     public static function get_defined_custom_rules(): array {
-        return ['completionsubmit'];
+        return ['completionsubmit', 'completionminnodes', 'completiongraded'];
     }
 
     /**
@@ -73,8 +151,12 @@ class custom_completion extends activity_custom_completion {
      * @return array<string,string>
      */
     public function get_custom_rule_descriptions(): array {
+        global $DB;
+        $min = (int) $DB->get_field('vimipad', 'completionminnodes', ['id' => $this->cm->instance]);
         return [
             'completionsubmit' => get_string('completionsubmit_desc', 'mod_vimipad'),
+            'completionminnodes' => get_string('completionminnodes_desc', 'mod_vimipad', $min),
+            'completiongraded' => get_string('completiongraded_desc', 'mod_vimipad'),
         ];
     }
 
@@ -84,6 +166,12 @@ class custom_completion extends activity_custom_completion {
      * @return array
      */
     public function get_sort_order(): array {
-        return ['completionview', 'completionsubmit', 'completionusegrade'];
+        return [
+            'completionview',
+            'completionminnodes',
+            'completionsubmit',
+            'completiongraded',
+            'completionusegrade',
+        ];
     }
 }
