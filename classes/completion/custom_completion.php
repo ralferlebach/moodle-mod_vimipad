@@ -52,7 +52,47 @@ class custom_completion extends activity_custom_completion {
     }
 
     /**
-     * State for the "submit a snapshot" rule.
+     * The workspace ids that count towards this user's completion, by mode.
+     *
+     * @param \stdClass $instance The activity instance.
+     * @return int[] The applicable workspace ids.
+     */
+    private function applicable_workspace_ids(\stdClass $instance): array {
+        global $DB;
+
+        $mode = (int) $instance->collaborationmode;
+
+        if ($mode === 1) {
+            // Group: the user's group workspace(s).
+            return $DB->get_fieldset_sql(
+                "SELECT ws.id
+                   FROM {vimipad_workspace} ws
+                  WHERE ws.vimipadid = :vid
+                    AND ws.groupid IN (SELECT gm.groupid FROM {groups_members} gm WHERE gm.userid = :userid)",
+                ['vid' => $instance->id, 'userid' => $this->userid]
+            );
+        }
+        if ($mode === 2) {
+            // Course: the single shared workspace.
+            return $DB->get_fieldset_select(
+                'vimipad_workspace',
+                'id',
+                'vimipadid = :vid AND userid IS NULL AND groupid IS NULL',
+                ['vid' => $instance->id]
+            );
+        }
+        // Individual: the user's own workspace.
+        return $DB->get_fieldset_select(
+            'vimipad_workspace',
+            'id',
+            'vimipadid = :vid AND userid = :userid',
+            ['vid' => $instance->id, 'userid' => $this->userid]
+        );
+    }
+
+    /**
+     * State for the "submit a snapshot" rule. Complete once any workspace that
+     * counts for the user has a submitted snapshot (regardless of who submitted).
      *
      * @param \stdClass $instance The activity instance.
      * @return int COMPLETION_COMPLETE or COMPLETION_INCOMPLETE.
@@ -64,17 +104,19 @@ class custom_completion extends activity_custom_completion {
             return COMPLETION_INCOMPLETE;
         }
 
-        $sql = "SELECT 1
-                  FROM {vimipad_snapshot} s
-                  JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
-                 WHERE ws.vimipadid = :vid AND s.submittedby = :userid AND s.status >= :submitted";
-        $params = [
-            'vid' => $instance->id,
-            'userid' => $this->userid,
-            'submitted' => \mod_vimipad\local\service\snapshot_service::STATUS_SUBMITTED,
-        ];
+        $wsids = $this->applicable_workspace_ids($instance);
+        if (empty($wsids)) {
+            return COMPLETION_INCOMPLETE;
+        }
 
-        return $DB->record_exists_sql($sql, $params) ? COMPLETION_COMPLETE : COMPLETION_INCOMPLETE;
+        [$insql, $params] = $DB->get_in_or_equal($wsids, SQL_PARAMS_NAMED);
+        $params['submitted'] = \mod_vimipad\local\service\snapshot_service::STATUS_SUBMITTED;
+        $exists = $DB->record_exists_sql(
+            "SELECT 1 FROM {vimipad_snapshot} s WHERE s.workspaceid $insql AND s.status >= :submitted",
+            $params
+        );
+
+        return $exists ? COMPLETION_COMPLETE : COMPLETION_INCOMPLETE;
     }
 
     /**
@@ -91,16 +133,13 @@ class custom_completion extends activity_custom_completion {
             return COMPLETION_INCOMPLETE;
         }
 
-        $sql = "SELECT COUNT(n.id)
-                  FROM {vimipad_node} n
-                  JOIN {vimipad_workspace} ws ON ws.id = n.workspaceid
-                 WHERE ws.vimipadid = :vid AND n.deleted = 0
-                   AND (ws.userid = :userid
-                        OR ws.groupid IN (SELECT gm.groupid
-                                            FROM {groups_members} gm
-                                           WHERE gm.userid = :userid2))";
-        $params = ['vid' => $instance->id, 'userid' => $this->userid, 'userid2' => $this->userid];
-        $count = (int) $DB->count_records_sql($sql, $params);
+        $wsids = $this->applicable_workspace_ids($instance);
+        if (empty($wsids)) {
+            return COMPLETION_INCOMPLETE;
+        }
+
+        [$insql, $params] = $DB->get_in_or_equal($wsids, SQL_PARAMS_NAMED);
+        $count = (int) $DB->count_records_select('vimipad_node', "workspaceid $insql AND deleted = 0", $params);
 
         return $count >= $required ? COMPLETION_COMPLETE : COMPLETION_INCOMPLETE;
     }
@@ -118,22 +157,19 @@ class custom_completion extends activity_custom_completion {
             return COMPLETION_INCOMPLETE;
         }
 
-        $sql = "SELECT 1
-                  FROM {vimipad_snapshot} s
-                  JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
-                 WHERE ws.vimipadid = :vid AND s.status >= :graded
-                   AND (ws.userid = :userid
-                        OR ws.groupid IN (SELECT gm.groupid
-                                            FROM {groups_members} gm
-                                           WHERE gm.userid = :userid2))";
-        $params = [
-            'vid' => $instance->id,
-            'userid' => $this->userid,
-            'userid2' => $this->userid,
-            'graded' => \mod_vimipad\local\service\snapshot_service::STATUS_GRADED,
-        ];
+        $wsids = $this->applicable_workspace_ids($instance);
+        if (empty($wsids)) {
+            return COMPLETION_INCOMPLETE;
+        }
 
-        return $DB->record_exists_sql($sql, $params) ? COMPLETION_COMPLETE : COMPLETION_INCOMPLETE;
+        [$insql, $params] = $DB->get_in_or_equal($wsids, SQL_PARAMS_NAMED);
+        $params['graded'] = \mod_vimipad\local\service\snapshot_service::STATUS_GRADED;
+        $exists = $DB->record_exists_sql(
+            "SELECT 1 FROM {vimipad_snapshot} s WHERE s.workspaceid $insql AND s.status >= :graded",
+            $params
+        );
+
+        return $exists ? COMPLETION_COMPLETE : COMPLETION_INCOMPLETE;
     }
 
     /**

@@ -55,7 +55,10 @@ class grading_service {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/mod/vimipad/lib.php');
 
-        $recipients = $this->resolve_recipients($workspace);
+        $cm = get_coursemodule_from_instance('vimipad', $instance->id, 0, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+
+        $recipients = $this->resolve_recipients($workspace, $context);
         $now = time();
 
         foreach ($recipients as $userid) {
@@ -87,8 +90,6 @@ class grading_service {
         $snapshotservice = new snapshot_service();
         $snapshotservice->set_status($snapshotid, snapshot_service::STATUS_GRADED);
 
-        $cm = get_coursemodule_from_instance('vimipad', $instance->id, 0, false, MUST_EXIST);
-        $context = \context_module::instance($cm->id);
         $eventdata = ['context' => $context, 'objectid' => (int) $snapshotid, 'userid' => $graderid];
         if (!empty($workspace->userid)) {
             $eventdata['relateduserid'] = (int) $workspace->userid;
@@ -100,9 +101,10 @@ class grading_service {
      * Resolve which users a grade applies to for a workspace.
      *
      * @param stdClass $workspace The workspace record.
+     * @param \context_module $context The activity context.
      * @return int[] The recipient user ids.
      */
-    private function resolve_recipients(stdClass $workspace): array {
+    private function resolve_recipients(stdClass $workspace, \context_module $context): array {
         if (!empty($workspace->userid)) {
             return [(int) $workspace->userid];
         }
@@ -110,8 +112,10 @@ class grading_service {
             $members = groups_get_members((int) $workspace->groupid, 'u.id');
             return array_map('intval', array_keys($members));
         }
-        // Course-wide workspace: no automatic grade recipient in this milestone.
-        return [];
+        // Course-wide shared workspace: the grade applies to every participant
+        // who may submit to the activity.
+        $users = get_enrolled_users($context, 'mod/vimipad:submit', 0, 'u.id');
+        return array_map('intval', array_keys($users));
     }
 
     /**

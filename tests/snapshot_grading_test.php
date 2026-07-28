@@ -114,6 +114,55 @@ final class snapshot_grading_test extends \advanced_testcase {
     }
 
     /**
+     * Grading a course-wide shared workspace applies the grade to every
+     * participant who may submit.
+     *
+     * @return void
+     */
+    public function test_course_grade_applies_to_all_participants(): void {
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module(
+            'vimipad',
+            ['course' => $course->id, 'collaborationmode' => 2, 'grade' => 100]
+        );
+        $s1 = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $s2 = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+
+        $now = time();
+        $wsid = $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
+            'currentrevision' => 1, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $snapshotid = $DB->insert_record('vimipad_snapshot', (object) [
+            'workspaceid' => $wsid, 'revision' => 1, 'snapshotjson' => '{}',
+            'submittedby' => $s1->id, 'status' => snapshot_service::STATUS_SUBMITTED, 'timecreated' => $now,
+        ]);
+        $workspace = $DB->get_record('vimipad_workspace', ['id' => $wsid]);
+
+        (new grading_service())->save_grade(
+            $instance,
+            $workspace,
+            (int) $snapshotid,
+            75.0,
+            'Good',
+            FORMAT_PLAIN,
+            (int) $teacher->id
+        );
+
+        $this->assertEquals(
+            75.0,
+            (float) $DB->get_field('vimipad_grade', 'grade', ['vimipadid' => $instance->id, 'userid' => $s1->id])
+        );
+        $this->assertEquals(
+            75.0,
+            (float) $DB->get_field('vimipad_grade', 'grade', ['vimipadid' => $instance->id, 'userid' => $s2->id])
+        );
+    }
+
+    /**
      * A snapshot is immutable: later edits do not change it.
      *
      * @return void

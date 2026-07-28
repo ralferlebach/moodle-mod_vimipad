@@ -156,4 +156,86 @@ final class custom_completion_test extends \advanced_testcase {
 
         $this->assertSame(COMPLETION_COMPLETE, $this->completion()->get_state('completiongraded'));
     }
+
+    /**
+     * In group mode, every member completes once the shared group snapshot is
+     * submitted, not only the member who submitted it.
+     *
+     * @return void
+     */
+    public function test_group_member_completes_when_peer_submits(): void {
+        global $DB;
+        $course = $this->getDataGenerator()->create_course(['enablecompletion' => 1]);
+        $instance = $this->getDataGenerator()->create_module('vimipad', [
+            'course' => $course->id, 'collaborationmode' => 1,
+            'completion' => COMPLETION_TRACKING_AUTOMATIC, 'completionsubmit' => 1,
+        ]);
+        $cm = get_fast_modinfo($course)->get_cm($instance->cmid);
+        $submitter = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $peer = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $submitter->id]);
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $peer->id]);
+
+        $now = time();
+        $wsid = $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => null, 'groupid' => $group->id,
+            'currentrevision' => 1, 'locked' => 1, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('vimipad_snapshot', (object) [
+            'workspaceid' => $wsid, 'revision' => 1, 'snapshotjson' => '{}',
+            'submittedby' => $submitter->id,
+            'status' => \mod_vimipad\local\service\snapshot_service::STATUS_SUBMITTED,
+            'timecreated' => $now,
+        ]);
+
+        $this->assertSame(
+            COMPLETION_COMPLETE,
+            (new custom_completion($cm, (int) $submitter->id))->get_state('completionsubmit')
+        );
+        $this->assertSame(
+            COMPLETION_COMPLETE,
+            (new custom_completion($cm, (int) $peer->id))->get_state('completionsubmit')
+        );
+    }
+
+    /**
+     * In course mode, the minimum-concepts rule counts the shared workspace.
+     *
+     * @return void
+     */
+    public function test_course_mode_min_nodes_counts_shared_workspace(): void {
+        global $DB;
+        $course = $this->getDataGenerator()->create_course(['enablecompletion' => 1]);
+        $instance = $this->getDataGenerator()->create_module('vimipad', [
+            'course' => $course->id, 'collaborationmode' => 2,
+            'completion' => COMPLETION_TRACKING_AUTOMATIC,
+        ]);
+        $DB->set_field('vimipad', 'completionminnodes', 2, ['id' => $instance->id]);
+        $cm = get_fast_modinfo($course)->get_cm($instance->cmid);
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $now = time();
+        $wsid = $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
+            'currentrevision' => 0, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $this->assertSame(
+            COMPLETION_INCOMPLETE,
+            (new custom_completion($cm, (int) $user->id))->get_state('completionminnodes')
+        );
+
+        foreach (['node_c1cccccccccc', 'node_c2cccccccccc'] as $sid) {
+            $DB->insert_record('vimipad_node', (object) [
+                'workspaceid' => $wsid, 'stableid' => $sid, 'type' => 'concept',
+                'contentformat' => FORMAT_HTML, 'timecreated' => $now, 'timemodified' => $now, 'deleted' => 0,
+            ]);
+        }
+
+        $this->assertSame(
+            COMPLETION_COMPLETE,
+            (new custom_completion($cm, (int) $user->id))->get_state('completionminnodes')
+        );
+    }
 }
