@@ -1,5 +1,6 @@
 {
     "plugintypes": {
-        "vimipadform": "mod/vimipad/form"
+        "vimipadform": "mod/vimipad/form",
+        "vimipadassess": "mod/vimipad/assess"
     }
 }

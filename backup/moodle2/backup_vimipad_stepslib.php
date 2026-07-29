@@ -110,6 +110,11 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             'timecreated', 'timemodified',
         ]);
 
+        $gradeinstances = new backup_nested_element('gradeinstances');
+        $gradeinstance = new backup_nested_element('gradeinstance', ['id'], [
+            'raterid', 'instanceid', 'timemodified',
+        ]);
+
         $journalentries = new backup_nested_element('journalentries');
         $journalentry = new backup_nested_element('journalentry', ['id'], [
             'userid', 'revisionref', 'entrytext', 'entryformat',
@@ -140,6 +145,8 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
         $annotations->add_child($annotation);
         $snapshot->add_child($aifeedbacks);
         $aifeedbacks->add_child($aifeedback);
+        $snapshot->add_child($gradeinstances);
+        $gradeinstances->add_child($gradeinstance);
         $workspace->add_child($journalentries);
         $journalentries->add_child($journalentry);
 
@@ -159,6 +166,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             $snapshot->set_source_table('vimipad_snapshot', ['workspaceid' => backup::VAR_PARENTID]);
             $annotation->set_source_table('vimipad_annotation', ['snapshotid' => backup::VAR_PARENTID]);
             $aifeedback->set_source_table('vimipad_aifeedback', ['snapshotid' => backup::VAR_PARENTID]);
+            $gradeinstance->set_source_table('vimipad_gradeinstance', ['snapshotid' => backup::VAR_PARENTID]);
             $journalentry->set_source_table('vimipad_journalentry', ['workspaceid' => backup::VAR_PARENTID]);
         }
 
@@ -176,6 +184,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
         $snapshot->annotate_ids('user', 'submittedby');
         $annotation->annotate_ids('user', 'userid');
         $aifeedback->annotate_ids('user', 'graderid');
+        $gradeinstance->annotate_ids('user', 'raterid');
         $journalentry->annotate_ids('user', 'userid');
 
         // File annotations.

@@ -4,7 +4,84 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.20** (2026072700).
+> release is **0.5.25** (2026072705).
+
+## 0.5.25 (2026072705) — assessment subplugin type + reference scorer
+
+- **New subplugin type `vimipadassess`** for automatic scoring, alongside the
+  display-oriented `vimipadform` type. The contract lives in
+  `classes/local/assess/`: a `submission` value object (concepts + propositions
+  distilled from a snapshot), an exchangeable `matcher` interface with a
+  normalised `exact_matcher`, a `result` (suggested score + matched/missing/extra
+  breakdown), an abstract `scorer`, and a `registry` that discovers installed
+  scorers. Scoring always yields a *suggestion*, never a set grade.
+- **First scorer `vimipadassess_reference`** — compares a submission against a
+  reference solution by concept and proposition (source–relation–target)
+  overlap, with precision/recall F1 per dimension, directional proposition
+  matching and a relation-label contribution. The matcher is injected, so the
+  same scorer will later work with fuzzy/semantic matching.
+- **Verified on a real Moodle 4.5.12 instance**, not just statically: the full
+  `mod_vimipad` suite (138 tests) and the `vimipadassess` tests (17, incl. the
+  core privacy provider check and registry discovery) pass; phpcs, phpcpd,
+  savepoints, validate and mustache are clean.
+- Still to come (Ausbaustufe 3, part 2): marking a snapshot as the activity's
+  reference solution and surfacing the scorer's suggestion in the grading tab.
+
+## 0.5.24 (2026072704) — advanced grading fixes, verified on a real instance
+
+Set up a real Moodle 4.5.12 + PostgreSQL PHPUnit environment and ran the suite,
+which surfaced two bugs that syntax checks alone could not:
+
+- **`gradeitems` now implements the correct interfaces.** 0.5.21/0.5.23 had the
+  class *extend* `component_gradeitems`; the grading manager checks for classes
+  that *implement* `core_grades\local\gradeitem\itemnumber_mapping` and
+  `advancedgrading_mapping`. It now implements both (with the no-argument
+  `get_itemname_mapping_for_component()` and `get_advancedgrading_itemnames()`),
+  so the advanced-grading debugging notice is genuinely gone. The now-dead
+  `grading_areas_list` callback and its string were removed.
+- **No duplicate grading backup step.** `backup_activity_task` /
+  `restore_activity_task` already add the grading structure step automatically,
+  so the manual copy added in 0.5.22 produced a duplicate `grading.xml`
+  ("file already exists") and broke backup. Removed; the plugin's own
+  `vimipad_gradeinstance` backup/restore and itemid realignment remain.
+
+Full plugin PHPUnit suite: 110 tests, 881 assertions, all passing.
+
+## 0.5.23 (2026072703) — fix advanced grading fatal
+
+- **Correct the `component_gradeitems` signature.** The class added in 0.5.21
+  declared `get_itemname_mapping_for_component(): array`, but the core abstract
+  method is `get_itemname_mapping_for_component(string $component): array`. The
+  mismatched signature was a fatal error that aborted the whole PHPUnit run. The
+  method now accepts the `$component` argument.
+
+## 0.5.22 (2026072702) — advanced grading in backup & restore
+
+- **Rubric / marking guide definitions survive backup and restore.** The backup
+  now includes the core `backup_activity_grading_structure_step` and the restore
+  the matching `restore_activity_grading_structure_step`, so the grading form
+  itself is preserved across course backup, restore and import.
+- **Per-submission filling links are carried over.** The `vimipad_gradeinstance`
+  table is backed up and restored (rater remapped as a user, grading instance
+  remapped via the grading_instance mapping), and each restored grading
+  instance's itemid is realigned to its new snapshot in `after_execute`. The
+  grading step is restored first so its mapping is available. Missing pieces are
+  skipped defensively rather than left dangling.
+- Needs a real backup → restore → verify test: the definition path follows the
+  standard core steps, but the filling relink (instance/itemid remapping) can
+  only be confirmed on a live restore. The numeric grade and gradebook value are
+  preserved regardless.
+
+## 0.5.21 (2026072701) — advanced grading CI fix
+
+- **Implement `component_gradeitems`.** Enabling advanced grading in 0.5.19 made
+  Moodle's grading manager emit a `debugging()` notice ("Components supporting
+  advanced grading should be updated to implement the component_gradeitems
+  class") whenever a module instance was created — which PHPUnit treats as a
+  failure, so every test that created an activity errored. Adding
+  `mod_vimipad\grades\gradeitems` (mapping grade item 0 to the `submissions`
+  area) satisfies the grading manager and silences the notice. No behaviour
+  change to the gradebook item itself.
 
 ## 0.5.20 (2026072700) — grading through the rubric
 

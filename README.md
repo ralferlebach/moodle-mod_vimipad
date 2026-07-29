@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.5.20 — grading through the rubric/marking guide (advanced grading), additive to the numeric grade. Needs instance testing.**
+**Development status: 0.5.25 — assessment subplugin type (vimipadassess) + reference-comparison scorer added; verified on a real Moodle 4.5.12 instance (155 PHPUnit tests green).**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

@@ -45,6 +45,14 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
     private $pendinggradesnapshot = [];
 
     /**
+     * Restored advanced-grading links: new grading instance id => new snapshot id,
+     * used to realign the core grading instance's itemid after restore.
+     *
+     * @var array<int,int>
+     */
+    private $pendinggradinginstances = [];
+
+    /**
      * Define the structure to be restored.
      *
      * @return array
@@ -99,6 +107,10 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
             $paths[] = new restore_path_element(
                 'vimipad_aifeedback',
                 '/activity/vimipad/workspaces/workspace/snapshots/snapshot/aifeedbacks/aifeedback'
+            );
+            $paths[] = new restore_path_element(
+                'vimipad_gradeinstance',
+                '/activity/vimipad/workspaces/workspace/snapshots/snapshot/gradeinstances/gradeinstance'
             );
             $paths[] = new restore_path_element(
                 'vimipad_journalentry',
@@ -328,6 +340,34 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
     }
 
     /**
+     * Restore an advanced-grading link record.
+     *
+     * The grading definitions and instances are restored by the grading
+     * structure step (which runs first), so the grading_instance mapping is
+     * available here. The core instance's itemid is realigned to the new
+     * snapshot id in after_execute().
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_gradeinstance($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->snapshotid = $this->get_new_parentid('vimipad_snapshot');
+        $data->raterid = $this->get_mappingid('user', $data->raterid) ?: 0;
+        $data->instanceid = (int) ($this->get_mappingid('grading_instance', $data->instanceid) ?: 0);
+
+        // Without the restored grading instance the link would dangle; skip it.
+        if (empty($data->instanceid)) {
+            return;
+        }
+
+        $DB->insert_record('vimipad_gradeinstance', $data);
+        $this->pendinggradinginstances[(int) $data->instanceid] = (int) $data->snapshotid;
+    }
+
+    /**
      * Restore a journal entry.
      *
      * @param array $data Parsed data.
@@ -371,6 +411,14 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
             $newsnapshotid = $this->get_mappingid('vimipad_snapshot', $oldsnapshotid);
             if ($newsnapshotid) {
                 $DB->set_field('vimipad_grade', 'snapshotid', $newsnapshotid, ['id' => $newgradeid]);
+            }
+        }
+
+        // Realign each restored grading instance's itemid to its new snapshot
+        // (advanced grading uses the snapshot id as the itemid).
+        foreach ($this->pendinggradinginstances as $instanceid => $snapshotid) {
+            if ($DB->record_exists('grading_instances', ['id' => $instanceid])) {
+                $DB->set_field('grading_instances', 'itemid', $snapshotid, ['id' => $instanceid]);
             }
         }
     }
