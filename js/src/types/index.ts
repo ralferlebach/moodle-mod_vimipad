@@ -163,3 +163,18 @@ export interface MountConfig {
     /** Optional string getter for i18n; if absent, keys are echoed. */
     getString?: (key: string) => string;
 }
+
+/**
+ * Configuration for the read-only revision viewer.
+ */
+export interface RevisionConfig {
+    cmid: number;
+    /** The workspace whose past state to reconstruct. */
+    workspaceid: number;
+    /** The revision to reconstruct. */
+    revision: number;
+    /** Optional injected transport; if absent, the built-in fetch client is used. */
+    callService?: ServiceTransport;
+    /** Optional string getter for i18n; if absent, keys are echoed. */
+    getString?: (key: string) => string;
+}

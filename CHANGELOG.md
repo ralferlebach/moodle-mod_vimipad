@@ -4,7 +4,35 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.15** (2026072695).
+> release is **0.5.17** (2026072697).
+
+## 0.5.17 (2026072697) — assessment architecture & grading metrics
+
+- **Assessment architecture documented.** `docs/design/assessment_architecture.md`
+  evaluates the established automatic concept-map assessment methods (Kit-Build
+  FMS/SMS, NLP/LLM, graph metrics, reference-free indices, fuzzy weights,
+  OpenIE, peer-matrix, and form-specific methods for mindmaps, argument maps,
+  causal loops, knowledge graphs) against the plugin's constraints, and fixes
+  the hybrid decision: manual workflow, annotations, AI draft, core
+  `gradingform` and structure metrics stay fixed in core; automatic scorers
+  become a `vimipadassess` subplugin type with a fuzzy-ready (0..1 weighted),
+  profile-aware scorer contract and an exchangeable matcher. Staged: grading
+  tab → gradingform → assess registry → `reference` scorer → further scorers.
+- **Structure metrics in the grading tab.** The submissions list now shows the
+  concept/relation counts per submission (batched queries) as a grading aid —
+  deliberately an aid only: structural metrics never set a grade on their own.
+
+## 0.5.16 (2026072696) — journal revision viewer
+
+- **See the map as it stood.** Each journal entry now has a "Show editing state"
+  button that renders the map read-only as it was at that entry's revision,
+  reconstructed from the operation log. The viewer offers both the canvas and
+  list views and lays the graph out automatically (past positions are not
+  stored).
+- Built as an isolated `mod_vimipad/revision` bootstrap that mounts a read-only
+  `RevisionViewer` from the editor bundle, kept separate from the editor
+  bootstrap so it cannot affect editing. Reuses the canvas and relation-list
+  renderers. New `getRevisionState` client call, covered by tests.
 
 ## 0.5.15 (2026072695) — journal revision reconstruction (backend)
 

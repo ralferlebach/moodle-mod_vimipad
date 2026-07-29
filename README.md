@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.5.15 — journal revision reconstruction backend: rebuild a map at a past revision via op-log replay.**
+**Development status: 0.5.17 — assessment architecture documented; grading tab gains structure metrics as a grading aid.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

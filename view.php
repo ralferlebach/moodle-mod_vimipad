@@ -297,12 +297,32 @@ switch ($tab) {
             ['class' => 'btn btn-secondary']
         ), 'mb-3');
 
-        $sql = "SELECT s.id AS snapshotid, s.status, s.timecreated, ws.userid, ws.groupid
+        $sql = "SELECT s.id AS snapshotid, s.status, s.timecreated, ws.id AS workspaceid, ws.userid, ws.groupid
                   FROM {vimipad_snapshot} s
                   JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
                  WHERE ws.vimipadid = :vid AND s.id = ws.submittedsnapshotid
               ORDER BY s.timecreated DESC";
         $submissions = $DB->get_records_sql($sql, ['vid' => $instance->id]);
+
+        // Structure metrics (nodes/relations per workspace) as a grading aid,
+        // batched in two grouped queries. The workspace is locked on submission,
+        // so the live tables reflect the submitted state.
+        $nodecounts = [];
+        $relationcounts = [];
+        if (!empty($submissions)) {
+            $wsids = array_map(static fn($sub) => (int) $sub->workspaceid, $submissions);
+            [$insql, $inparams] = $DB->get_in_or_equal($wsids, SQL_PARAMS_NAMED);
+            $nodecounts = $DB->get_records_sql_menu(
+                "SELECT workspaceid, COUNT(*) FROM {vimipad_node}
+                  WHERE workspaceid $insql AND deleted = 0 GROUP BY workspaceid",
+                $inparams
+            );
+            $relationcounts = $DB->get_records_sql_menu(
+                "SELECT workspaceid, COUNT(*) FROM {vimipad_relation}
+                  WHERE workspaceid $insql AND deleted = 0 GROUP BY workspaceid",
+                $inparams
+            );
+        }
 
         if (empty($submissions)) {
             echo html_writer::tag('p', get_string('nosubmissions', 'mod_vimipad'), ['class' => 'text-muted']);
@@ -310,6 +330,7 @@ switch ($tab) {
             $table = new html_table();
             $table->head = [
                 get_string('participant', 'mod_vimipad'),
+                get_string('gradetab:size', 'mod_vimipad'),
                 get_string('status', 'mod_vimipad'),
                 get_string('actions', 'mod_vimipad'),
             ];
@@ -332,8 +353,11 @@ switch ($tab) {
                     '/mod/vimipad/grade.php',
                     ['id' => $cm->id, 'snapshotid' => $sub->snapshotid]
                 );
+                $size = (int) ($nodecounts[$sub->workspaceid] ?? 0) . ' / '
+                    . (int) ($relationcounts[$sub->workspaceid] ?? 0);
                 $table->data[] = [
                     s($who),
+                    $size,
                     get_string('snapshotstatus_' . (int) $sub->status, 'mod_vimipad'),
                     html_writer::link(
                         $gradeurl,
@@ -465,6 +489,7 @@ switch ($tab) {
         }
         $authors = $DB->get_records_list('user', 'id', array_keys($authorids));
         $buckets = \mod_vimipad\local\output\journal_buckets::bucketise($entries, time());
+        $hasrevisionbuttons = false;
 
         foreach ($buckets as $bucketkey => $group) {
             echo html_writer::start_tag('details', ['class' => 'vimipad-journal-bucket', 'open' => 'open']);
@@ -492,9 +517,23 @@ switch ($tab) {
                     );
                 }
                 echo html_writer::div(format_text($entry->entrytext, FORMAT_PLAIN), 'vimipad-journal-text');
+                if (!empty($entry->revisionref) && $ws !== null) {
+                    echo html_writer::tag('button', get_string('journal:showstate', 'mod_vimipad'), [
+                        'type' => 'button',
+                        'class' => 'btn btn-sm btn-outline-secondary vimipad-showstate',
+                        'data-vimipad-revision' => (int) $entry->revisionref,
+                        'data-workspaceid' => (int) $ws->id,
+                    ]);
+                    $hasrevisionbuttons = true;
+                }
                 echo html_writer::end_tag('div');
             }
             echo html_writer::end_tag('details');
+        }
+
+        if ($hasrevisionbuttons) {
+            echo html_writer::div('', '', ['id' => 'vimipad-revision-viewer', 'class' => 'vimipad-revision-viewer-host mt-3']);
+            $PAGE->requires->js_call_amd('mod_vimipad/revision', 'init', [$cm->id]);
         }
         break;
 

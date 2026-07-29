@@ -643,3 +643,12 @@
     gap: 0.5rem;
     padding: 0.35rem 0;
 }
+
+/* Journal revision viewer: hidden until a "show editing state" button fills it. */
+.vimipad-revision-viewer-host:empty {
+    display: none;
+}
+
+.vimipad-showstate {
+    margin-top: 0.5rem;
+}

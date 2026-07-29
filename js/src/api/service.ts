@@ -105,6 +105,21 @@ export class ApiClient {
     }
 
     /**
+     * Reconstruct a workspace state at a past revision (read-only).
+     *
+     * @param workspaceid The workspace id.
+     * @param revision The revision to reconstruct.
+     */
+    async getRevisionState(workspaceid: number, revision: number): Promise<WorkspaceState> {
+        const result = await this.transport('mod_vimipad_get_revision_state', {
+            cmid: this.cmid,
+            workspaceid,
+            revision,
+        });
+        return result as WorkspaceState;
+    }
+
+    /**
      * Apply a single operation against a known base revision.
      *
      * @param workspaceid The workspace id.
