@@ -197,7 +197,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        moodle: [MOODLE_405_STABLE, MOODLE_500_STABLE, MOODLE_502_STABLE, MOODLE_503_STABLE]
+        # MOODLE_503_STABLE is not yet cut upstream; re-add it once the branch exists.
+        moodle: [MOODLE_405_STABLE, MOODLE_500_STABLE, MOODLE_502_STABLE]
         php: ['8.1', '8.2', '8.3']
         db:
           - { engine: mariadb, type: mariadb, port: 3306, user: root,   pass: root   }
@@ -208,9 +209,6 @@ jobs:
           # Moodle 5.2 requires PHP 8.3+.
           - { moodle: MOODLE_502_STABLE, php: '8.1' }
           - { moodle: MOODLE_502_STABLE, php: '8.2' }
-          # Moodle 5.3 requires PHP 8.3+.
-          - { moodle: MOODLE_503_STABLE, php: '8.1' }
-          - { moodle: MOODLE_503_STABLE, php: '8.2' }
 
     services:
       mariadb:
@@ -290,7 +288,7 @@ jobs:
           - { moodle: MOODLE_405_STABLE, php: '8.2' }
           - { moodle: MOODLE_500_STABLE, php: '8.2' }
           - { moodle: MOODLE_502_STABLE, php: '8.3' }
-          - { moodle: MOODLE_503_STABLE, php: '8.3' }
+          # MOODLE_503_STABLE: re-add once the branch is cut upstream.
 
     services:
       mariadb:

@@ -4,7 +4,28 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.10** (2026072690).
+> release is **0.5.12** (2026072692).
+
+## 0.5.12 (2026072692) — fullscreen canvas height fix
+
+- **Fullscreen uses the full height again.** The viewport cap added in 0.5.9
+  (`max-height: 60vh`, so the insert bar and journal stay visible) also applied
+  in fullscreen, limiting the canvas to about 60% of the screen. Both fullscreen
+  rules (native and the fixed-overlay fallback) now reset `max-height`, so the
+  canvas fills the screen as intended.
+
+## 0.5.11 (2026072691) — CI fixes for the tabbed UI
+
+- **Behat updated for the new tabs.** The editor's Canvas/List switch is now a
+  server tab, so the editor scenario follows the "List" tab link instead of a
+  button; the grading scenarios open the "Grading" tab before acting on
+  submissions. The "Submissions" heading is restored on that tab.
+- **Generator fix.** The test generator resolved the module context via a
+  property that isn't present on a raw instance record, breaking the Behat
+  "submissions" setup; it now resolves the course module explicitly.
+- **CI matrix.** `MOODLE_503_STABLE` is removed from the PHPUnit, Behat and
+  release matrices until that branch is cut upstream (its clone currently fails
+  before any plugin code runs). It should be re-added once Moodle 5.3 branches.
 
 ## 0.5.10 (2026072690) — Journal & submission tab (stage 1)
 

@@ -68,7 +68,7 @@ jobs:
           - { moodle-branch: MOODLE_500_STABLE, php: '8.3', db: { engine: mariadb, type: mariadb, port: 3306, user: root,   pass: root,   name: moodle } }
           # Moodle 5.2 / 5.3 (require PHP 8.3+).
           - { moodle-branch: MOODLE_502_STABLE, php: '8.3', db: { engine: pgsql,   type: pgsql,   port: 5432, user: moodle, pass: moodle, name: moodle } }
-          - { moodle-branch: MOODLE_503_STABLE, php: '8.3', db: { engine: mariadb, type: mariadb, port: 3306, user: root,   pass: root,   name: moodle } }
+          # MOODLE_503_STABLE: re-add once the branch is cut upstream.
 
     services:
       postgres:

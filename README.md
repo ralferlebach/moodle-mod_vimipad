@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.5.10 — Journal & submission tab: server-rendered journal in time buckets, submit relocated out of the editor.**
+**Development status: 0.5.12 — fullscreen canvas height fix (0.5.9 viewport cap leaked into fullscreen).**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

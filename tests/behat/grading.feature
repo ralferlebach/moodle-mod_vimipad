@@ -25,12 +25,14 @@ Feature: Teachers grade submitted ViMi Pad snapshots
 
   Scenario: A teacher sees the list of submissions
     When I am on the "Energy map" "vimipad activity" page logged in as teacher1
+    And I follow "Grading"
     Then I should see "Submissions"
     And I should see "Sam Student"
     And I should see "Submitted"
 
   Scenario: A teacher records a grade for a submission
     Given I am on the "Energy map" "vimipad activity" page logged in as teacher1
+    And I follow "Grading"
     When I follow "View and grade"
     Then I should see "View and grade snapshot"
     And I should see "Energy"
@@ -41,6 +43,7 @@ Feature: Teachers grade submitted ViMi Pad snapshots
 
   Scenario: A teacher adds an annotation to a snapshot
     Given I am on the "Energy map" "vimipad activity" page logged in as teacher1
+    And I follow "Grading"
     And I follow "View and grade"
     When I set the field "Annotation" to "Consider adding a root concept."
     And I press "Add"
@@ -49,6 +52,7 @@ Feature: Teachers grade submitted ViMi Pad snapshots
 
   Scenario: A teacher opens the edit-activity report
     Given I am on the "Energy map" "vimipad activity" page logged in as teacher1
+    And I follow "Grading"
     When I follow "Edit-activity report"
     Then I should see "Edit activity"
     And I should see "Sam Student"

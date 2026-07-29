@@ -236,6 +236,7 @@ switch ($tab) {
 
     case 'grade':
         // Submissions to grade (moves into a full grading tab in a later step).
+        echo $OUTPUT->heading(get_string('submissions', 'mod_vimipad'), 3);
         echo html_writer::div(html_writer::link(
             new moodle_url('/mod/vimipad/report.php', ['cmid' => $cm->id]),
             get_string('report:link', 'mod_vimipad'),

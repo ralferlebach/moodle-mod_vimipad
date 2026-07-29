@@ -30,5 +30,6 @@ Feature: Learners build knowledge maps with the ViMi Pad editor
     And I wait until "Add concept" "fieldset" exists
     When I set the field "Concept label" to "Energy"
     And I click on "Add" "button" in the "Add concept" "fieldset"
-    And I click on "List" "button"
+    And I click on "List" "link"
+    And I wait until "Add concept" "fieldset" exists
     Then I should see "Energy"
