@@ -4,7 +4,21 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.13** (2026072693).
+> release is **0.5.14** (2026072694).
+
+## 0.5.14 (2026072694) — consensus UI & notifications
+
+- **Consensus flow in the Journal & submission tab.** For group activities with
+  consensus, the submission area now follows the state machine: when open, a
+  "Start submission process" button; while voting, a member overview (avatar,
+  profile and message links, confirmed/pending badge) with an "I agree" checkbox
+  and a "Confirm submission" button — becoming "Submit for grading" for the last
+  member — plus a red outline "Cancel process" button. Direct (non-consensus)
+  submission keeps its single button.
+- **System notifications.** A new `consensus` message provider notifies group
+  members when the process is started, cancelled or completed, via Moodle
+  messaging (`db/messages.php` + `consensus_notifier`). This carries the
+  "liveness" so the overview itself stays server-rendered.
 
 ## 0.5.13 (2026072693) — consensus state machine (backend)
 

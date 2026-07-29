@@ -635,3 +635,11 @@
     margin-top: 0.25rem;
     white-space: pre-wrap;
 }
+
+/* Group-consensus member overview in the Journal & submission tab. */
+.vimipad-consensus-member {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+}

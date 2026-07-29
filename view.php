@@ -156,6 +156,60 @@ if (
     }
     redirect($journalurl, $notice);
 }
+
+// Handle group-consensus actions (start / confirm / cancel) from the same tab.
+$consensusaction = optional_param('consensus', '', PARAM_ALPHA);
+if (
+    $tab === 'journal' && $canedit && !$readonly
+        && in_array($consensusaction, ['start', 'confirm', 'cancel'], true) && confirm_sesskey()
+) {
+    $journalurl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']);
+    $ownws = (new \mod_vimipad\local\service\workspace_service())
+        ->get_or_create_for_user($instance, $context, (int) $USER->id, $activegroupid ?: null);
+    $service = new \mod_vimipad\local\service\consensus_service();
+    $members = (new \mod_vimipad\local\service\snapshot_service())
+        ->consensus_required_userids($ownws, $context);
+
+    try {
+        if ($consensusaction === 'start') {
+            $service->start($instance, $ownws, $context, (int) $USER->id);
+            \mod_vimipad\local\consensus_notifier::notify($cm, $instance, 'started', (int) $USER->id, $members);
+            $notice = get_string('consensus:notice:started', 'mod_vimipad');
+        } else if ($consensusaction === 'cancel') {
+            $service->cancel($instance, $ownws, $context, (int) $USER->id);
+            \mod_vimipad\local\consensus_notifier::notify($cm, $instance, 'cancelled', (int) $USER->id, $members);
+            $notice = get_string('consensus:notice:cancelled', 'mod_vimipad');
+        } else {
+            if (!optional_param('agree', 0, PARAM_BOOL)) {
+                redirect(
+                    $journalurl,
+                    get_string('consensus:mustagree', 'mod_vimipad'),
+                    null,
+                    \core\output\notification::NOTIFY_ERROR
+                );
+            }
+            $result = $service->confirm($instance, $ownws, $context, (int) $USER->id);
+            if ((int) $result['state'] === \mod_vimipad\local\service\consensus_service::STATE_SUBMITTED) {
+                \mod_vimipad\event\snapshot_submitted::create([
+                    'context' => $context,
+                    'objectid' => (int) $result['snapshotid'],
+                    'other' => ['workspaceid' => (int) $ownws->id],
+                ])->trigger();
+                $completion = new completion_info($course);
+                if ($completion->is_enabled($cm)) {
+                    $completion->update_state($cm, COMPLETION_UNKNOWN, (int) $USER->id);
+                }
+                \mod_vimipad\local\consensus_notifier::notify($cm, $instance, 'submitted', (int) $USER->id, $members);
+                $notice = get_string('submitted', 'mod_vimipad');
+            } else {
+                $notice = get_string('consensus:notice:confirmed', 'mod_vimipad');
+            }
+        }
+    } catch (\moodle_exception $e) {
+        redirect($journalurl, $e->getMessage(), null, \core\output\notification::NOTIFY_ERROR);
+    }
+    redirect($journalurl, $notice);
+}
 $tabtree = [];
 foreach ($availabletabs as $key) {
     $taburl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => $key]);
@@ -308,20 +362,81 @@ switch ($tab) {
             $ws = $wsservice->get_or_create_for_user($instance, $context, (int) $USER->id, $activegroupid ?: null);
         }
 
-        // Submission block (own map only): the submit button now lives here.
+        // Submission block (own map only).
         if (!$readonly && $canedit && $ws !== null) {
             echo $OUTPUT->heading(get_string('submission', 'mod_vimipad'), 4);
+            $formaction = (new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']))->out(false);
+            $isconsensus = $isgroup && (int) $instance->requireallteamsubmit === 1 && !empty($ws->groupid);
+
+            // Small POST form for a single consensus action (optional agree box).
+            $actionform = function (string $action, string $label, string $class, bool $agree = false) use ($formaction) {
+                $html = html_writer::start_tag('form', ['method' => 'post', 'action' => $formaction, 'class' => 'd-inline']);
+                $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+                $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'consensus', 'value' => $action]);
+                if ($agree) {
+                    $html .= html_writer::tag('label', html_writer::empty_tag('input', [
+                        'type' => 'checkbox', 'name' => 'agree', 'value' => 1, 'required' => 'required',
+                    ]) . ' ' . get_string('consensus:agree', 'mod_vimipad'), ['class' => 'd-block mb-2']);
+                }
+                $html .= html_writer::empty_tag('input', ['type' => 'submit', 'value' => $label, 'class' => $class]);
+                $html .= html_writer::end_tag('form');
+                return $html;
+            };
+
             if ((int) $ws->locked === 1) {
-                echo html_writer::div(
-                    get_string('editor:submitted', 'mod_vimipad'),
-                    'alert alert-success'
-                );
+                echo html_writer::div(get_string('editor:submitted', 'mod_vimipad'), 'alert alert-success');
+            } else if ($isconsensus) {
+                $status = (new \mod_vimipad\local\service\consensus_service())->get_status($instance, $ws, $context);
+                if ((int) $status['state'] === \mod_vimipad\local\service\consensus_service::STATE_OPEN) {
+                    echo html_writer::tag('p', get_string('consensus:openhint', 'mod_vimipad'), ['class' => 'text-muted']);
+                    echo $actionform('start', get_string('consensus:start', 'mod_vimipad'), 'btn btn-primary');
+                } else {
+                    // Voting: member overview with confirmation status.
+                    $memberids = array_map(static fn($member) => (int) $member['userid'], $status['members']);
+                    $memberusers = empty($memberids) ? [] : $DB->get_records_list('user', 'id', $memberids);
+                    $confirmedcount = 0;
+                    $iconfirmed = false;
+                    echo html_writer::start_tag('ul', ['class' => 'vimipad-consensus-members list-unstyled mb-3']);
+                    foreach ($status['members'] as $member) {
+                        $memberuser = $memberusers[$member['userid']] ?? null;
+                        if ($member['confirmed']) {
+                            $confirmedcount++;
+                            if ((int) $member['userid'] === (int) $USER->id) {
+                                $iconfirmed = true;
+                            }
+                        }
+                        echo html_writer::start_tag('li', ['class' => 'vimipad-consensus-member']);
+                        if ($memberuser) {
+                            echo $OUTPUT->user_picture($memberuser, ['size' => 28, 'link' => true, 'includefullname' => true]);
+                            echo ' ' . html_writer::link(
+                                new moodle_url('/message/index.php', ['id' => $memberuser->id]),
+                                get_string('journal:message', 'mod_vimipad'),
+                                ['class' => 'small']
+                            );
+                        }
+                        $badgetext = $member['confirmed']
+                            ? get_string('consensus:confirmed', 'mod_vimipad')
+                            : get_string('consensus:pending', 'mod_vimipad');
+                        $badgeclass = $member['confirmed'] ? 'badge badge-success' : 'badge badge-secondary';
+                        echo ' ' . html_writer::tag('span', $badgetext, ['class' => $badgeclass]);
+                        echo html_writer::end_tag('li');
+                    }
+                    echo html_writer::end_tag('ul');
+
+                    if ($iconfirmed) {
+                        echo html_writer::div(get_string('consensus:youconfirmed', 'mod_vimipad'), 'alert alert-info');
+                    } else {
+                        $islast = (count($status['members']) - $confirmedcount) === 1;
+                        $label = $islast
+                            ? get_string('consensus:submitfinal', 'mod_vimipad')
+                            : get_string('consensus:confirm', 'mod_vimipad');
+                        echo $actionform('confirm', $label, 'btn btn-primary', true);
+                    }
+                    echo ' ' . $actionform('cancel', get_string('consensus:cancel', 'mod_vimipad'), 'btn btn-outline-danger');
+                }
             } else {
-                echo html_writer::start_tag('form', [
-                    'method' => 'post',
-                    'action' => (new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']))->out(false),
-                    'class' => 'mb-4',
-                ]);
+                // Direct submission (no consensus).
+                echo html_writer::start_tag('form', ['method' => 'post', 'action' => $formaction, 'class' => 'mb-4']);
                 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
                 echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'dosubmit', 'value' => 1]);
                 echo html_writer::empty_tag('input', [

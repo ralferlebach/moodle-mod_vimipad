@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.5.13 — consensus state-machine backend (start/confirm/cancel/status) with web services and tests; UI + messaging next.**
+**Development status: 0.5.14 — group-consensus UI in the Journal & submission tab, with Moodle system notifications.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.
