@@ -125,6 +125,14 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/vimipad:view',
     ],
+    'mod_vimipad_get_revision_state' => [
+        'classname' => 'mod_vimipad\external\get_revision_state',
+        'methodname' => 'execute',
+        'description' => 'Reconstruct a workspace state at a past revision (read-only).',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:view',
+    ],
     'mod_vimipad_get_journal_entries' => [
         'classname' => 'mod_vimipad\external\get_journal_entries',
         'methodname' => 'execute',

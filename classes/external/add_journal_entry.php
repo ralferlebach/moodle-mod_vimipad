@@ -75,7 +75,8 @@ class add_journal_entry extends external_api {
             (int) $USER->id,
             $params['entrytext'],
             FORMAT_PLAIN,
-            $params['visibility']
+            $params['visibility'],
+            (int) $workspace->currentrevision
         );
 
         return ['id' => $id];

@@ -190,6 +190,7 @@ $string['grade'] = 'Grade';
 $string['gradeoutof'] = 'Grade (out of {$a})';
 $string['gradesaved'] = 'Grade saved.';
 $string['gradetitle'] = 'View and grade snapshot';
+$string['journal:atrevision'] = 'at revision {$a}';
 $string['journal:bucket:lastweek'] = 'Last week';
 $string['journal:bucket:older'] = 'Older';
 $string['journal:bucket:thismonth'] = 'This month';

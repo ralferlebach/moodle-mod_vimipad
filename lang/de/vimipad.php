@@ -190,6 +190,7 @@ $string['grade'] = 'Bewertung';
 $string['gradeoutof'] = 'Bewertung (von {$a})';
 $string['gradesaved'] = 'Bewertung gespeichert.';
 $string['gradetitle'] = 'Snapshot ansehen und bewerten';
+$string['journal:atrevision'] = 'bei Revision {$a}';
 $string['journal:bucket:lastweek'] = 'Letzte Woche';
 $string['journal:bucket:older'] = 'Älter';
 $string['journal:bucket:thismonth'] = 'Dieser Monat';

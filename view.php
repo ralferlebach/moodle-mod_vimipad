@@ -484,6 +484,13 @@ switch ($tab) {
                     );
                 }
                 echo html_writer::tag('span', ' · ' . userdate($entry->timecreated), ['class' => 'text-muted small']);
+                if (!empty($entry->revisionref)) {
+                    echo html_writer::tag(
+                        'span',
+                        ' · ' . get_string('journal:atrevision', 'mod_vimipad', (int) $entry->revisionref),
+                        ['class' => 'text-muted small']
+                    );
+                }
                 echo html_writer::div(format_text($entry->entrytext, FORMAT_PLAIN), 'vimipad-journal-text');
                 echo html_writer::end_tag('div');
             }

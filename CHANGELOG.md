@@ -4,7 +4,21 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.14** (2026072694).
+> release is **0.5.15** (2026072695).
+
+## 0.5.15 (2026072695) — journal revision reconstruction (backend)
+
+- **Rebuild a map at a past revision.** New `reconstruction_service` replays the
+  operation log up to a target revision to reproduce the exact node/relation
+  topology at that point (the log stores server-assigned stable ids, so the
+  replay is faithful). Deleted nodes and their relations drop out.
+- **Revision captured per journal entry.** Journal entries now record the
+  workspace revision at the time of writing (the `revisionref` field is finally
+  populated), and each entry shows which revision it refers to.
+- **Web service.** `get_revision_state` returns the reconstructed state in the
+  same shape as `get_workspace` (read-only, auto-laid-out), with own-vs-foreign
+  access control. Covered by a unit test. The in-editor viewer that renders this
+  state for an entry follows in the next stage.
 
 ## 0.5.14 (2026072694) — consensus UI & notifications
 
