@@ -3,6 +3,7 @@
 .vimipad-editor .vimipad-canvas {
     width: 100%;
     height: auto;
+    max-height: 60vh;
     color: #495057;
     touch-action: none;
     background: var(--vimipad-canvas-bg, #fff);
@@ -302,6 +303,16 @@
     align-items: flex-start;
     gap: 1rem;
     margin-top: 0.75rem;
+}
+
+/* With the submit button relocated, the insert controls use the full width. */
+.vimipad-controls-row > * {
+    flex: 1 1 320px;
+}
+
+.vimipad-submit-bar {
+    display: flex;
+    justify-content: flex-end;
 }
 
 .vimipad-controls-submit {

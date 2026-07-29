@@ -798,7 +798,6 @@ export function EditorApp(props: Props): React.ReactElement {
                     <div className="vimipad-controls-row">
                         {addNodeControls}
                         {addRelationControls}
-                        {submitButton && <div className="vimipad-controls-submit">{submitButton}</div>}
                     </div>
                 </>
             ) : (
@@ -815,7 +814,6 @@ export function EditorApp(props: Props): React.ReactElement {
                         onRenameRelation={renameRelation}
                         t={t}
                     />
-                    {submitButton && <div className="vimipad-controls-submit mt-3">{submitButton}</div>}
                 </>
             )}
             </div>
@@ -848,6 +846,8 @@ export function EditorApp(props: Props): React.ReactElement {
             </div>
 
             <JournalPanel api={api} workspaceid={state.workspaceid} t={t} />
+
+            {submitButton && <div className="vimipad-submit-bar mt-3">{submitButton}</div>}
 
             <p className="text-muted small mt-2">{t('editor:revision')}: {state.revision}</p>
         </div>

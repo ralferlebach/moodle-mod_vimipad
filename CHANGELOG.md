@@ -4,7 +4,17 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.8** (2026072688).
+> release is **0.5.9** (2026072689).
+
+## 0.5.9 (2026072689) — editor surface finalised
+
+- **Full-width insert bar.** The submit button no longer sits among the insert
+  controls; the concept/relation controls now use the full width.
+- **Capped canvas height.** The canvas is limited to a share of the viewport so
+  the insert bar and journal stay visible without scrolling the whole page.
+- **Submit relocated.** The submit button moves to the foot of the editor for
+  now; it becomes part of the dedicated Journal & submission tab in the next
+  step (which is also where the group consensus flow will live).
 
 ## 0.5.8 (2026072688) — single-view editor tabs + learner inspection
 
