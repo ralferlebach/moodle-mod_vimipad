@@ -36,9 +36,13 @@ import React, {useCallback, useEffect, useReducer, useRef, useState} from 'react
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas} from '../graph/autolayout';
 import {EditorState} from '../store/reducer';
 import {LayoutMap, Point, Size, SizeMap, FormConfig} from '../types';
-import {NodeShape} from '../canvas/shape_catalog';
 import {formClampShape, formLine, formShared, LineStyle} from '../canvas/form_config';
-import {parseNodeStyle, TextStyle} from '../canvas/node_style';
+import {
+    clampSize, clampView, edgePoint, nodeHeight, nodeWidth, profileLine, relLinePath, treeBusPath,
+} from '../canvas/node_geometry';
+import {labelBox, shapeElement} from '../canvas/shapes';
+import {useDismiss} from '../hooks/use_dismiss';
+import {parseNodeStyle} from '../canvas/node_style';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {TextEditMenu} from './TextEditMenu';
 import {FA, Icon} from '../canvas/icons';
@@ -99,13 +103,6 @@ interface Props {
     exportXmlUrl?: string;
 }
 
-/** Default node box height when no manual size is stored. */
-const DEFAULT_NODE_HEIGHT = 40;
-/** Resize bounds, kept within the canvas. */
-const MIN_W = 60;
-const MIN_H = 32;
-const MAX_W = 360;
-const MAX_H = 240;
 /** Size of a corner resize handle, in canvas units. */
 const HANDLE = 9;
 /** Finger-friendly hit area around each corner handle (touch targets). */
@@ -117,211 +114,6 @@ const VIEW_ASPECT = CANVAS_HEIGHT / CANVAS_WIDTH;
 // Open on a comfortable window centred on the canvas middle (where new content is
 // placed) rather than the whole large canvas, which would appear zoomed far out.
 const INITIAL_VIEW_W = Math.min(CANVAS_WIDTH, 1100);
-
-/** Keep the viewport within the canvas bounds. */
-function clampView(v: {x: number; y: number; w: number; h: number}): {x: number; y: number; w: number; h: number} {
-    return {
-        w: v.w,
-        h: v.h,
-        x: Math.min(Math.max(0, v.x), Math.max(0, CANVAS_WIDTH - v.w)),
-        y: Math.min(Math.max(0, v.y), Math.max(0, CANVAS_HEIGHT - v.h)),
-    };
-}
-/** Base label font size, in canvas units; each size step adds 2. */
-const BASE_FONT = 13;
-
-/**
- * Resolve CSS font properties for a node label from its text style.
- *
- * @param text The parsed text style, if any.
- * @returns Inline style properties for the label text element.
- */
-/** Default width of a node box: from the longest line, capped to the max width. */
-const nodeWidth = (label: string): number => {
-    const longest = label.split('\n').reduce((max, line) => Math.max(max, line.length), 1);
-    return Math.max(70, Math.min(MAX_W, longest * 8 + 20));
-};
-
-/**
- * Auto-grown node box height for a label, from its explicit and wrapped lines.
- *
- * Explicit newlines and an estimate of soft-wrapping at the given width both add
- * lines; the height grows with the line count (bounded by the resize maximum) so
- * multi-line labels are not clipped.
- *
- * @param label The node label.
- * @param width The node box width the text wraps within.
- * @returns The box height in canvas units.
- */
-const nodeHeight = (label: string, width: number): number => {
-    const perLine = Math.max(1, Math.floor((width - 12) / 7));
-    let lines = 0;
-    for (const segment of label.split('\n')) {
-        lines += Math.max(1, Math.ceil((segment.length || 1) / perLine));
-    }
-    return Math.max(DEFAULT_NODE_HEIGHT, Math.min(MAX_H, 16 + lines * 18));
-};
-
-/**
- * The connector line style for a display type (profile). Line style is a
- * property of the display form, not of the individual relation.
- *
- * @param profile The display-type key.
- * @returns The line style for that display type.
- */
-function profileLine(profile: string): LineStyle {
-    switch (profile) {
-        case 'tree':
-            return 'orthogonal';
-        case 'mindmap':
-        case 'bubblemap':
-            return 'curved';
-        default:
-            return 'straight';
-    }
-}
-
-/**
- * Point on a node's box boundary in the direction of a target point, so
- * connectors (and their arrowheads) start/end at the edge, not under the node.
- *
- * @param center The node centre.
- * @param size The node size.
- * @param towards The point to aim at.
- * @returns The boundary point.
- */
-function edgePoint(center: Point, size: Size, towards: Point): Point {
-    const dx = towards.x - center.x;
-    const dy = towards.y - center.y;
-    if (dx === 0 && dy === 0) {
-        return center;
-    }
-    const hw = size.w / 2 + 2;
-    const hh = size.h / 2 + 2;
-    const scale = 1 / Math.max(Math.abs(dx) / hw, Math.abs(dy) / hh);
-    return {x: center.x + dx * scale, y: center.y + dy * scale};
-}
-
-/**
- * Orthogonal "org-chart" routing for a tree edge: parent bottom → shared bus →
- * child top. Because every child of a parent uses the same bus offset, the
- * vertical trunk and the horizontal bus overlap into one shared bifurcation.
- *
- * @param sc Source (parent) centre.
- * @param ss Source size.
- * @param tc Target (child) centre.
- * @param ts Target size.
- * @returns A path `d` string.
- */
-function treeBusPath(sc: Point, ss: Size, tc: Point, ts: Size): string {
-    const fromX = sc.x;
-    const fromY = sc.y + ss.h / 2;
-    const toX = tc.x;
-    const toY = tc.y - ts.h / 2;
-    let busY = fromY + 24;
-    if (busY > toY - 8) {
-        busY = (fromY + toY) / 2;
-    }
-    return `M ${fromX} ${fromY} L ${fromX} ${busY} L ${toX} ${busY} L ${toX} ${toY}`;
-}
-
-/**
- * SVG path for a connector, or null when a straight <line> should be used.
- *
- * @param from Source point.
- * @param to Target point.
- * @param line The line style.
- * @returns A path `d` string, or null for straight lines.
- */
-function relLinePath(from: Point, to: Point, line: LineStyle): string | null {
-    if (line === 'curved') {
-        // Vertical base direction: the connector leaves the source and enters the
-        // target vertically (control points offset straight up/down). Mirrored
-        // children therefore curve symmetrically, which reads well for the radial
-        // mindmap and bubble-map layouts.
-        const dy = to.y - from.y;
-        const dir = dy >= 0 ? 1 : -1;
-        const k = Math.max(24, Math.abs(dy) * 0.5);
-        const c1y = from.y + dir * k;
-        const c2y = to.y - dir * k;
-        return `M ${from.x} ${from.y} C ${from.x} ${c1y} ${to.x} ${c2y} ${to.x} ${to.y}`;
-    }
-    if (line === 'orthogonal') {
-        const mx = (from.x + to.x) / 2;
-        return `M ${from.x} ${from.y} L ${mx} ${from.y} L ${mx} ${to.y} L ${to.x} ${to.y}`;
-    }
-    return null;
-}
-
-/**
- * Shared CSS for the node label div and its inline editor, so switching into
- * edit mode does not move or recolour the text. Centred, wrapping, multi-line.
- *
- * @param text The text style, if any.
- * @returns CSS properties for an HTML box.
- */
-function labelBox(text: TextStyle | undefined): React.CSSProperties {
-    const family = text?.font === 'serif' ? 'Georgia, "Times New Roman", serif'
-        : text?.font === 'mono' ? 'ui-monospace, Menlo, Consolas, monospace'
-            : text?.font === 'sans' ? 'system-ui, -apple-system, "Segoe UI", sans-serif'
-                : 'inherit';
-    return {
-        boxSizing: 'border-box',
-        width: '100%',
-        height: '100%',
-        margin: 0,
-        padding: '2px 6px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        textAlign: 'center',
-        whiteSpace: 'pre-wrap',
-        overflowWrap: 'anywhere',
-        wordBreak: 'break-word',
-        lineHeight: 1.2,
-        fontFamily: family,
-        fontSize: `${BASE_FONT + (text?.size ?? 0) * 2}px`,
-        fontWeight: text?.bold ? 700 : undefined,
-        fontStyle: text?.italic ? 'italic' : undefined,
-        textDecoration: text?.underline ? 'underline' : undefined,
-        color: text?.color ?? 'var(--vimipad-node-text, #212529)',
-    };
-}
-
-/**
- * Clamp a candidate size to the accepted resize bounds.
- *
- * @param w Candidate width.
- * @param h Candidate height.
- * @returns The clamped size.
- */
-function clampSize(w: number, h: number): Size {
-    return {
-        w: Math.max(MIN_W, Math.min(MAX_W, Math.round(w))),
-        h: Math.max(MIN_H, Math.min(MAX_H, Math.round(h))),
-    };
-}
-
-/**
- * Render the outline element for a shape at the origin (node group is centred).
- *
- * @param shape The node shape.
- * @param w The box width.
- * @param h The box height.
- * @param extra Extra SVG props (fill, stroke, class …).
- * @returns The shape element.
- */
-function shapeElement(
-    shape: NodeShape,
-    w: number,
-    h: number,
-    extra: React.SVGProps<SVGRectElement & SVGEllipseElement>
-): React.ReactElement {
-    if (shape === 'ellipse') {
-        return <ellipse cx={0} cy={0} rx={w / 2} ry={h / 2} {...extra} />;
-    }
-    return <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={shape === 'roundrect' ? 10 : 0} {...extra} />;
-}
 
 /**
  * Render the SVG canvas.
@@ -366,27 +158,8 @@ export function CanvasView(props: Props): React.ReactElement {
     // Export dropdown (controlled; robust across browsers, unlike <details>).
     const [exportOpen, setExportOpen] = useState(false);
     const exportRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        if (!exportOpen) {
-            return undefined;
-        }
-        const onDown = (event: MouseEvent): void => {
-            if (exportRef.current && !exportRef.current.contains(event.target as Node)) {
-                setExportOpen(false);
-            }
-        };
-        const onKey = (event: KeyboardEvent): void => {
-            if (event.key === 'Escape') {
-                setExportOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', onDown);
-        document.addEventListener('keydown', onKey);
-        return () => {
-            document.removeEventListener('mousedown', onDown);
-            document.removeEventListener('keydown', onKey);
-        };
-    }, [exportOpen]);
+    const closeExport = useCallback(() => setExportOpen(false), []);
+    useDismiss(exportRef, exportOpen, closeExport);
 
     useEffect(() => {
         const onChange = (): void => setNativeFs(Boolean(document.fullscreenElement));

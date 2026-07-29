@@ -8,7 +8,10 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.4.22 — feature-complete 0.4.x, hardening in progress.**
+**Development status: 0.5.5 — 0.5.x line, on a fully hardened 0.4.x base.**
+The 0.5.x line adds import (JSON & XML, append or replace, including layout),
+reopening a submitted map for revision, internal canvas refactoring and polling
+scalability.
 The activity can be created and configured (diagram profile, working mode,
 optional companion channel, AI toggle), and provides the full editor: a React
 canvas and an equal-rights relation list view with real-time collaboration,

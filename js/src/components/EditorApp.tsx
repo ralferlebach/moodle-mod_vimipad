@@ -106,6 +106,7 @@ export function EditorApp(props: Props): React.ReactElement {
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
     const [nodeLabel, setNodeLabel] = useState('');
     const [relSource, setRelSource] = useState('');
     const [relTarget, setRelTarget] = useState('');
@@ -162,6 +163,24 @@ export function EditorApp(props: Props): React.ReactElement {
     useEffect(() => {
         load();
     }, [load]);
+
+    const importInputRef = useRef<HTMLInputElement>(null);
+    const [importReplace, setImportReplace] = useState(false);
+
+    const onImportFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) {
+            return;
+        }
+        try {
+            const text = await file.text();
+            await api.importMap(stateRef.current.workspaceid, text, importReplace ? 'replace' : 'append');
+            await load();
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [api, load, importReplace]);
 
     // Feed operations polled from collaborators into the local state. Layout
     // changes travel on the separate layout channel and are reconciled below.
@@ -634,8 +653,14 @@ export function EditorApp(props: Props): React.ReactElement {
         }
         setBusy(true);
         try {
-            await api.createSnapshot(state.workspaceid);
-            dispatch({kind: 'load', state: {...state, locked: 1}});
+            const result = await api.createSnapshot(state.workspaceid);
+            if (result.pending > 0) {
+                // Group consensus: waiting for the remaining members to submit.
+                setNotice(t('editor:submitpending'));
+            } else {
+                dispatch({kind: 'load', state: {...state, locked: 1}});
+                setNotice(null);
+            }
             setError(null);
         } catch (e) {
             setError((e as Error).message);
@@ -722,6 +747,7 @@ export function EditorApp(props: Props): React.ReactElement {
         <div className="vimipad-editor" ref={rootRef}>
             <div className="vimipad-sr-only" role="status" aria-live="polite">{status}</div>
             {error && <div className="alert alert-danger" role="alert">{error}</div>}
+            {notice && <div className="alert alert-info" role="status">{notice}</div>}
             {state.locked === 1 && (
                 <div className="alert alert-warning" role="status">{t('editor:locked')}</div>
             )}
@@ -817,6 +843,33 @@ export function EditorApp(props: Props): React.ReactElement {
                     {submitButton && <div className="vimipad-controls-submit mt-3">{submitButton}</div>}
                 </>
             )}
+            </div>
+
+            <div className="vimipad-tools mt-2">
+                <input
+                    ref={importInputRef}
+                    type="file"
+                    accept="application/json,application/xml,text/xml,.json,.xml"
+                    className="vimipad-hidden-input"
+                    onChange={(e) => void onImportFile(e)}
+                />
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() => importInputRef.current?.click()}
+                    disabled={state.locked === 1}
+                >
+                    {t('editor:import')}
+                </button>
+                <label className="vimipad-import-replace">
+                    <input
+                        type="checkbox"
+                        checked={importReplace}
+                        onChange={(e) => setImportReplace(e.target.checked)}
+                        disabled={state.locked === 1}
+                    />{' '}
+                    {t('editor:importreplace')}
+                </label>
             </div>
 
             <JournalPanel api={api} workspaceid={state.workspaceid} t={t} />

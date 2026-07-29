@@ -58,6 +58,7 @@ class cleanup {
         $childtables = [
             'vimipad_node', 'vimipad_relation', 'vimipad_container', 'vimipad_layout',
             'vimipad_operation', 'vimipad_snapshot', 'vimipad_journalentry', 'vimipad_lock',
+            'vimipad_submissionintent',
         ];
         foreach ($childtables as $table) {
             $DB->delete_records_select($table, "workspaceid $insql", $params);

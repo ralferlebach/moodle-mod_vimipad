@@ -583,3 +583,22 @@
 .vimipad-journal-text {
     white-space: pre-wrap;
 }
+
+/* -------------------------------------------------------------------------
+   Import control
+   ------------------------------------------------------------------------- */
+
+.vimipad-hidden-input {
+    display: none;
+}
+
+.vimipad-tools {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.vimipad-import-replace {
+    margin: 0;
+    font-size: 0.9rem;
+}

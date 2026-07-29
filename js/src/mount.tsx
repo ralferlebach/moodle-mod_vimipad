@@ -55,6 +55,8 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:fmt_italic': 'Italic',
     'editor:fmt_underline': 'Underline',
     'editor:fullview': 'Full view',
+    'editor:import': 'Import',
+    'editor:importreplace': 'Replace existing map',
     'editor:journal': 'Learning journal',
     'editor:journalnew': 'Write a journal entry…',
     'editor:journalsave': 'Save entry',
@@ -96,6 +98,7 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:subject': 'Subject',
     'editor:submit': 'Submit for grading',
     'editor:submitconfirm': 'Once submitted, the map is locked and can no longer be edited. Continue?',
+    'editor:submitpending': 'Waiting for the other group members to submit.',
     'editor:undo': 'Undo',
 };
 

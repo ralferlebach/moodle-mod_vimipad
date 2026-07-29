@@ -42,6 +42,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             'name', 'intro', 'introformat', 'defaultprofile',
             'collaborationmode', 'gradingmode', 'aienabled', 'channelurl',
             'grade', 'completionsubmit', 'completionminnodes', 'completiongraded',
+            'duedate', 'cutoffdate', 'requireallteamsubmit',
             'timecreated', 'timemodified',
         ]);
 

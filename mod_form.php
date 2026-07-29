@@ -82,6 +82,36 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->setType('channelurl', PARAM_URL);
         $mform->addHelpButton('channelurl', 'channelurl', 'mod_vimipad');
 
+        // Group consensus: require every member to submit (group mode only).
+        $mform->addElement(
+            'advcheckbox',
+            'requireallteamsubmit',
+            get_string('requireallteamsubmit', 'mod_vimipad'),
+            get_string('requireallteamsubmit_label', 'mod_vimipad')
+        );
+        $mform->setDefault('requireallteamsubmit', 0);
+        $mform->addHelpButton('requireallteamsubmit', 'requireallteamsubmit', 'mod_vimipad');
+        $mform->hideIf('requireallteamsubmit', 'collaborationmode', 'neq', 1);
+
+        // Availability: optional due and cut-off dates.
+        $mform->addElement('header', 'availability', get_string('availability', 'mod_vimipad'));
+
+        $mform->addElement(
+            'date_time_selector',
+            'duedate',
+            get_string('duedate', 'mod_vimipad'),
+            ['optional' => true]
+        );
+        $mform->addHelpButton('duedate', 'duedate', 'mod_vimipad');
+
+        $mform->addElement(
+            'date_time_selector',
+            'cutoffdate',
+            get_string('cutoffdate', 'mod_vimipad'),
+            ['optional' => true]
+        );
+        $mform->addHelpButton('cutoffdate', 'cutoffdate', 'mod_vimipad');
+
         $this->standard_grading_coursemodule_elements();
 
         $this->standard_coursemodule_elements();
@@ -161,6 +191,12 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $errors = parent::validation($data, $files);
         if (!empty($data['completionminnodesenabled']) && (int) $data['completionminnodes'] < 1) {
             $errors['completionminnodesgroup'] = get_string('completionminnodes_error', 'mod_vimipad');
+        }
+        if (
+            !empty($data['duedate']) && !empty($data['cutoffdate'])
+                && (int) $data['cutoffdate'] < (int) $data['duedate']
+        ) {
+            $errors['cutoffdate'] = get_string('cutoffbeforedue', 'mod_vimipad');
         }
         return $errors;
     }

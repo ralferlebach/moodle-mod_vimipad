@@ -38,43 +38,46 @@ class statistics_service {
     public function workspace_summary(int $workspaceid): array {
         global $DB;
 
-        $ops = $DB->get_records(
-            'vimipad_operation',
-            ['workspaceid' => $workspaceid],
-            'revision ASC',
-            'id, operationtype, userid, timecreated'
+        $totals = $DB->get_record_sql(
+            'SELECT COUNT(*) AS total, MIN(timecreated) AS firstactivity, MAX(timecreated) AS lastactivity
+               FROM {vimipad_operation}
+              WHERE workspaceid = :wid',
+            ['wid' => $workspaceid]
         );
 
         $bytype = [];
-        $byuser = [];
-        $first = 0;
-        $last = 0;
-
-        foreach ($ops as $op) {
-            $type = (string) $op->operationtype;
-            $uid = (int) $op->userid;
-            $bytype[$type] = ($bytype[$type] ?? 0) + 1;
-            $byuser[$uid] = ($byuser[$uid] ?? 0) + 1;
-
-            $time = (int) $op->timecreated;
-            if ($first === 0 || $time < $first) {
-                $first = $time;
-            }
-            if ($time > $last) {
-                $last = $time;
-            }
+        $typerows = $DB->get_records_sql(
+            'SELECT operationtype, COUNT(*) AS cnt
+               FROM {vimipad_operation}
+              WHERE workspaceid = :wid
+           GROUP BY operationtype
+           ORDER BY cnt DESC',
+            ['wid' => $workspaceid]
+        );
+        foreach ($typerows as $row) {
+            $bytype[(string) $row->operationtype] = (int) $row->cnt;
         }
 
-        arsort($byuser);
-        arsort($bytype);
+        $byuser = [];
+        $userrows = $DB->get_records_sql(
+            'SELECT userid, COUNT(*) AS cnt
+               FROM {vimipad_operation}
+              WHERE workspaceid = :wid
+           GROUP BY userid
+           ORDER BY cnt DESC',
+            ['wid' => $workspaceid]
+        );
+        foreach ($userrows as $row) {
+            $byuser[(int) $row->userid] = (int) $row->cnt;
+        }
 
         return [
-            'total' => count($ops),
+            'total' => (int) $totals->total,
             'bytype' => $bytype,
             'byuser' => $byuser,
             'contributors' => count($byuser),
-            'firstactivity' => $first,
-            'lastactivity' => $last,
+            'firstactivity' => (int) $totals->firstactivity,
+            'lastactivity' => (int) $totals->lastactivity,
         ];
     }
 

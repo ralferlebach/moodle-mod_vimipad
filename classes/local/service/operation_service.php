@@ -109,16 +109,20 @@ class operation_service {
      *
      * @param int $workspaceid The workspace id.
      * @param int $sincerevision The revision the client already has.
+     * @param int $limit Maximum number of operations to return (0 = no limit).
      * @return \stdClass[] Operation records (id, revision, operationtype, payloadjson, userid, timecreated).
      */
-    public function get_operations_since(int $workspaceid, int $sincerevision): array {
+    public function get_operations_since(int $workspaceid, int $sincerevision, int $limit = 0): array {
         global $DB;
 
         $records = $DB->get_records_select(
             'vimipad_operation',
             'workspaceid = :wid AND revision > :rev',
             ['wid' => $workspaceid, 'rev' => $sincerevision],
-            'revision ASC'
+            'revision ASC',
+            '*',
+            0,
+            $limit > 0 ? $limit : 0
         );
 
         return array_values($records);

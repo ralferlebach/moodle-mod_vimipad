@@ -157,6 +157,25 @@ class workspace_service {
     }
 
     /**
+     * Reopen a submitted (locked) workspace so its owner can revise it.
+     *
+     * The existing snapshot is kept; the workspace is simply unlocked so further
+     * edits and a fresh submission become possible.
+     *
+     * @param int $workspaceid The workspace id.
+     * @return void
+     */
+    public function reopen(int $workspaceid): void {
+        global $DB;
+
+        $DB->update_record('vimipad_workspace', (object) [
+            'id' => $workspaceid,
+            'locked' => 0,
+            'timemodified' => time(),
+        ]);
+    }
+
+    /**
      * Create a new empty workspace record.
      *
      * @param int $vimipadid The vimipad instance id.

@@ -133,4 +133,34 @@ final class layout_service_test extends \advanced_testcase {
         $this->assertSame(9, $stored['pos']['n1']['x']);
         $this->assertSame(2, $stored['pos']['n2']['x']);
     }
+
+    /**
+     * get_layout_since returns the layout only when newer than the given time.
+     *
+     * @return void
+     */
+    public function test_get_layout_since_only_when_changed(): void {
+        global $DB;
+        $service = new layout_service();
+        $service->save($this->workspaceid, 'conceptmap', '{"v":1}', '', $this->userid);
+        $time = (int) $DB->get_field(
+            'vimipad_layout',
+            'timemodified',
+            ['workspaceid' => $this->workspaceid, 'profile' => 'conceptmap']
+        );
+
+        $before = $service->get_layout_since($this->workspaceid, 'conceptmap', $time - 1);
+        $this->assertTrue($before['changed']);
+        $this->assertSame('{"v":1}', $before['layoutjson']);
+        $this->assertSame($time, $before['timemodified']);
+
+        $same = $service->get_layout_since($this->workspaceid, 'conceptmap', $time);
+        $this->assertFalse($same['changed']);
+        $this->assertSame('', $same['layoutjson']);
+        $this->assertSame($time, $same['timemodified']);
+
+        $none = $service->get_layout_since($this->workspaceid, 'tree', 0);
+        $this->assertFalse($none['changed']);
+        $this->assertSame(0, $none['timemodified']);
+    }
 }

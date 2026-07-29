@@ -31,6 +31,7 @@ require(__DIR__ . '/../../config.php');
 use mod_vimipad\local\service\ai_feedback_service;
 use mod_vimipad\local\service\grading_service;
 use mod_vimipad\local\service\snapshot_service;
+use mod_vimipad\local\service\workspace_service;
 
 $id = required_param('id', PARAM_INT);
 $snapshotid = required_param('snapshotid', PARAM_INT);
@@ -158,8 +159,30 @@ if ($savegrade && confirm_sesskey()) {
     );
 }
 
+// Handle reopening the submitted workspace so its owner can revise it.
+$reopen = optional_param('reopen', 0, PARAM_BOOL);
+if ($reopen && confirm_sesskey()) {
+    (new workspace_service())->reopen((int) $workspace->id);
+    redirect($pageurl, get_string('reopened', 'mod_vimipad'));
+}
+
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('gradetitle', 'mod_vimipad'));
+
+// Offer to reopen the workspace for revision while it is locked.
+if ((int) $workspace->locked === 1) {
+    echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false), 'class' => 'mb-3']);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+    echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'reopen', 'value' => 1]);
+    echo html_writer::tag('p', get_string('reopen_help', 'mod_vimipad'), ['class' => 'text-muted small mb-1']);
+    echo html_writer::empty_tag('input', [
+        'type' => 'submit',
+        'value' => get_string('reopen', 'mod_vimipad'),
+        'class' => 'btn btn-outline-secondary',
+    ]);
+    echo html_writer::end_tag('form');
+}
+
 
 // Render the snapshot read-only.
 $data = json_decode($snapshot->snapshotjson, true);
@@ -216,8 +239,13 @@ $journal = (new \mod_vimipad\local\service\journal_service())->get_teacher_visib
 if ($journal) {
     echo html_writer::tag('h4', get_string('journal:teacherheading', 'mod_vimipad'), ['class' => 'mt-4']);
     $jitems = [];
+    $authorids = [];
     foreach ($journal as $entry) {
-        $author = $DB->get_record('user', ['id' => $entry->userid]);
+        $authorids[(int) $entry->userid] = true;
+    }
+    $authors = empty($authorids) ? [] : $DB->get_records_list('user', 'id', array_keys($authorids));
+    foreach ($journal as $entry) {
+        $author = $authors[$entry->userid] ?? null;
         $meta = ($author ? fullname($author) : (string) $entry->userid) . ' · ' . userdate($entry->timecreated);
         $jitems[] = html_writer::tag(
             'li',

@@ -61,6 +61,9 @@ export class PollClient {
     /** @type {number} The highest revision the client has applied. */
     private revision = 0;
 
+    /** @type {number} The layout modification time the client last received. */
+    private layoutTime = 0;
+
     /** @type {number} The current polling interval in milliseconds. */
     private interval: number;
 
@@ -131,6 +134,7 @@ export class PollClient {
                 cmid: this.opts.cmid,
                 workspaceid: this.opts.workspaceid,
                 sincerevision: this.revision,
+                layoutsince: this.layoutTime,
             });
             const poll = raw as PollResult;
             const rttMs = clock() - started;
@@ -142,10 +146,14 @@ export class PollClient {
             if (this.opts.onPresence) {
                 this.opts.onPresence(poll.leases);
             }
-            // Forward the current layout (positions + sizes) so remote moves and
-            // resizes reconcile live; dedup/merge happens upstream.
-            if (this.opts.onLayout) {
+            // Forward the layout (positions + sizes) only when it changed since
+            // the last poll; the server sends an empty string when unchanged, so
+            // an unchanged layout is not re-applied every tick.
+            if (poll.layoutjson && this.opts.onLayout) {
                 this.opts.onLayout(poll.layoutjson);
+            }
+            if (typeof poll.layouttime === 'number' && poll.layouttime > this.layoutTime) {
+                this.layoutTime = poll.layouttime;
             }
             // Forward workspace-level state (lock/profile) so a submission lock or
             // a display-type change reaches collaborators without a reload.
@@ -153,13 +161,22 @@ export class PollClient {
                 this.opts.onWorkspaceState({locked: poll.locked, profile: poll.profile});
             }
 
-            // Advance the revision monotonically.
-            if (poll.revision > this.revision) {
+            // Advance the revision. With batched operations, advance only to the
+            // last received operation so a later batch is not skipped; otherwise
+            // catch up to the workspace's current revision.
+            if (hasOperations) {
+                this.revision = poll.operations[poll.operations.length - 1].revision;
+            } else if (poll.revision > this.revision) {
                 this.revision = poll.revision;
             }
 
-            const changed = hasOperations || poll.leases.length > 0;
-            this.interval = nextInterval(this.opts.adaptive, this.interval, {changed, rttMs});
+            if (poll.hasmore) {
+                // A backlog remains beyond this batch; poll again promptly.
+                this.interval = this.opts.adaptive.min;
+            } else {
+                const changed = hasOperations || poll.leases.length > 0;
+                this.interval = nextInterval(this.opts.adaptive, this.interval, {changed, rttMs});
+            }
         } catch (e) {
             if (this.opts.onError) {
                 this.opts.onError(e as Error);

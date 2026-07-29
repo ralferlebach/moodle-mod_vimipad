@@ -129,8 +129,25 @@ class snapshot_service {
      * @param int $userid The submitting user id.
      * @return stdClass The created snapshot record.
      */
-    public function create_submission(stdClass $workspace, string $profile, int $userid): stdClass {
+    /**
+     * Submit a workspace as a snapshot, honouring the cut-off date and, in group
+     * mode with consensus enabled, requiring every member to submit first.
+     *
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $workspace The workspace being submitted.
+     * @param \context $context The module context.
+     * @param int $userid The acting user id.
+     * @return array{snapshot: ?stdClass, pending: int} The snapshot (null while
+     *     consensus is pending) and the number of members still to submit.
+     * @throws \moodle_exception If submission is closed or already submitted.
+     */
+    public function create_submission(stdClass $instance, stdClass $workspace, \context $context, int $userid): array {
         global $DB;
+
+        $now = time();
+        if ((int) $instance->cutoffdate > 0 && $now > (int) $instance->cutoffdate) {
+            throw new \moodle_exception('error:submissionclosed', 'mod_vimipad');
+        }
 
         // Serialize submissions per workspace so two concurrent submits cannot
         // both create a snapshot (double submission).
@@ -147,7 +164,36 @@ class snapshot_service {
                 throw new \moodle_exception('error:alreadysubmitted', 'mod_vimipad');
             }
 
-            $normalized = $this->build_normalized($fresh, $profile);
+            // Group consensus: record this member's intent and hold the
+            // submission until every submitting member has signalled readiness.
+            if (
+                (int) $instance->collaborationmode === 1
+                    && (int) $instance->requireallteamsubmit === 1
+                    && !empty($fresh->groupid)
+            ) {
+                if (
+                    !$DB->record_exists('vimipad_submissionintent', [
+                    'workspaceid' => (int) $fresh->id, 'userid' => $userid,
+                    ])
+                ) {
+                    $DB->insert_record('vimipad_submissionintent', (object) [
+                        'workspaceid' => (int) $fresh->id, 'userid' => $userid, 'timecreated' => $now,
+                    ]);
+                }
+                $required = $this->consensus_required_userids($fresh, $context);
+                $have = $DB->get_fieldset_select(
+                    'vimipad_submissionintent',
+                    'userid',
+                    'workspaceid = :wid',
+                    ['wid' => (int) $fresh->id]
+                );
+                $remaining = array_diff($required, array_map('intval', $have));
+                if (!empty($remaining)) {
+                    return ['snapshot' => null, 'pending' => count($remaining)];
+                }
+            }
+
+            $normalized = $this->build_normalized($fresh, $instance->defaultprofile);
 
             $transaction = $DB->start_delegated_transaction();
 
@@ -168,12 +214,34 @@ class snapshot_service {
                 'timemodified' => time(),
             ]);
 
+            // The consensus is consumed once the snapshot exists.
+            $DB->delete_records('vimipad_submissionintent', ['workspaceid' => (int) $fresh->id]);
+
             $transaction->allow_commit();
 
-            return $snapshot;
+            return ['snapshot' => $snapshot, 'pending' => 0];
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * The user ids that must all submit before a group map is submitted:
+     * the group's members who hold the submit capability.
+     *
+     * @param stdClass $workspace The group workspace.
+     * @param \context $context The module context.
+     * @return int[] The required user ids.
+     */
+    private function consensus_required_userids(stdClass $workspace, \context $context): array {
+        $members = groups_get_members((int) $workspace->groupid, 'u.id');
+        $required = [];
+        foreach ($members as $member) {
+            if (has_capability('mod/vimipad:submit', $context, $member->id)) {
+                $required[] = (int) $member->id;
+            }
+        }
+        return $required;
     }
 
     /**

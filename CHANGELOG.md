@@ -4,7 +4,81 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.4.22** (2026072679).
+> release is **0.5.5** (2026072685).
+
+## 0.5.5 (2026072685) — deadlines & group consensus submission
+
+- **Due & cut-off dates.** Activities can set an optional due date (submissions
+  after it count as late) and cut-off date (submissions are blocked after it).
+  New `duedate`/`cutoffdate` settings with validation (cut-off not before due).
+- **Group consensus submission.** In group mode, an activity can require every
+  group member to submit before the shared map is submitted (as with group
+  assignments). Each member's readiness is recorded; the snapshot is created
+  only once everyone has submitted, and the editor shows a waiting notice while
+  consensus is pending. New `requireallteamsubmit` setting and
+  `vimipad_submissionintent` table, covered by backup and the privacy provider.
+
+## 0.5.4 (2026072684) — polling bandwidth, hook extraction, test fixes
+
+- **Layout only when changed.** `poll_changes` now sends the layout JSON only
+  when it changed since the client last saw it (the client passes back a
+  `layoutsince` timestamp and receives `layouttime`), so an unchanged layout is
+  no longer re-sent and re-applied on every poll.
+- **Reusable dismiss hook.** The export dropdown's outside-click / Escape
+  dismissal was extracted from CanvasView into a tested `useDismiss` hook.
+- **Query efficiency follow-through and test fixes.** Corrected the completion
+  test setup (the min-nodes rule is now enabled at module creation), simplified
+  three PHPDoc parameter types that the doc checker could not parse, and removed
+  duplicated setup between the two import round-trip tests.
+
+## 0.5.3 (2026072683) — query efficiency (view, report, grade)
+
+- **No more per-row user lookups.** The submissions list (view), the by-user and
+  overview tables (report) and the teacher-visible journal (grade) now fetch all
+  the user records they need in a single batched query instead of one query per
+  row.
+- **SQL aggregation for the workspace report.** `workspace_summary` counts
+  operations per type and per user with `GROUP BY` queries rather than loading
+  every operation row into memory, so the report scales to large workspaces.
+
+## 0.5.2 (2026072682) — layout import, canvas split, polling scale
+
+- **Layout import.** Import now also restores the layout (node positions and
+  sizes), remapped onto the freshly assigned stable ids, for both JSON and XML
+  exports. Containers/memberships remain out of scope (a dormant schema feature
+  nothing yet produces or consumes).
+- **Canvas refactor.** The pure label/shape render helpers were extracted from
+  CanvasView into `canvas/shapes.tsx` with their own unit tests, continuing the
+  behaviour-preserving decomposition begun in 0.5.1.
+- **Polling scalability.** `poll_changes` now returns operations in bounded
+  batches with a `hasmore` flag (the client advances only to the last received
+  operation and re-polls promptly, never skipping a backlog), and expired-lease
+  cleanup runs occasionally rather than on every poll.
+
+## 0.5.1 (2026072681) — import (XML, replace), reopen, refactor
+
+- **XML import.** Import now accepts XML exports as well as JSON (the format is
+  auto-detected); shared parsing/creation logic with a round-trip test.
+- **Import modes.** An import can *append* (default) or *replace* the current
+  map; replace removes the existing nodes/relations first, through the operation
+  path. A "Replace existing map" checkbox sits next to the import control.
+- **Reopen for revision.** A teacher can unlock a submitted workspace from the
+  grading page so its owner can edit and submit again; the existing snapshot is
+  kept. New `workspace_service::reopen`.
+- **Internal refactor.** The pure canvas geometry helpers (node sizing, edge
+  boundary points, connector routing) were extracted from CanvasView into
+  `canvas/node_geometry.ts` with their own unit tests, trimming the component.
+
+## 0.5.0 (2026072680) — 0.5.x line begins: import
+
+First feature of the 0.5.x line, on top of the fully hardened 0.4.x base.
+
+- **Import.** The counterpart to export: a JSON export document can be imported
+  into a workspace. Nodes and relations are appended through the validated
+  operation path (so revisions advance and collaborators see them), get fresh
+  stable ids, and relations are remapped onto the imported nodes. The whole
+  import is atomic. New `import_service`, `mod_vimipad_import_map` external, an
+  "Import" control in the editor, and an export→import round-trip test.
 
 ## 0.4.22 (2026072679) — 0.4.x feature-complete, hardened + consolidated
 

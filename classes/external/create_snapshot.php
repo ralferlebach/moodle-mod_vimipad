@@ -78,21 +78,28 @@ class create_snapshot extends external_api {
         }
 
         $service = new snapshot_service();
-        $snapshot = $service->create_submission($workspace, $instance->defaultprofile, (int) $USER->id);
+        $result = $service->create_submission($instance, $workspace, $context, (int) $USER->id);
+        $snapshot = $result['snapshot'];
 
-        \mod_vimipad\event\snapshot_submitted::create([
-            'context' => $context,
-            'objectid' => (int) $snapshot->id,
-            'other' => ['workspaceid' => (int) $workspace->id],
-        ])->trigger();
+        if ($snapshot !== null) {
+            \mod_vimipad\event\snapshot_submitted::create([
+                'context' => $context,
+                'objectid' => (int) $snapshot->id,
+                'other' => ['workspaceid' => (int) $workspace->id],
+            ])->trigger();
 
-        // Re-evaluate activity completion (submit/graded/min-nodes custom rules).
-        $completion = new \completion_info($course);
-        if ($completion->is_enabled($cm)) {
-            $completion->update_state($cm, COMPLETION_UNKNOWN, (int) $USER->id);
+            // Re-evaluate activity completion (submit/graded/min-nodes custom rules).
+            $completion = new \completion_info($course);
+            if ($completion->is_enabled($cm)) {
+                $completion->update_state($cm, COMPLETION_UNKNOWN, (int) $USER->id);
+            }
         }
 
-        return ['snapshotid' => (int) $snapshot->id, 'status' => (int) $snapshot->status];
+        return [
+            'snapshotid' => $snapshot ? (int) $snapshot->id : 0,
+            'status' => $snapshot ? (int) $snapshot->status : 0,
+            'pending' => (int) $result['pending'],
+        ];
     }
 
     /**
@@ -102,8 +109,9 @@ class create_snapshot extends external_api {
      */
     public static function execute_returns(): external_single_structure {
         return new external_single_structure([
-            'snapshotid' => new external_value(PARAM_INT, 'The created snapshot id'),
+            'snapshotid' => new external_value(PARAM_INT, 'The created snapshot id (0 while consensus is pending)'),
             'status' => new external_value(PARAM_INT, 'Snapshot status'),
+            'pending' => new external_value(PARAM_INT, 'Group members still to submit (0 = submitted)'),
         ]);
     }
 }

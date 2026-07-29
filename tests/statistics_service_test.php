@@ -101,6 +101,28 @@ final class statistics_service_test extends \advanced_testcase {
     }
 
     /**
+     * workspace_summary returns zeroed aggregates for a workspace with no
+     * operations (the SQL MIN/MAX-over-empty edge case).
+     *
+     * @return void
+     */
+    public function test_workspace_summary_empty(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
+        $wsid = $this->make_workspace((int) $instance->id, null);
+
+        $summary = (new statistics_service())->workspace_summary($wsid);
+
+        $this->assertSame(0, $summary['total']);
+        $this->assertSame([], $summary['bytype']);
+        $this->assertSame([], $summary['byuser']);
+        $this->assertSame(0, $summary['contributors']);
+        $this->assertSame(0, $summary['firstactivity']);
+        $this->assertSame(0, $summary['lastactivity']);
+    }
+
+    /**
      * instance_overview rolls up every workspace, including empty ones.
      *
      * @return void

@@ -118,9 +118,17 @@ if ($cangrade) {
             get_string('status', 'mod_vimipad'),
             get_string('actions', 'mod_vimipad'),
         ];
+        // Pre-fetch submitter records in a single query to avoid a per-row lookup.
+        $userids = [];
         foreach ($submissions as $sub) {
             if (!empty($sub->userid)) {
-                $who = fullname($DB->get_record('user', ['id' => $sub->userid], '*', MUST_EXIST));
+                $userids[(int) $sub->userid] = true;
+            }
+        }
+        $users = empty($userids) ? [] : $DB->get_records_list('user', 'id', array_keys($userids));
+        foreach ($submissions as $sub) {
+            if (!empty($sub->userid)) {
+                $who = isset($users[$sub->userid]) ? fullname($users[$sub->userid]) : '';
             } else if (!empty($sub->groupid)) {
                 $who = groups_get_group_name($sub->groupid);
             } else {

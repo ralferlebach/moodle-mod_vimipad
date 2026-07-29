@@ -365,4 +365,31 @@ final class operation_service_test extends \advanced_testcase {
         $none = $service->get_operations_since($this->workspaceid, $r2['revision']);
         $this->assertCount(0, $none);
     }
+
+    /**
+     * get_operations_since caps the batch at the given limit, in revision order.
+     *
+     * @return void
+     */
+    public function test_get_operations_since_respects_limit(): void {
+        $service = new operation_service();
+        $rev = 0;
+        for ($i = 0; $i < 5; $i++) {
+            $result = $service->apply(
+                $this->workspaceid,
+                $rev,
+                'node_create',
+                ['type' => 'concept', 'label' => 'N' . $i],
+                1
+            );
+            $rev = (int) $result['revision'];
+        }
+
+        $this->assertCount(5, $service->get_operations_since($this->workspaceid, 0));
+
+        $limited = $service->get_operations_since($this->workspaceid, 0, 2);
+        $this->assertCount(2, $limited);
+        $this->assertSame(1, (int) $limited[0]->revision);
+        $this->assertSame(2, (int) $limited[1]->revision);
+    }
 }

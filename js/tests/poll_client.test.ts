@@ -41,7 +41,7 @@ describe('PollClient', () => {
         client.setRevision(3);
         await client.pollOnce();
         expect(transport).toHaveBeenCalledWith('mod_vimipad_poll_changes',
-            {cmid: 1, workspaceid: 2, sincerevision: 3});
+            {cmid: 1, workspaceid: 2, sincerevision: 3, layoutsince: 0});
     });
 
     test('emits operations from the poll to the onOperations callback', async () => {
@@ -56,6 +56,24 @@ describe('PollClient', () => {
         await client.pollOnce();
         expect(received).toHaveLength(1);
         expect(client.getRevision()).toBe(4);
+    });
+
+    test('with a batch backlog, advances only to the last op and polls at min', async () => {
+        const ops = [
+            {revision: 11, operationtype: 'node_create', payloadjson: '{}', userid: 9},
+            {revision: 12, operationtype: 'node_create', payloadjson: '{}', userid: 9},
+        ];
+        // The workspace is at revision 30 but only ops up to 12 were returned.
+        const transport = jest.fn(async () => result({revision: 30, operations: ops, hasmore: true}));
+        const client = new PollClient({
+            cmid: 1, workspaceid: 2, transport,
+            adaptive: {min: 500, max: 10000, base: 1000, adaptive: true},
+        });
+        client.setRevision(10);
+        await client.pollOnce();
+        // Must not skip ahead to 30; the next poll continues from the last op.
+        expect(client.getRevision()).toBe(12);
+        expect(client.getInterval()).toBe(500);
     });
 
     test('emits presence (leases) to the onPresence callback', async () => {
@@ -94,6 +112,29 @@ describe('PollClient', () => {
         });
         await client.pollOnce();
         expect(seen).toBe(layoutjson);
+    });
+
+    test('skips an unchanged layout and passes layoutsince back', async () => {
+        let call = 0;
+        const transport = jest.fn(async (_m: string, _args: Record<string, unknown>) => {
+            call++;
+            return call === 1
+                ? result({layoutjson: '{"v":1}', layouttime: 555})
+                : result({layoutjson: '', layouttime: 555});
+        });
+        const layouts: string[] = [];
+        const client = new PollClient({
+            cmid: 1, workspaceid: 2, transport,
+            adaptive: {min: 1000, max: 10000, base: 1000, adaptive: true},
+            onLayout: (l) => layouts.push(l),
+        });
+        await client.pollOnce();
+        await client.pollOnce();
+        // Only the first (changed) layout is applied; the second poll sends the
+        // known layout time so the server can skip re-sending it.
+        expect(layouts).toEqual(['{"v":1}']);
+        expect(transport).toHaveBeenLastCalledWith('mod_vimipad_poll_changes',
+            {cmid: 1, workspaceid: 2, sincerevision: 0, layoutsince: 555});
     });
 
     test('lengthens the interval after an empty poll', async () => {

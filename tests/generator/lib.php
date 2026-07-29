@@ -99,8 +99,11 @@ class mod_vimipad_generator extends testing_module_generator {
 
         if ($submit) {
             $service = new \mod_vimipad\local\service\snapshot_service();
-            $snapshot = $service->create_submission($workspace, $instance->defaultprofile, $userid);
-            $workspace->snapshotid = $snapshot->id;
+            $context = \context_module::instance($instance->cmid);
+            $result = $service->create_submission($instance, $workspace, $context, $userid);
+            if ($result['snapshot'] !== null) {
+                $workspace->snapshotid = $result['snapshot']->id;
+            }
         }
 
         return $workspace;

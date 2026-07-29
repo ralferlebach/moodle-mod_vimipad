@@ -114,12 +114,33 @@ export class ApiClient {
      * @param workspaceid The workspace id.
      * @returns The created snapshot id and its status.
      */
-    async createSnapshot(workspaceid: number): Promise<{snapshotid: number; status: number}> {
+    async createSnapshot(workspaceid: number): Promise<{snapshotid: number; status: number; pending: number}> {
         const result = await this.transport('mod_vimipad_create_snapshot', {
             cmid: this.cmid,
             workspaceid,
         });
-        return result as {snapshotid: number; status: number};
+        return result as {snapshotid: number; status: number; pending: number};
+    }
+
+    /**
+     * Import a JSON export document into a workspace.
+     *
+     * @param workspaceid The workspace id.
+     * @param json The JSON export document.
+     * @returns The imported element counts and the new revision.
+     */
+    async importMap(
+        workspaceid: number,
+        json: string,
+        mode: 'append' | 'replace' = 'append'
+    ): Promise<{nodes: number; relations: number; revision: number}> {
+        const result = await this.transport('mod_vimipad_import_map', {
+            cmid: this.cmid,
+            workspaceid,
+            json,
+            mode,
+        });
+        return result as {nodes: number; relations: number; revision: number};
     }
 
     /**

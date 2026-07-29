@@ -210,8 +210,9 @@ final class custom_completion_test extends \advanced_testcase {
         $instance = $this->getDataGenerator()->create_module('vimipad', [
             'course' => $course->id, 'collaborationmode' => 2,
             'completion' => COMPLETION_TRACKING_AUTOMATIC,
+            'completionminnodesenabled' => 1,
+            'completionminnodes' => 2,
         ]);
-        $DB->set_field('vimipad', 'completionminnodes', 2, ['id' => $instance->id]);
         $cm = get_fast_modinfo($course)->get_cm($instance->cmid);
         $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
 

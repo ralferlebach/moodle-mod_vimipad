@@ -109,4 +109,12 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/vimipad:comment',
     ],
+    'mod_vimipad_import_map' => [
+        'classname' => 'mod_vimipad\external\import_map',
+        'methodname' => 'execute',
+        'description' => 'Import a JSON export into a workspace.',
+        'type' => 'write',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:editown, mod/vimipad:editgroup',
+    ],
 ];

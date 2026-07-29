@@ -169,4 +169,37 @@ class layout_service {
 
         return $record && $record->layoutjson !== null ? $record->layoutjson : '';
     }
+
+    /**
+     * Return the layout only when it changed after the given timestamp.
+     *
+     * Lets a poller skip re-sending an unchanged layout: the JSON is returned
+     * only when the stored layout is newer than $since, alongside its
+     * modification time so the caller can pass it back next time.
+     *
+     * @param int $workspaceid The workspace id.
+     * @param string $profile The diagram profile.
+     * @param int $since The timestamp the caller already has (0 = none).
+     * @return array The layout json (empty when unchanged), its time and a changed flag.
+     */
+    public function get_layout_since(int $workspaceid, string $profile, int $since): array {
+        global $DB;
+
+        $record = $DB->get_record(
+            'vimipad_layout',
+            ['workspaceid' => $workspaceid, 'profile' => $profile]
+        );
+        if (!$record) {
+            return ['layoutjson' => '', 'timemodified' => 0, 'changed' => false];
+        }
+
+        $timemodified = (int) $record->timemodified;
+        $changed = $timemodified > $since;
+
+        return [
+            'layoutjson' => ($changed && $record->layoutjson !== null) ? $record->layoutjson : '',
+            'timemodified' => $timemodified,
+            'changed' => $changed,
+        ];
+    }
 }

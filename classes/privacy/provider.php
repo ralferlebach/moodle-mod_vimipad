@@ -111,6 +111,10 @@ class provider implements
             'userid' => 'privacy:metadata:vimipad_lock:userid',
         ], 'privacy:metadata:vimipad_lock');
 
+        $collection->add_database_table('vimipad_submissionintent', [
+            'userid' => 'privacy:metadata:vimipad_submissionintent:userid',
+        ], 'privacy:metadata:vimipad_submissionintent');
+
         $collection->add_subsystem_link(
             'core_ai',
             [],
@@ -170,6 +174,11 @@ class provider implements
         // Element locks.
         $contextlist->add_from_sql(
             $base . $ws . "JOIN {vimipad_lock} lk ON lk.workspaceid = ws.id WHERE lk.userid = :u",
+            $mod + ['u' => $userid]
+        );
+        // Group submit intents.
+        $contextlist->add_from_sql(
+            $base . $ws . "JOIN {vimipad_submissionintent} si ON si.workspaceid = ws.id WHERE si.userid = :u",
             $mod + ['u' => $userid]
         );
         // Snapshots submitted.
@@ -234,6 +243,8 @@ class provider implements
             JOIN {vimipad_layout} l ON l.workspaceid = ws.id WHERE cm.id = :cmid AND l.modifiedby IS NOT NULL", $params);
         $userlist->add_from_sql('userid', "SELECT lk.userid $ws
             JOIN {vimipad_lock} lk ON lk.workspaceid = ws.id WHERE cm.id = :cmid", $params);
+        $userlist->add_from_sql('userid', "SELECT si.userid $ws
+            JOIN {vimipad_submissionintent} si ON si.workspaceid = ws.id WHERE cm.id = :cmid", $params);
         $userlist->add_from_sql('submittedby', "SELECT s.submittedby $snap
             WHERE cm.id = :cmid AND s.submittedby IS NOT NULL", $params);
         $userlist->add_from_sql('userid', "SELECT a.userid $snap
@@ -581,6 +592,13 @@ class provider implements
         // Element locks are transient: remove the user's leases in shared workspaces.
         $DB->delete_records_select(
             'vimipad_lock',
+            "workspaceid $insql AND userid = :userid",
+            array_merge($params, ['userid' => $userid])
+        );
+
+        // Group submit intents are transient: remove the user's intents.
+        $DB->delete_records_select(
+            'vimipad_submissionintent',
             "workspaceid $insql AND userid = :userid",
             array_merge($params, ['userid' => $userid])
         );

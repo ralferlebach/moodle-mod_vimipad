@@ -143,5 +143,57 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072673, 'vimipad');
     }
 
+    if ($oldversion < 2026072685) {
+        $table = new xmldb_table('vimipad');
+
+        $field = new xmldb_field(
+            'duedate',
+            XMLDB_TYPE_INTEGER,
+            '10',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'completiongraded'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field('cutoffdate', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'duedate');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        $field = new xmldb_field(
+            'requireallteamsubmit',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'cutoffdate'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Per-member submit intent for group consensus submission.
+        $intent = new xmldb_table('vimipad_submissionintent');
+        if (!$dbman->table_exists($intent)) {
+            $intent->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $intent->add_field('workspaceid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $intent->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $intent->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $intent->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $intent->add_key('workspaceid', XMLDB_KEY_FOREIGN, ['workspaceid'], 'vimipad_workspace', ['id']);
+            $intent->add_index('workspaceid-userid', XMLDB_INDEX_UNIQUE, ['workspaceid', 'userid']);
+            $dbman->create_table($intent);
+        }
+
+        upgrade_mod_savepoint(true, 2026072685, 'vimipad');
+    }
+
     return true;
 }

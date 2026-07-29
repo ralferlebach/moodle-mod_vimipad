@@ -130,7 +130,9 @@ export interface PollResult {
     locked: number;
     profile: string;
     operations: PolledOperation[];
+    hasmore?: boolean;
     layoutjson: string;
+    layouttime?: number;
     leases: Lease[];
 }
 

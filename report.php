@@ -43,14 +43,15 @@ $PAGE->set_context($context);
 /**
  * Human label for a workspace owner (user, group or course-wide).
  *
- * @param array{userid: ?int, groupid: ?int} $row The overview row.
+ * @param array $row The overview row (with userid, groupid keys).
+ * @param array $users Prefetched user records keyed by id.
  * @return string The owner label.
  */
-function vimipad_owner_label(array $row): string {
-    global $DB;
+function vimipad_owner_label(array $row, array $users): string {
     if (!empty($row['userid'])) {
-        $user = $DB->get_record('user', ['id' => $row['userid']]);
-        return $user ? fullname($user) : get_string('mode_individual', 'mod_vimipad');
+        return isset($users[$row['userid']])
+            ? fullname($users[$row['userid']])
+            : get_string('mode_individual', 'mod_vimipad');
     }
     if (!empty($row['groupid'])) {
         return groups_get_group_name($row['groupid']) ?: get_string('mode_group', 'mod_vimipad');
@@ -109,9 +110,10 @@ if ($workspaceid) {
     echo $OUTPUT->heading(get_string('report:byuser', 'mod_vimipad'), 4);
     $usertable = new html_table();
     $usertable->head = [get_string('participant', 'mod_vimipad'), get_string('report:count', 'mod_vimipad')];
+    $byuserids = array_keys($summary['byuser']);
+    $byusers = empty($byuserids) ? [] : $DB->get_records_list('user', 'id', $byuserids);
     foreach ($summary['byuser'] as $uid => $count) {
-        $user = $DB->get_record('user', ['id' => $uid]);
-        $usertable->data[] = [$user ? fullname($user) : (string) $uid, $count];
+        $usertable->data[] = [isset($byusers[$uid]) ? fullname($byusers[$uid]) : (string) $uid, $count];
     }
     echo html_writer::table($usertable);
 } else {
@@ -128,13 +130,21 @@ if ($workspaceid) {
             get_string('report:colcontributors', 'mod_vimipad'),
             get_string('report:collastactivity', 'mod_vimipad'),
         ];
+        // Pre-fetch owner records in one query for the whole overview.
+        $ownerids = [];
+        foreach ($overview as $row) {
+            if (!empty($row['userid'])) {
+                $ownerids[(int) $row['userid']] = true;
+            }
+        }
+        $owners = empty($ownerids) ? [] : $DB->get_records_list('user', 'id', array_keys($ownerids));
         foreach ($overview as $row) {
             $detailurl = new moodle_url(
                 '/mod/vimipad/report.php',
                 ['cmid' => $cm->id, 'workspaceid' => $row['workspaceid']]
             );
             $table->data[] = [
-                html_writer::link($detailurl, s(vimipad_owner_label($row))),
+                html_writer::link($detailurl, s(vimipad_owner_label($row, $owners))),
                 $row['total'],
                 $row['contributors'],
                 $row['lastactivity'] ? userdate($row['lastactivity']) : '-',

@@ -41,6 +41,9 @@ final class snapshot_grading_test extends \advanced_testcase {
     /** @var int The student user id. */
     private $studentid;
 
+    /** @var \context_module The module context. */
+    private $context;
+
     /**
      * Create course, activity, student, workspace and one node.
      *
@@ -55,6 +58,7 @@ final class snapshot_grading_test extends \advanced_testcase {
             'vimipad',
             ['course' => $this->course->id, 'collaborationmode' => 0, 'grade' => 100]
         );
+        $this->context = \context_module::instance($this->instance->cmid);
         $student = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
         $this->studentid = (int) $student->id;
 
@@ -81,7 +85,7 @@ final class snapshot_grading_test extends \advanced_testcase {
         $workspace = $DB->get_record('vimipad_workspace', ['id' => $this->workspaceid]);
 
         $service = new snapshot_service();
-        $snapshot = $service->create_submission($workspace, 'conceptmap', $this->studentid);
+        $snapshot = $service->create_submission($this->instance, $workspace, $this->context, $this->studentid)['snapshot'];
 
         $this->assertSame(snapshot_service::STATUS_SUBMITTED, (int) $snapshot->status);
 
@@ -106,11 +110,11 @@ final class snapshot_grading_test extends \advanced_testcase {
         $workspace = $DB->get_record('vimipad_workspace', ['id' => $this->workspaceid]);
         $service = new snapshot_service();
 
-        $service->create_submission($workspace, 'conceptmap', $this->studentid);
+        $service->create_submission($this->instance, $workspace, $this->context, $this->studentid);
 
         // The caller still holds the pre-submission workspace record.
         $this->expectException(\moodle_exception::class);
-        $service->create_submission($workspace, 'conceptmap', $this->studentid);
+        $service->create_submission($this->instance, $workspace, $this->context, $this->studentid);
     }
 
     /**
@@ -171,7 +175,7 @@ final class snapshot_grading_test extends \advanced_testcase {
         global $DB;
         $workspace = $DB->get_record('vimipad_workspace', ['id' => $this->workspaceid]);
         $service = new snapshot_service();
-        $snapshot = $service->create_submission($workspace, 'conceptmap', $this->studentid);
+        $snapshot = $service->create_submission($this->instance, $workspace, $this->context, $this->studentid)['snapshot'];
 
         // Change the underlying node afterwards.
         $DB->set_field(
@@ -197,7 +201,7 @@ final class snapshot_grading_test extends \advanced_testcase {
 
         $workspace = $DB->get_record('vimipad_workspace', ['id' => $this->workspaceid]);
         $snapservice = new snapshot_service();
-        $snapshot = $snapservice->create_submission($workspace, 'conceptmap', $this->studentid);
+        $snapshot = $snapservice->create_submission($this->instance, $workspace, $this->context, $this->studentid)['snapshot'];
 
         $teacher = $this->getDataGenerator()->create_and_enrol($this->course, 'editingteacher');
 
@@ -271,7 +275,7 @@ final class snapshot_grading_test extends \advanced_testcase {
         $teacher = $this->getDataGenerator()->create_and_enrol($this->course, 'editingteacher');
         $workspace = $DB->get_record('vimipad_workspace', ['id' => $this->workspaceid]);
         $snapservice = new snapshot_service();
-        $snapshot = $snapservice->create_submission($workspace, 'conceptmap', $this->studentid);
+        $snapshot = $snapservice->create_submission($this->instance, $workspace, $this->context, $this->studentid)['snapshot'];
 
         $sink = $this->redirectEvents();
         $grading = new grading_service();
@@ -286,5 +290,59 @@ final class snapshot_grading_test extends \advanced_testcase {
             }
         }
         $this->assertTrue($found, 'snapshot_graded event was not triggered');
+    }
+
+    /**
+     * Submission is blocked once the cut-off date has passed.
+     *
+     * @return void
+     */
+    public function test_submission_blocked_after_cutoff(): void {
+        global $DB;
+        $workspace = $DB->get_record('vimipad_workspace', ['id' => $this->workspaceid], '*', MUST_EXIST);
+        $this->instance->cutoffdate = time() - 100;
+
+        $this->expectException(\moodle_exception::class);
+        (new snapshot_service())->create_submission($this->instance, $workspace, $this->context, $this->studentid);
+    }
+
+    /**
+     * With group consensus, the map is submitted only once every member has.
+     *
+     * @return void
+     */
+    public function test_group_consensus_pending_until_all_submit(): void {
+        global $DB;
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('vimipad', [
+            'course' => $course->id, 'collaborationmode' => 1, 'requireallteamsubmit' => 1,
+        ]);
+        $context = \context_module::instance($instance->cmid);
+        $u1 = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $u2 = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        groups_add_member($group, $u1);
+        groups_add_member($group, $u2);
+
+        $now = time();
+        $wsid = $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => null, 'groupid' => $group->id,
+            'currentrevision' => 1, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $workspace = $DB->get_record('vimipad_workspace', ['id' => $wsid], '*', MUST_EXIST);
+        $service = new snapshot_service();
+
+        // First member submits: pending, no snapshot, still unlocked.
+        $first = $service->create_submission($instance, $workspace, $context, (int) $u1->id);
+        $this->assertNull($first['snapshot']);
+        $this->assertSame(1, $first['pending']);
+        $this->assertSame(0, (int) $DB->get_field('vimipad_workspace', 'locked', ['id' => $wsid]));
+
+        // Second member submits: the map is submitted, locked and intents cleared.
+        $second = $service->create_submission($instance, $workspace, $context, (int) $u2->id);
+        $this->assertNotNull($second['snapshot']);
+        $this->assertSame(0, $second['pending']);
+        $this->assertSame(1, (int) $DB->get_field('vimipad_workspace', 'locked', ['id' => $wsid]));
+        $this->assertSame(0, $DB->count_records('vimipad_submissionintent', ['workspaceid' => $wsid]));
     }
 }

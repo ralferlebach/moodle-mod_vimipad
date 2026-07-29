@@ -47,6 +47,12 @@ class poll_changes extends external_api {
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'workspaceid' => new external_value(PARAM_INT, 'Workspace id'),
             'sincerevision' => new external_value(PARAM_INT, 'The revision the client already has'),
+            'layoutsince' => new external_value(
+                PARAM_INT,
+                'The layout modification time the client already has (0 = none)',
+                VALUE_DEFAULT,
+                0
+            ),
         ]);
     }
 
@@ -56,24 +62,32 @@ class poll_changes extends external_api {
      * @param int $cmid Course module id.
      * @param int $workspaceid Workspace id.
      * @param int $sincerevision The revision the client already has.
+     * @param int $layoutsince The layout modification time the client already has.
      * @return array The poll payload.
      */
-    public static function execute(int $cmid, int $workspaceid, int $sincerevision): array {
+    public static function execute(int $cmid, int $workspaceid, int $sincerevision, int $layoutsince = 0): array {
         global $DB;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'cmid' => $cmid,
             'workspaceid' => $workspaceid,
             'sincerevision' => $sincerevision,
+            'layoutsince' => $layoutsince,
         ]);
 
         helper::validate_workspace_for_edit($params['cmid'], $params['workspaceid'], $instance, $workspace);
 
         $operationservice = new operation_service();
+        $batch = 200;
         $operations = $operationservice->get_operations_since(
             (int) $workspace->id,
-            $params['sincerevision']
+            $params['sincerevision'],
+            $batch + 1
         );
+        $hasmore = count($operations) > $batch;
+        if ($hasmore) {
+            $operations = array_slice($operations, 0, $batch);
+        }
 
         $operationsout = [];
         foreach ($operations as $op) {
@@ -86,10 +100,18 @@ class poll_changes extends external_api {
         }
 
         $layoutservice = new layout_service();
-        $layoutjson = $layoutservice->get_layout_json((int) $workspace->id, $instance->defaultprofile);
+        $layout = $layoutservice->get_layout_since(
+            (int) $workspace->id,
+            $instance->defaultprofile,
+            (int) $params['layoutsince']
+        );
 
         $lockservice = new lock_service();
-        $lockservice->purge_expired((int) $workspace->id);
+        // Expired-lease cleanup is housekeeping, not needed on every read: run it
+        // occasionally rather than in the hot poll path.
+        if (mt_rand(1, 10) === 1) {
+            $lockservice->purge_expired((int) $workspace->id);
+        }
         $leases = [];
         foreach ($lockservice->get_active_leases((int) $workspace->id) as $lease) {
             $leases[] = [
@@ -105,7 +127,9 @@ class poll_changes extends external_api {
             'locked' => (int) $workspace->locked,
             'profile' => $instance->defaultprofile,
             'operations' => $operationsout,
-            'layoutjson' => $layoutjson,
+            'hasmore' => $hasmore,
+            'layoutjson' => $layout['layoutjson'],
+            'layouttime' => $layout['timemodified'],
             'leases' => $leases,
         ];
     }
@@ -126,7 +150,9 @@ class poll_changes extends external_api {
                 'payloadjson' => new external_value(PARAM_RAW, 'JSON payload'),
                 'userid' => new external_value(PARAM_INT, 'Acting user id'),
             ])),
-            'layoutjson' => new external_value(PARAM_RAW, 'Current layout JSON'),
+            'hasmore' => new external_value(PARAM_BOOL, 'True if more operations remain beyond this batch'),
+            'layoutjson' => new external_value(PARAM_RAW, 'Current layout JSON (empty when unchanged since layoutsince)'),
+            'layouttime' => new external_value(PARAM_INT, 'Layout modification time, to pass back as layoutsince'),
             'leases' => new external_multiple_structure(new external_single_structure([
                 'targettype' => new external_value(PARAM_ALPHA, 'Element type'),
                 'targetstableid' => new external_value(PARAM_ALPHANUMEXT, 'Element stable id'),

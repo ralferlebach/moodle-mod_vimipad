@@ -139,4 +139,28 @@ final class workspace_service_test extends \advanced_testcase {
 
         $this->assertEquals((int) $group->id, (int) $ws->groupid);
     }
+
+    /**
+     * Reopening a locked workspace unlocks it for revision.
+     *
+     * @return void
+     */
+    public function test_reopen_unlocks(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
+        $now = time();
+        $wsid = $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
+            'currentrevision' => 3, 'locked' => 1, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        (new workspace_service())->reopen((int) $wsid);
+
+        $this->assertSame(0, (int) $DB->get_field('vimipad_workspace', 'locked', ['id' => $wsid]));
+        // The revision (and thus the map) is untouched.
+        $this->assertSame(3, (int) $DB->get_field('vimipad_workspace', 'currentrevision', ['id' => $wsid]));
+    }
 }

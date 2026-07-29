@@ -20,6 +20,9 @@
         <FIELD NAME="completionsubmit" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if submitting a snapshot completes the activity"/>
         <FIELD NAME="completionminnodes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Minimum number of concepts required to complete (0 = rule off)"/>
         <FIELD NAME="completiongraded" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if the activity completes once the submission is graded"/>
+        <FIELD NAME="duedate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Submissions after this time are marked late (0 = no due date)"/>
+        <FIELD NAME="cutoffdate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Submissions are blocked after this time (0 = no cut-off)"/>
+        <FIELD NAME="requireallteamsubmit" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if every group member must submit before the group map is submitted"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
@@ -199,6 +202,22 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="workspaceid-status" UNIQUE="false" FIELDS="workspaceid, status"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_submissionintent" COMMENT="Per-member submit intent for group consensus submission">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="FK to the group workspace"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Group member who signalled readiness to submit"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-userid" UNIQUE="true" FIELDS="workspaceid, userid"/>
       </INDEXES>
     </TABLE>
 
