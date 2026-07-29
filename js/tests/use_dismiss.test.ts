@@ -23,7 +23,7 @@
 
 import React, {useRef} from 'react';
 import {createRoot, Root} from 'react-dom/client';
-import {act} from 'react-dom/test-utils';
+import {act} from 'react';
 import {useDismiss} from '../src/hooks/use_dismiss';
 
 // Mark the environment so React's effects flush synchronously under act().

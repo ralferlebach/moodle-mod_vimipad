@@ -4,7 +4,33 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.5** (2026072685).
+> release is **0.5.7** (2026072687).
+
+## 0.5.7 (2026072687) — read-only foreign viewing
+
+- **Read-only live viewing.** When a user opens a map that is not their own
+  (in group mode, a group they do not belong to), the editor loads it read-only:
+  the API client blocks every state-mutating web-service call at a single choke
+  point, the submit/insert/import/journal affordances are hidden, and a notice is
+  shown — while polling keeps the view live. `view.php` determines the read-only
+  state and passes it to the editor.
+- Test tidy-up: the hook render test now uses `React.act` instead of the
+  deprecated `react-dom/test-utils` export.
+
+## 0.5.6 (2026072686) — tabbed activity UI (shell)
+
+First step of the reorganised activity surface: the tabs become the primary
+structure, rendered server-side directly under the activity heading and menu.
+
+- **Server-rendered tab bar.** `view.php` now presents role-gated tabs (Canvas,
+  List, Journal & submission, Grading, Feedback, Tools). The active tab travels
+  in the URL alongside the native group selection, so both persist across tabs
+  and are shareable. The Canvas and List tabs mount the editor with the matching
+  initial view; Grading keeps the submissions list; the remaining tabs are
+  placeholders filled by later steps.
+- Groundwork only: the deeper editor rework (foreign read-only viewing via a
+  user selector, dynamic canvas height, moved submit button) and the Journal,
+  Feedback and Tools tab contents follow in subsequent 0.6.x steps.
 
 ## 0.5.5 (2026072685) — deadlines & group consensus submission
 

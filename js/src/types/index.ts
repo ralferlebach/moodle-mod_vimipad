@@ -152,6 +152,10 @@ export interface MountConfig {
     cmid: number;
     /** Active group id for group collaboration mode (0 = auto-select). */
     groupid?: number;
+    /** Which view opens first, driven by the surrounding Moodle tab. */
+    initialView?: 'canvas' | 'list';
+    /** If true, the map is foreign: view live but block all edits. */
+    readonly?: boolean;
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */

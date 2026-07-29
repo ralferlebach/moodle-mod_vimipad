@@ -81,6 +81,8 @@ interface Props {
     t: (key: string) => string;
     /** Active group id for group collaboration mode (0 = auto-select). */
     groupid?: number;
+    /** Which view opens first (set by the surrounding Moodle tab). */
+    initialView?: ViewMode;
 }
 
 type ViewMode = 'canvas' | 'list';
@@ -98,9 +100,9 @@ const EMPTY: EditorState = {
  * @returns The rendered editor.
  */
 export function EditorApp(props: Props): React.ReactElement {
-    const {api, t, groupid = 0} = props;
+    const {api, t, groupid = 0, initialView = 'canvas'} = props;
     const [state, dispatch] = useReducer(reduce, EMPTY);
-    const [view, setView] = useState<ViewMode>('canvas');
+    const [view, setView] = useState<ViewMode>(initialView);
     const [stored, setStored] = useState<LayoutMap>({});
     const [sizes, setSizes] = useState<SizeMap>({});
     const [loading, setLoading] = useState(true);
@@ -236,7 +238,8 @@ export function EditorApp(props: Props): React.ReactElement {
         () => computeLayout(state.nodes, stored, state.relations, state.profile),
         [state.nodes, stored, state.relations, state.profile]
     );
-    const disabled = busy || loading || state.locked === 1;
+    const readonly = api.isReadonly();
+    const disabled = busy || loading || state.locked === 1 || readonly;
 
     const runOperation = useCallback(async (
         type: string,
@@ -732,7 +735,7 @@ export function EditorApp(props: Props): React.ReactElement {
         </fieldset>
     );
 
-    const submitButton = state.locked !== 1 ? (
+    const submitButton = (state.locked !== 1 && !readonly) ? (
         <button
             type="button"
             className="btn btn-success"
@@ -748,6 +751,9 @@ export function EditorApp(props: Props): React.ReactElement {
             <div className="vimipad-sr-only" role="status" aria-live="polite">{status}</div>
             {error && <div className="alert alert-danger" role="alert">{error}</div>}
             {notice && <div className="alert alert-info" role="status">{notice}</div>}
+            {readonly && (
+                <div className="alert alert-info" role="status">{t('editor:readonly')}</div>
+            )}
             {state.locked === 1 && (
                 <div className="alert alert-warning" role="status">{t('editor:locked')}</div>
             )}
@@ -857,7 +863,7 @@ export function EditorApp(props: Props): React.ReactElement {
                     type="button"
                     className="btn btn-outline-secondary btn-sm"
                     onClick={() => importInputRef.current?.click()}
-                    disabled={state.locked === 1}
+                    disabled={state.locked === 1 || readonly}
                 >
                     {t('editor:import')}
                 </button>
@@ -866,7 +872,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         type="checkbox"
                         checked={importReplace}
                         onChange={(e) => setImportReplace(e.target.checked)}
-                        disabled={state.locked === 1}
+                        disabled={state.locked === 1 || readonly}
                     />{' '}
                     {t('editor:importreplace')}
                 </label>

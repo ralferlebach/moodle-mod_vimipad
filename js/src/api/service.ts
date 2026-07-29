@@ -36,17 +36,57 @@ export interface ApplyResult {
     stableid: string;
 }
 
+/** Web-service methods that mutate state; blocked in read-only mode. */
+const WRITE_METHODS = new Set<string>([
+    'mod_vimipad_apply_operation',
+    'mod_vimipad_save_layout',
+    'mod_vimipad_create_snapshot',
+    'mod_vimipad_import_map',
+    'mod_vimipad_add_journal_entry',
+    'mod_vimipad_acquire_lock',
+    'mod_vimipad_renew_lock',
+    'mod_vimipad_release_lock',
+]);
+
+/**
+ * Wrap a transport so every state-mutating call is rejected. Reads and polling
+ * pass through unchanged, so a foreign map can still be viewed live.
+ *
+ * @param transport The underlying transport.
+ * @returns A transport that blocks writes.
+ */
+function readonlyGuard(transport: ServiceTransport): ServiceTransport {
+    return (methodname: string, args: Record<string, unknown>): Promise<unknown> => {
+        if (WRITE_METHODS.has(methodname)) {
+            return Promise.reject(new Error('vimipad:readonly'));
+        }
+        return transport(methodname, args);
+    };
+}
+
 export class ApiClient {
     private readonly transport: ServiceTransport;
     private readonly cmid: number;
+    private readonly readonly: boolean;
 
     /**
      * @param transport The call transport.
      * @param cmid The course module id.
+     * @param readonly If true, all mutating calls are blocked (foreign view).
      */
-    constructor(transport: ServiceTransport, cmid: number) {
-        this.transport = transport;
+    constructor(transport: ServiceTransport, cmid: number, readonly = false) {
+        this.readonly = readonly;
+        this.transport = readonly ? readonlyGuard(transport) : transport;
         this.cmid = cmid;
+    }
+
+    /**
+     * Whether this client is in read-only mode (viewing a foreign map).
+     *
+     * @returns True if writes are blocked.
+     */
+    isReadonly(): boolean {
+        return this.readonly;
     }
 
     /**

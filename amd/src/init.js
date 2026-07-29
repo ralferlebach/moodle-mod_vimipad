@@ -48,7 +48,7 @@ const STRING_KEYS = [
     'editor:dragnodes', 'editor:export', 'editor:line_curved', 'editor:line_orthogonal',
     'editor:line_straight', 'editor:listview', 'editor:loading',
     'editor:locked', 'editor:nodelabel', 'editor:norelations', 'editor:normalview', 'editor:object',
-    'editor:rearrange', 'editor:redo', 'editor:undo',
+    'editor:readonly', 'editor:rearrange', 'editor:redo', 'editor:undo',
     'editor:relation', 'editor:relations', 'editor:reledit',
     'editor:reverse', 'editor:retarget', 'editor:revision',
     'editor:subject', 'editor:submit', 'editor:submitconfirm', 'editor:submitpending',
@@ -122,6 +122,8 @@ export const init = async(cmid, selector = 'vimipad-editor-root') => {
         editor.mount(element, {
             cmid,
             groupid: parseInt(element.dataset.groupid || '0', 10),
+            initialView: element.dataset.view === 'list' ? 'list' : 'canvas',
+            readonly: element.dataset.readonly === '1',
             callService: buildTransport(),
             getString: (key) => strings[key] ?? key,
         });

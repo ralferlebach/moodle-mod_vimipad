@@ -89,32 +89,36 @@ export function JournalPanel(props: Props): React.ReactElement | null {
         <details className="vimipad-journal">
             <summary>{t('editor:journal')}</summary>
             <div className="vimipad-journal-body">
-                <textarea
-                    className="form-control vimipad-journal-input"
-                    rows={3}
-                    value={text}
-                    placeholder={t('editor:journalnew')}
-                    aria-label={t('editor:journalnew')}
-                    onChange={(e) => setText(e.target.value)}
-                />
-                <div className="vimipad-journal-controls">
-                    <label className="vimipad-journal-visibility">
-                        <input
-                            type="checkbox"
-                            checked={teacherVisible}
-                            onChange={(e) => setTeacherVisible(e.target.checked)}
-                        />{' '}
-                        {t('editor:journalteachervisible')}
-                    </label>
-                    <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        onClick={() => void submit()}
-                        disabled={busy || text.trim() === ''}
-                    >
-                        {t('editor:journalsave')}
-                    </button>
-                </div>
+                {!api.isReadonly() && (
+                    <>
+                        <textarea
+                            className="form-control vimipad-journal-input"
+                            rows={3}
+                            value={text}
+                            placeholder={t('editor:journalnew')}
+                            aria-label={t('editor:journalnew')}
+                            onChange={(e) => setText(e.target.value)}
+                        />
+                        <div className="vimipad-journal-controls">
+                            <label className="vimipad-journal-visibility">
+                                <input
+                                    type="checkbox"
+                                    checked={teacherVisible}
+                                    onChange={(e) => setTeacherVisible(e.target.checked)}
+                                />{' '}
+                                {t('editor:journalteachervisible')}
+                            </label>
+                            <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                onClick={() => void submit()}
+                                disabled={busy || text.trim() === ''}
+                            >
+                                {t('editor:journalsave')}
+                            </button>
+                        </div>
+                    </>
+                )}
                 {error && <div className="alert alert-danger" role="alert">{error}</div>}
                 <ul className="vimipad-journal-list">
                     {entries.map((entry) => (
