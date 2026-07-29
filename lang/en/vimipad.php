@@ -189,6 +189,7 @@ $string['feedback'] = 'Feedback';
 $string['grade'] = 'Grade';
 $string['gradeoutof'] = 'Grade (out of {$a})';
 $string['gradesaved'] = 'Grade saved.';
+$string['gradetab:back'] = 'Back to submissions';
 $string['gradetab:size'] = 'Concepts / relations';
 $string['gradetitle'] = 'View and grade snapshot';
 $string['journal:atrevision'] = 'at revision {$a}';

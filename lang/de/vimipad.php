@@ -189,6 +189,7 @@ $string['feedback'] = 'Feedback';
 $string['grade'] = 'Bewertung';
 $string['gradeoutof'] = 'Bewertung (von {$a})';
 $string['gradesaved'] = 'Bewertung gespeichert.';
+$string['gradetab:back'] = 'Zurück zur Übersicht';
 $string['gradetab:size'] = 'Begriffe / Relationen';
 $string['gradetitle'] = 'Snapshot ansehen und bewerten';
 $string['journal:atrevision'] = 'bei Revision {$a}';

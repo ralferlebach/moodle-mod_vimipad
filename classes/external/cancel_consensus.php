@@ -20,7 +20,6 @@ use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use mod_vimipad\local\service\consensus_service;
-use mod_vimipad\local\service\workspace_service;
 
 /**
  * External function: cancel the group-consensus submission process.
@@ -47,33 +46,11 @@ class cancel_consensus extends external_api {
      * @return array
      */
     public static function execute(int $cmid, int $groupid = 0): array {
-        global $USER, $DB;
+        global $USER;
 
-        $params = self::validate_parameters(
-            helper::consensus_parameters(),
-            ['cmid' => $cmid, 'groupid' => $groupid]
-        );
-
-        [, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
-        $context = \context_module::instance($cm->id);
-        self::validate_context($context);
-        require_capability('mod/vimipad:submit', $context);
-
-        $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
-        $workspace = (new workspace_service())->get_or_create_for_user(
-            $instance,
-            $context,
-            (int) $USER->id,
-            $params['groupid'] ?: null
-        );
-
-        $service = new consensus_service();
-        $service->cancel($instance, $workspace, $context, (int) $USER->id);
-
-        $fresh = $DB->get_record('vimipad_workspace', ['id' => (int) $workspace->id], '*', MUST_EXIST);
-        $status = $service->get_status($instance, $fresh, $context);
-
-        return helper::consensus_payload($status, 0);
+        [$instance, $workspace, $context] = helper::consensus_context($cmid, $groupid, 'mod/vimipad:submit');
+        (new consensus_service())->cancel($instance, $workspace, $context, (int) $USER->id);
+        return helper::consensus_result($instance, $workspace, $context, 0);
     }
 
     /**

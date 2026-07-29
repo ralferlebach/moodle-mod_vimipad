@@ -136,7 +136,7 @@ class get_workspace extends external_api {
      * @param \stdClass $node The node record.
      * @return array
      */
-    private static function map_node(\stdClass $node): array {
+    public static function map_node(\stdClass $node): array {
         return [
             'stableid' => $node->stableid,
             'type' => $node->type,
@@ -153,7 +153,7 @@ class get_workspace extends external_api {
      * @param \stdClass $relation The relation record.
      * @return array
      */
-    private static function map_relation(\stdClass $relation): array {
+    public static function map_relation(\stdClass $relation): array {
         return [
             'stableid' => $relation->stableid,
             'sourceid' => $relation->sourceid,

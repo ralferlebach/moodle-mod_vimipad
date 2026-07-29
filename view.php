@@ -210,6 +210,30 @@ if (
     }
     redirect($journalurl, $notice);
 }
+
+// Handle grading actions (Grading tab with a submission selected). Runs before
+// output so POST handlers can redirect; a GET is a no-op.
+$gradesnapshot = null;
+$gradeworkspace = null;
+$gradesnapshotid = ($tab === 'grade') ? optional_param('snapshotid', 0, PARAM_INT) : 0;
+if ($gradesnapshotid && $cangrade) {
+    $gradesnapshot = $DB->get_record('vimipad_snapshot', ['id' => $gradesnapshotid], '*', MUST_EXIST);
+    $gradeworkspace = $DB->get_record(
+        'vimipad_workspace',
+        ['id' => $gradesnapshot->workspaceid, 'vimipadid' => $instance->id],
+        '*',
+        MUST_EXIST
+    );
+    \mod_vimipad\local\output\grading_panel::handle_action(
+        $cm,
+        $course,
+        $context,
+        $instance,
+        $gradesnapshot,
+        $gradeworkspace
+    );
+}
+
 $tabtree = [];
 foreach ($availabletabs as $key) {
     $taburl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => $key]);
@@ -289,7 +313,20 @@ switch ($tab) {
         break;
 
     case 'grade':
-        // Submissions to grade (moves into a full grading tab in a later step).
+        if ($gradesnapshot !== null) {
+            // Single-submission grading detail.
+            echo $OUTPUT->heading(get_string('gradetitle', 'mod_vimipad'), 3);
+            \mod_vimipad\local\output\grading_panel::render(
+                $cm,
+                $context,
+                $instance,
+                $gradesnapshot,
+                $gradeworkspace
+            );
+            break;
+        }
+
+        // Submissions list.
         echo $OUTPUT->heading(get_string('submissions', 'mod_vimipad'), 3);
         echo html_writer::div(html_writer::link(
             new moodle_url('/mod/vimipad/report.php', ['cmid' => $cm->id]),
@@ -349,10 +386,7 @@ switch ($tab) {
                 } else {
                     $who = get_string('mode_course', 'mod_vimipad');
                 }
-                $gradeurl = new moodle_url(
-                    '/mod/vimipad/grade.php',
-                    ['id' => $cm->id, 'snapshotid' => $sub->snapshotid]
-                );
+                $gradeurl = \mod_vimipad\local\output\grading_panel::detail_url($cm, (int) $sub->snapshotid);
                 $size = (int) ($nodecounts[$sub->workspaceid] ?? 0) . ' / '
                     . (int) ($relationcounts[$sub->workspaceid] ?? 0);
                 $table->data[] = [

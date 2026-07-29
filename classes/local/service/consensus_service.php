@@ -178,34 +178,20 @@ class consensus_service {
     ): array {
         global $DB;
 
-        $now = time();
-        if ((int) $instance->cutoffdate > 0 && $now > (int) $instance->cutoffdate) {
-            throw new \moodle_exception('error:submissionclosed', 'mod_vimipad');
-        }
-
-        $lockfactory = \core\lock\lock_config::get_lock_factory('mod_vimipad_workspace');
-        $lock = $lockfactory->get_lock('submit_' . (int) $workspace->id, 10);
-        if (!$lock) {
-            throw new \moodle_exception('error:workspacelocked', 'mod_vimipad');
-        }
+        $snapshotservice = new snapshot_service();
+        [$lock, $fresh] = $snapshotservice->begin_submission($instance, $workspace);
 
         try {
-            $fresh = $DB->get_record('vimipad_workspace', ['id' => (int) $workspace->id], '*', MUST_EXIST);
-            if ((int) $fresh->locked === 1) {
-                throw new \moodle_exception('error:alreadysubmitted', 'mod_vimipad');
-            }
-
             if (
                 !$DB->record_exists('vimipad_submissionintent', [
                 'workspaceid' => (int) $fresh->id, 'userid' => $userid,
                 ])
             ) {
                 $DB->insert_record('vimipad_submissionintent', (object) [
-                    'workspaceid' => (int) $fresh->id, 'userid' => $userid, 'timecreated' => $now,
+                    'workspaceid' => (int) $fresh->id, 'userid' => $userid, 'timecreated' => time(),
                 ]);
             }
 
-            $snapshotservice = new snapshot_service();
             $required = $snapshotservice->consensus_required_userids($fresh, $context);
             $have = $DB->get_fieldset_select(
                 'vimipad_submissionintent',

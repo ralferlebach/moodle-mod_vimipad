@@ -1,0 +1,473 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+namespace mod_vimipad\local\output;
+
+use context_module;
+use html_writer;
+use html_table;
+use moodle_url;
+use stdClass;
+use mod_vimipad\local\service\ai_feedback_service;
+use mod_vimipad\local\service\grading_service;
+use mod_vimipad\local\service\journal_service;
+use mod_vimipad\local\service\workspace_service;
+
+/**
+ * Renders the grading detail for one submission and processes its actions.
+ *
+ * Extracted so the grading UI can live inside the activity's Grading tab (and
+ * the legacy grade.php can redirect to it) without duplicating logic. All
+ * writes are capability-, context- and sesskey-checked by the caller/handler.
+ *
+ * @package    mod_vimipad
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class grading_panel {
+    /**
+     * The Grading-tab URL showing a single submission's detail.
+     *
+     * @param stdClass $cm The course module.
+     * @param int $snapshotid The snapshot id.
+     * @return moodle_url
+     */
+    public static function detail_url(stdClass $cm, int $snapshotid): moodle_url {
+        return new moodle_url('/mod/vimipad/view.php', [
+            'id' => $cm->id, 'tab' => 'grade', 'snapshotid' => $snapshotid,
+        ]);
+    }
+
+    /**
+     * Process a grading POST action (if any) and redirect. No-op otherwise.
+     *
+     * @param stdClass $cm The course module.
+     * @param stdClass $course The course.
+     * @param context_module $context The module context.
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $snapshot The snapshot being graded.
+     * @param stdClass $workspace The snapshot's workspace.
+     * @return void
+     */
+    public static function handle_action(
+        stdClass $cm,
+        stdClass $course,
+        context_module $context,
+        stdClass $instance,
+        stdClass $snapshot,
+        stdClass $workspace
+    ): void {
+        global $DB, $USER;
+
+        $snapshotid = (int) $snapshot->id;
+        $pageurl = self::detail_url($cm, $snapshotid);
+
+        if (optional_param('addannotation', 0, PARAM_BOOL) && confirm_sesskey()) {
+            $rawtarget = optional_param('annotationtarget', 'map', PARAM_RAW);
+            $targettype = 'map';
+            $targetstableid = '';
+            if (strpos($rawtarget, ':') !== false) {
+                [$ttype, $tid] = explode(':', $rawtarget, 2);
+                if (in_array($ttype, ['node', 'relation'], true)) {
+                    $targettype = $ttype;
+                    $targetstableid = clean_param($tid, PARAM_ALPHANUMEXT);
+                }
+            }
+            $commenttext = required_param('commenttext', PARAM_TEXT);
+            if (trim($commenttext) !== '') {
+                $DB->insert_record('vimipad_annotation', (object) [
+                    'snapshotid' => $snapshotid,
+                    'targettype' => $targettype,
+                    'targetstableid' => $targetstableid !== '' ? $targetstableid : null,
+                    'commenttext' => $commenttext,
+                    'commentformat' => FORMAT_PLAIN,
+                    'userid' => $USER->id,
+                    'timecreated' => time(),
+                    'timemodified' => time(),
+                ]);
+            }
+            redirect($pageurl, get_string('annotationadded', 'mod_vimipad'));
+        }
+
+        if (optional_param('genai', 0, PARAM_BOOL) && confirm_sesskey()) {
+            require_capability('mod/vimipad:useai', $context);
+            $notes = optional_param('ainotes', '', PARAM_TEXT);
+            $points = optional_param('aipoints', '', PARAM_RAW_TRIMMED);
+            $pointsval = ($points === '') ? null : (int) $points;
+
+            if (!ai_feedback_service::is_available($context, $instance)) {
+                redirect(
+                    $pageurl,
+                    get_string('error:aiunavailable', 'mod_vimipad'),
+                    null,
+                    \core\output\notification::NOTIFY_ERROR
+                );
+            }
+            if (!ai_feedback_service::policy_accepted((int) $USER->id)) {
+                redirect(
+                    $pageurl,
+                    get_string('ai:policyrequired', 'mod_vimipad'),
+                    null,
+                    \core\output\notification::NOTIFY_WARNING
+                );
+            }
+            try {
+                (new ai_feedback_service())->generate_draft(
+                    $context,
+                    $instance,
+                    $snapshot,
+                    $notes,
+                    $pointsval,
+                    (int) $USER->id
+                );
+                redirect($pageurl, get_string('ai:draftgenerated', 'mod_vimipad'));
+            } catch (\moodle_exception $e) {
+                redirect($pageurl, $e->getMessage(), null, \core\output\notification::NOTIFY_ERROR);
+            }
+        }
+
+        if (optional_param('acceptai', 0, PARAM_BOOL) && confirm_sesskey()) {
+            require_capability('mod/vimipad:useai', $context);
+            $aifeedbackid = required_param('aifeedbackid', PARAM_INT);
+            $acceptedtext = required_param('acceptedtext', PARAM_TEXT);
+            (new ai_feedback_service())->accept_draft($aifeedbackid, $snapshotid, $acceptedtext);
+            redirect($pageurl, get_string('ai:draftaccepted', 'mod_vimipad'));
+        }
+
+        if (optional_param('savegrade', 0, PARAM_BOOL) && confirm_sesskey()) {
+            $gradeval = optional_param('grade', '', PARAM_RAW_TRIMMED);
+            $feedback = optional_param('feedback', '', PARAM_TEXT);
+            $rawgrade = ($gradeval === '') ? null : (float) $gradeval;
+            (new grading_service())->save_grade(
+                $instance,
+                $workspace,
+                $snapshotid,
+                $rawgrade,
+                $feedback,
+                FORMAT_PLAIN,
+                (int) $USER->id
+            );
+            redirect(
+                new moodle_url('/mod/vimipad/view.php', ['id' => $cm->id, 'tab' => 'grade']),
+                get_string('gradesaved', 'mod_vimipad')
+            );
+        }
+
+        if (optional_param('reopen', 0, PARAM_BOOL) && confirm_sesskey()) {
+            (new workspace_service())->reopen((int) $workspace->id);
+            redirect($pageurl, get_string('reopened', 'mod_vimipad'));
+        }
+    }
+
+    /**
+     * Render the grading detail for a snapshot.
+     *
+     * @param stdClass $cm The course module.
+     * @param context_module $context The module context.
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $snapshot The snapshot being graded.
+     * @param stdClass $workspace The snapshot's workspace.
+     * @return void
+     */
+    public static function render(
+        stdClass $cm,
+        context_module $context,
+        stdClass $instance,
+        stdClass $snapshot,
+        stdClass $workspace
+    ): void {
+        global $DB, $USER, $OUTPUT;
+
+        $snapshotid = (int) $snapshot->id;
+        $pageurl = self::detail_url($cm, $snapshotid);
+
+        // Back to the submissions list.
+        echo html_writer::div(html_writer::link(
+            new moodle_url('/mod/vimipad/view.php', ['id' => $cm->id, 'tab' => 'grade']),
+            get_string('gradetab:back', 'mod_vimipad'),
+            ['class' => 'btn btn-sm btn-outline-secondary']
+        ), 'mb-3');
+
+        // Offer to reopen the workspace for revision while it is locked.
+        if ((int) $workspace->locked === 1) {
+            echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false), 'class' => 'mb-3']);
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'reopen', 'value' => 1]);
+            echo html_writer::tag('p', get_string('reopen_help', 'mod_vimipad'), ['class' => 'text-muted small mb-1']);
+            echo html_writer::empty_tag('input', [
+                'type' => 'submit',
+                'value' => get_string('reopen', 'mod_vimipad'),
+                'class' => 'btn btn-outline-secondary',
+            ]);
+            echo html_writer::end_tag('form');
+        }
+
+        // Render the snapshot read-only.
+        $data = json_decode($snapshot->snapshotjson, true);
+        $labels = [];
+        foreach (($data['nodes'] ?? []) as $node) {
+            $labels[$node['stableid']] = $node['label'];
+        }
+
+        echo html_writer::tag('h3', get_string('profile_' . $data['profile'], 'mod_vimipad'));
+        echo html_writer::tag('h4', get_string('editor:relations', 'mod_vimipad'));
+        if (empty($data['relations'])) {
+            echo html_writer::tag('p', get_string('editor:norelations', 'mod_vimipad'), ['class' => 'text-muted']);
+        } else {
+            $table = new html_table();
+            $table->head = [
+                get_string('editor:subject', 'mod_vimipad'),
+                get_string('editor:relation', 'mod_vimipad'),
+                get_string('editor:object', 'mod_vimipad'),
+            ];
+            foreach ($data['relations'] as $rel) {
+                $table->data[] = [
+                    s($labels[$rel['sourceid']] ?? $rel['sourceid']),
+                    s($rel['label'] !== '' ? $rel['label'] : $rel['type']),
+                    s($labels[$rel['targetid']] ?? $rel['targetid']),
+                ];
+            }
+            echo html_writer::table($table);
+        }
+
+        // Existing annotations.
+        $annotations = $DB->get_records('vimipad_annotation', ['snapshotid' => $snapshotid], 'timecreated ASC');
+        if ($annotations) {
+            echo html_writer::tag('h4', get_string('annotations', 'mod_vimipad'));
+            $list = [];
+            foreach ($annotations as $annotation) {
+                $target = $annotation->targetstableid && isset($labels[$annotation->targetstableid])
+                    ? $labels[$annotation->targetstableid] : $annotation->targettype;
+                $list[] = html_writer::tag('li', s($target) . ': ' . s($annotation->commenttext));
+            }
+            echo html_writer::tag('ul', implode('', $list));
+        }
+
+        // Teacher-visible learner journal for this workspace.
+        $journal = (new journal_service())->get_teacher_visible((int) $snapshot->workspaceid);
+        if ($journal) {
+            echo html_writer::tag('h4', get_string('journal:teacherheading', 'mod_vimipad'), ['class' => 'mt-4']);
+            $authorids = [];
+            foreach ($journal as $entry) {
+                $authorids[(int) $entry->userid] = true;
+            }
+            $authors = empty($authorids) ? [] : $DB->get_records_list('user', 'id', array_keys($authorids));
+            $jitems = [];
+            foreach ($journal as $entry) {
+                $author = $authors[$entry->userid] ?? null;
+                $meta = ($author ? fullname($author) : (string) $entry->userid) . ' · ' . userdate($entry->timecreated);
+                $jitems[] = html_writer::tag(
+                    'li',
+                    html_writer::tag('div', s($meta), ['class' => 'text-muted small']) .
+                    html_writer::tag('div', s($entry->entrytext)),
+                    ['class' => 'mb-2']
+                );
+            }
+            echo html_writer::tag('ul', implode('', $jitems), ['class' => 'list-unstyled']);
+        }
+
+        self::render_annotation_form($pageurl, $data, $labels);
+        $acceptedforfeedback = self::render_ai_assistance($context, $instance, $snapshot, $pageurl);
+        self::render_grade_form($instance, $workspace, $pageurl, $acceptedforfeedback);
+    }
+
+    /**
+     * Render the add-annotation form.
+     *
+     * @param moodle_url $pageurl The form action URL.
+     * @param array $data The decoded snapshot.
+     * @param array $labels stableid => label map.
+     * @return void
+     */
+    private static function render_annotation_form(moodle_url $pageurl, array $data, array $labels): void {
+        echo html_writer::tag('h4', get_string('addannotation', 'mod_vimipad'));
+        echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'addannotation', 'value' => 1]);
+
+        $targetoptions = ['map' => get_string('annotationtarget_map', 'mod_vimipad')];
+        foreach (($data['nodes'] ?? []) as $node) {
+            $targetoptions['node:' . $node['stableid']] =
+                get_string('annotationtarget_node', 'mod_vimipad', $node['label']);
+        }
+        foreach (($data['relations'] ?? []) as $rel) {
+            if (empty($rel['stableid'])) {
+                continue;
+            }
+            $rlabel = $rel['label'] !== ''
+                ? $rel['label']
+                : (($labels[$rel['sourceid']] ?? '?') . ' → ' . ($labels[$rel['targetid']] ?? '?'));
+            $targetoptions['relation:' . $rel['stableid']] =
+                get_string('annotationtarget_relation', 'mod_vimipad', $rlabel);
+        }
+        echo html_writer::tag(
+            'label',
+            get_string('annotationtarget', 'mod_vimipad'),
+            ['for' => 'vimipad-annotation-target']
+        );
+        echo html_writer::select(
+            $targetoptions,
+            'annotationtarget',
+            'map',
+            false,
+            ['id' => 'vimipad-annotation-target', 'class' => 'form-select mb-2']
+        );
+        echo html_writer::tag(
+            'label',
+            get_string('annotationtext', 'mod_vimipad'),
+            ['for' => 'vimipad-annotation-text']
+        );
+        echo html_writer::tag(
+            'textarea',
+            '',
+            ['id' => 'vimipad-annotation-text', 'name' => 'commenttext', 'rows' => 3, 'class' => 'form-control']
+        );
+        echo html_writer::empty_tag(
+            'input',
+            ['type' => 'submit', 'value' => get_string('add', 'mod_vimipad'), 'class' => 'btn btn-secondary mt-2']
+        );
+        echo html_writer::end_tag('form');
+    }
+
+    /**
+     * Render the AI feedback assistance block.
+     *
+     * @param context_module $context The module context.
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $snapshot The snapshot.
+     * @param moodle_url $pageurl The form action URL.
+     * @return string The accepted AI text, for pre-filling feedback (or '').
+     */
+    private static function render_ai_assistance(
+        context_module $context,
+        stdClass $instance,
+        stdClass $snapshot,
+        moodle_url $pageurl
+    ): string {
+        global $USER;
+
+        if (!ai_feedback_service::is_available($context, $instance)) {
+            return '';
+        }
+        $snapshotid = (int) $snapshot->id;
+        $latest = (new ai_feedback_service())->get_latest($snapshotid);
+
+        echo html_writer::tag('h4', get_string('ai:heading', 'mod_vimipad'), ['class' => 'mt-4']);
+        echo html_writer::tag('p', get_string('ai:intro', 'mod_vimipad'), ['class' => 'text-muted']);
+        if (!ai_feedback_service::policy_accepted((int) $USER->id)) {
+            echo html_writer::div(get_string('ai:policyrequired', 'mod_vimipad'), 'alert alert-warning');
+        }
+
+        echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'genai', 'value' => 1]);
+        echo html_writer::tag('label', get_string('ai:notes', 'mod_vimipad'), ['for' => 'vimipad-ai-notes']);
+        echo html_writer::tag(
+            'textarea',
+            '',
+            ['id' => 'vimipad-ai-notes', 'name' => 'ainotes', 'rows' => 2, 'class' => 'form-control']
+        );
+        echo html_writer::empty_tag('input', [
+            'type' => 'submit', 'value' => get_string('ai:generate', 'mod_vimipad'),
+            'class' => 'btn btn-outline-primary mt-2',
+        ]);
+        echo html_writer::end_tag('form');
+
+        if ($latest && $latest->drafttext !== null && $latest->drafttext !== '') {
+            echo html_writer::tag('h5', get_string('ai:draft', 'mod_vimipad'), ['class' => 'mt-3']);
+            if (!empty($latest->providerinfo)) {
+                echo html_writer::tag('p', s($latest->providerinfo), ['class' => 'text-muted small']);
+            }
+            echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'acceptai', 'value' => 1]);
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'aifeedbackid', 'value' => $latest->id]);
+            echo html_writer::tag('label', get_string('ai:editaccept', 'mod_vimipad'), ['for' => 'vimipad-ai-accepted']);
+            $draftshown = $latest->acceptedtext !== null && $latest->acceptedtext !== ''
+                ? $latest->acceptedtext : $latest->drafttext;
+            echo html_writer::tag(
+                'textarea',
+                s($draftshown),
+                ['id' => 'vimipad-ai-accepted', 'name' => 'acceptedtext', 'rows' => 6, 'class' => 'form-control']
+            );
+            echo html_writer::empty_tag('input', [
+                'type' => 'submit', 'value' => get_string('ai:accept', 'mod_vimipad'),
+                'class' => 'btn btn-primary mt-2',
+            ]);
+            echo html_writer::end_tag('form');
+        }
+
+        if ($latest && $latest->acceptedtext !== null && $latest->acceptedtext !== '') {
+            return (string) $latest->acceptedtext;
+        }
+        return '';
+    }
+
+    /**
+     * Render the grade form.
+     *
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $workspace The workspace.
+     * @param moodle_url $pageurl The form action URL.
+     * @param string $acceptedforfeedback Accepted AI text to pre-fill (or '').
+     * @return void
+     */
+    private static function render_grade_form(
+        stdClass $instance,
+        stdClass $workspace,
+        moodle_url $pageurl,
+        string $acceptedforfeedback
+    ): void {
+        global $DB;
+
+        echo html_writer::tag('h4', get_string('grade', 'mod_vimipad'), ['class' => 'mt-4']);
+        $currentgrade = $DB->get_record(
+            'vimipad_grade',
+            ['vimipadid' => $instance->id, 'userid' => $workspace->userid]
+        );
+
+        echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+        echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'savegrade', 'value' => 1]);
+        echo html_writer::tag('label', get_string('gradeoutof', 'mod_vimipad', $instance->grade), ['for' => 'vimipad-grade']);
+        echo html_writer::empty_tag('input', [
+            'type' => 'number', 'step' => 'any', 'min' => 0, 'max' => $instance->grade,
+            'id' => 'vimipad-grade', 'name' => 'grade', 'class' => 'form-control',
+            'value' => $currentgrade && $currentgrade->grade !== null ? $currentgrade->grade : '',
+        ]);
+        echo html_writer::tag(
+            'label',
+            get_string('feedback', 'mod_vimipad'),
+            ['for' => 'vimipad-feedback', 'class' => 'mt-2']
+        );
+        $feedbackvalue = '';
+        if ($currentgrade && $currentgrade->feedback !== null && $currentgrade->feedback !== '') {
+            $feedbackvalue = $currentgrade->feedback;
+        } else if ($acceptedforfeedback !== '') {
+            $feedbackvalue = $acceptedforfeedback;
+        }
+        echo html_writer::tag(
+            'textarea',
+            s($feedbackvalue),
+            ['id' => 'vimipad-feedback', 'name' => 'feedback', 'rows' => 3, 'class' => 'form-control']
+        );
+        echo html_writer::empty_tag(
+            'input',
+            ['type' => 'submit', 'value' => get_string('savegrade', 'mod_vimipad'), 'class' => 'btn btn-primary mt-2']
+        );
+        echo html_writer::end_tag('form');
+    }
+}

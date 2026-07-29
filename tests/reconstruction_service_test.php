@@ -55,38 +55,43 @@ final class reconstruction_service_test extends \advanced_testcase {
         $uid = (int) $user->id;
 
         // Build: +A, +B, A->B, update A label, delete B.
-        $ops->apply($wsid, 0, 'node_create', ['stableid' => 'node_a', 'type' => 'concept', 'label' => 'A'], $uid);
-        $ops->apply($wsid, 1, 'node_create', ['stableid' => 'node_b', 'type' => 'concept', 'label' => 'B'], $uid);
+        $ops->apply($wsid, 0, 'node_create', ['stableid' => 'node_00000000000a', 'type' => 'concept', 'label' => 'A'], $uid);
+        $ops->apply($wsid, 1, 'node_create', ['stableid' => 'node_00000000000b', 'type' => 'concept', 'label' => 'B'], $uid);
         $ops->apply(
             $wsid,
             2,
             'relation_create',
-            ['stableid' => 'rel_1', 'sourceid' => 'node_a', 'targetid' => 'node_b', 'type' => 'link'],
+            [
+                'stableid' => 'rel_0000000000c1',
+                'sourceid' => 'node_00000000000a',
+                'targetid' => 'node_00000000000b',
+                'type' => 'link',
+            ],
             $uid
         );
-        $ops->apply($wsid, 3, 'node_update', ['stableid' => 'node_a', 'label' => 'A2'], $uid);
-        $ops->apply($wsid, 4, 'node_delete', ['stableid' => 'node_b'], $uid);
+        $ops->apply($wsid, 3, 'node_update', ['stableid' => 'node_00000000000a', 'label' => 'A2'], $uid);
+        $ops->apply($wsid, 4, 'node_delete', ['stableid' => 'node_00000000000b'], $uid);
 
         $service = new reconstruction_service();
 
         // At revision 2: both nodes, no relation yet.
         $state = $service->reconstruct($wsid, 2);
-        $this->assertEqualsCanonicalizing(['node_a', 'node_b'], $this->ids($state['nodes']));
+        $this->assertEqualsCanonicalizing(['node_00000000000a', 'node_00000000000b'], $this->ids($state['nodes']));
         $this->assertCount(0, $state['relations']);
 
         // At revision 3: the relation exists.
         $state = $service->reconstruct($wsid, 3);
         $this->assertCount(1, $state['relations']);
-        $this->assertSame('rel_1', $state['relations'][0]->stableid);
+        $this->assertSame('rel_0000000000c1', $state['relations'][0]->stableid);
 
         // At revision 4: A carries the updated label.
         $state = $service->reconstruct($wsid, 4);
         $bykey = $this->keyed($state['nodes']);
-        $this->assertSame('A2', $bykey['node_a']->label);
+        $this->assertSame('A2', $bykey['node_00000000000a']->label);
 
         // At revision 5: B is gone and its relation is dropped.
         $state = $service->reconstruct($wsid, 5);
-        $this->assertSame(['node_a'], $this->ids($state['nodes']));
+        $this->assertSame(['node_00000000000a'], $this->ids($state['nodes']));
         $this->assertCount(0, $state['relations']);
     }
 

@@ -89,44 +89,9 @@ class get_revision_state extends external_api {
             'profile' => $instance->defaultprofile,
             'formconfig' => registry::for_profile($instance->defaultprofile)->to_array(),
             'layoutjson' => '',
-            'nodes' => array_map([self::class, 'map_node'], $state['nodes']),
-            'relations' => array_map([self::class, 'map_relation'], $state['relations']),
+            'nodes' => array_map([get_workspace::class, 'map_node'], $state['nodes']),
+            'relations' => array_map([get_workspace::class, 'map_relation'], $state['relations']),
             'collab' => helper::collab_config(),
-        ];
-    }
-
-    /**
-     * Map a reconstructed node to the external structure.
-     *
-     * @param \stdClass $node The node.
-     * @return array
-     */
-    private static function map_node(\stdClass $node): array {
-        return [
-            'stableid' => $node->stableid,
-            'type' => $node->type,
-            'label' => (string) $node->label,
-            'content' => (string) ($node->content ?? ''),
-            'contentformat' => (int) ($node->contentformat ?? 0),
-            'metadatajson' => (string) ($node->metadatajson ?? ''),
-        ];
-    }
-
-    /**
-     * Map a reconstructed relation to the external structure.
-     *
-     * @param \stdClass $relation The relation.
-     * @return array
-     */
-    private static function map_relation(\stdClass $relation): array {
-        return [
-            'stableid' => $relation->stableid,
-            'sourceid' => $relation->sourceid,
-            'targetid' => $relation->targetid,
-            'type' => $relation->type,
-            'label' => (string) $relation->label,
-            'direction' => (int) $relation->direction,
-            'metadatajson' => (string) ($relation->metadatajson ?? ''),
         ];
     }
 

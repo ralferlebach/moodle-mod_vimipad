@@ -21,7 +21,10 @@ use core_external\external_function_parameters;
 use core_external\external_multiple_structure;
 use core_external\external_single_structure;
 use core_external\external_value;
+use stdClass;
 use mod_vimipad\local\access;
+use mod_vimipad\local\service\consensus_service;
+use mod_vimipad\local\service\workspace_service;
 
 /**
  * Shared helpers for collaboration external functions.
@@ -97,6 +100,58 @@ class helper {
                 'confirmed' => (bool) $member['confirmed'],
             ], $status['members']),
         ];
+    }
+
+    /**
+     * Validate a consensus request and resolve the caller's group workspace.
+     *
+     * Shared by all consensus functions so the parameter, context, capability and
+     * workspace resolution live in one place.
+     *
+     * @param int $cmid Course module id.
+     * @param int $groupid Group id (0 to auto-select).
+     * @param string $capability The capability to require.
+     * @return array [stdClass $instance, stdClass $workspace, \context_module $context]
+     */
+    public static function consensus_context(int $cmid, int $groupid, string $capability): array {
+        global $USER, $DB;
+
+        $params = self::validate_parameters(self::consensus_parameters(), ['cmid' => $cmid, 'groupid' => $groupid]);
+        [, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
+        $context = \context_module::instance($cm->id);
+        self::validate_context($context);
+        require_capability($capability, $context);
+
+        $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
+        $workspace = (new workspace_service())->get_or_create_for_user(
+            $instance,
+            $context,
+            (int) $USER->id,
+            $params['groupid'] ?: null
+        );
+        return [$instance, $workspace, $context];
+    }
+
+    /**
+     * Re-read the workspace and build the consensus status payload.
+     *
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $workspace The group workspace.
+     * @param \context $context The module context.
+     * @param int $snapshotid The snapshot id if just submitted, else 0.
+     * @return array
+     */
+    public static function consensus_result(
+        stdClass $instance,
+        stdClass $workspace,
+        \context $context,
+        int $snapshotid
+    ): array {
+        global $DB;
+
+        $fresh = $DB->get_record('vimipad_workspace', ['id' => (int) $workspace->id], '*', MUST_EXIST);
+        $status = (new consensus_service())->get_status($instance, $fresh, $context);
+        return self::consensus_payload($status, $snapshotid);
     }
     /**
      * Resolve and validate a workspace for editing by the current user.

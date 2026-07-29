@@ -144,26 +144,9 @@ class snapshot_service {
     public function create_submission(stdClass $instance, stdClass $workspace, \context $context, int $userid): array {
         global $DB;
 
-        $now = time();
-        if ((int) $instance->cutoffdate > 0 && $now > (int) $instance->cutoffdate) {
-            throw new \moodle_exception('error:submissionclosed', 'mod_vimipad');
-        }
-
-        // Serialize submissions per workspace so two concurrent submits cannot
-        // both create a snapshot (double submission).
-        $lockfactory = \core\lock\lock_config::get_lock_factory('mod_vimipad_workspace');
-        $lock = $lockfactory->get_lock('submit_' . (int) $workspace->id, 10);
-        if (!$lock) {
-            throw new \moodle_exception('error:workspacelocked', 'mod_vimipad');
-        }
+        [$lock, $fresh] = $this->begin_submission($instance, $workspace);
 
         try {
-            // Re-read under the lock: a concurrent submit may have locked it.
-            $fresh = $DB->get_record('vimipad_workspace', ['id' => (int) $workspace->id], '*', MUST_EXIST);
-            if ((int) $fresh->locked === 1) {
-                throw new \moodle_exception('error:alreadysubmitted', 'mod_vimipad');
-            }
-
             // Group consensus: record this member's intent and hold the
             // submission until every submitting member has signalled readiness.
             if (
@@ -177,7 +160,7 @@ class snapshot_service {
                     ])
                 ) {
                     $DB->insert_record('vimipad_submissionintent', (object) [
-                        'workspaceid' => (int) $fresh->id, 'userid' => $userid, 'timecreated' => $now,
+                        'workspaceid' => (int) $fresh->id, 'userid' => $userid, 'timecreated' => time(),
                     ]);
                 }
                 $required = $this->consensus_required_userids($fresh, $context);
@@ -199,6 +182,43 @@ class snapshot_service {
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * Enforce the cut-off, acquire the per-workspace submit lock and re-read.
+     *
+     * Shared by direct submission and the group-consensus flow so both serialize
+     * on the same lock and see a consistent, not-yet-locked workspace. The caller
+     * owns the returned lock and must release it.
+     *
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $workspace The workspace.
+     * @return array [\core\lock\lock $lock, stdClass $fresh]
+     * @throws \moodle_exception On a passed cut-off, lock contention or an already-submitted map.
+     */
+    public function begin_submission(stdClass $instance, stdClass $workspace): array {
+        global $DB;
+
+        if ((int) $instance->cutoffdate > 0 && time() > (int) $instance->cutoffdate) {
+            throw new \moodle_exception('error:submissionclosed', 'mod_vimipad');
+        }
+
+        // Serialize submissions per workspace so two concurrent submits cannot
+        // both create a snapshot (double submission).
+        $lockfactory = \core\lock\lock_config::get_lock_factory('mod_vimipad_workspace');
+        $lock = $lockfactory->get_lock('submit_' . (int) $workspace->id, 10);
+        if (!$lock) {
+            throw new \moodle_exception('error:workspacelocked', 'mod_vimipad');
+        }
+
+        // Re-read under the lock: a concurrent submit may have locked it.
+        $fresh = $DB->get_record('vimipad_workspace', ['id' => (int) $workspace->id], '*', MUST_EXIST);
+        if ((int) $fresh->locked === 1) {
+            $lock->release();
+            throw new \moodle_exception('error:alreadysubmitted', 'mod_vimipad');
+        }
+
+        return [$lock, $fresh];
     }
 
     /**

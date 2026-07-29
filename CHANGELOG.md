@@ -4,7 +4,24 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.17** (2026072697).
+> release is **0.5.18** (2026072698).
+
+## 0.5.18 (2026072698) — grading in the tab + CI fixes
+
+- **Grading moved into the Grading tab.** Selecting a submission now opens the
+  full grading detail inside the tab — read-only snapshot, existing annotations,
+  teacher-visible journal, add-annotation form, AI feedback draft and the grade
+  form — with a "Back to submissions" link. The logic lives in a reusable
+  `grading_panel`; the legacy `grade.php` now redirects to the tab so old links
+  keep working.
+- **CI fixes.**
+  - phpcpd: removed four clones — the consensus externals now share a
+    `consensus_context`/`consensus_result` helper, `get_revision_state` reuses
+    `get_workspace`'s node/relation mappers, and the submit cut-off/lock/re-read
+    is extracted to `snapshot_service::begin_submission` (shared by direct and
+    consensus submission). No clones remain.
+  - PHPUnit: the reconstruction test used malformed stable ids; it now uses
+    valid `node_`/`rel_` ids so the operation replay validates.
 
 ## 0.5.17 (2026072697) — assessment architecture & grading metrics
 
