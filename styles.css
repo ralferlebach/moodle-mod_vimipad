@@ -613,3 +613,23 @@
     margin: 0;
     font-size: 0.9rem;
 }
+
+/* Journal & submission tab: entries grouped into collapsible time buckets. */
+.vimipad-journal-bucket {
+    margin-bottom: 1rem;
+}
+
+.vimipad-journal-bucket > summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.vimipad-journal-entry {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--vimipad-border, #dee2e6);
+}
+
+.vimipad-journal-text {
+    margin-top: 0.25rem;
+    white-space: pre-wrap;
+}

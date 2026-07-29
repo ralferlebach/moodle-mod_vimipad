@@ -110,7 +110,6 @@ export function EditorApp(props: Props): React.ReactElement {
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [notice, setNotice] = useState<string | null>(null);
     const [nodeLabel, setNodeLabel] = useState('');
     const [relSource, setRelSource] = useState('');
     const [relTarget, setRelTarget] = useState('');
@@ -651,30 +650,6 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [runOperation, state.nodes, state.workspaceid, api, layout, stored, sizes]);
 
-    const submit = useCallback(async () => {
-        // eslint-disable-next-line no-alert
-        if (!window.confirm(t('editor:submitconfirm'))) {
-            return;
-        }
-        setBusy(true);
-        try {
-            const result = await api.createSnapshot(state.workspaceid);
-            if (result.pending > 0) {
-                // Group consensus: waiting for the remaining members to submit.
-                setNotice(t('editor:submitpending'));
-            } else {
-                dispatch({kind: 'load', state: {...state, locked: 1}});
-                setNotice(null);
-            }
-            setError(null);
-        } catch (e) {
-            setError((e as Error).message);
-            await load();
-        } finally {
-            setBusy(false);
-        }
-    }, [api, state, load, t]);
-
     if (loading) {
         return <div className="vimipad-editor-loading">{t('editor:loading')}</div>;
     }
@@ -737,22 +712,10 @@ export function EditorApp(props: Props): React.ReactElement {
         </fieldset>
     );
 
-    const submitButton = (state.locked !== 1 && !readonly) ? (
-        <button
-            type="button"
-            className="btn btn-success"
-            disabled={busy || loading || state.nodes.length === 0}
-            onClick={submit}
-        >
-            <Icon name={FA.submit} /> {t('editor:submit')}
-        </button>
-    ) : null;
-
     return (
         <div className="vimipad-editor" ref={rootRef}>
             <div className="vimipad-sr-only" role="status" aria-live="polite">{status}</div>
             {error && <div className="alert alert-danger" role="alert">{error}</div>}
-            {notice && <div className="alert alert-info" role="status">{notice}</div>}
             {readonly && (
                 <div className="alert alert-info" role="status">{t('editor:readonly')}</div>
             )}
@@ -846,8 +809,6 @@ export function EditorApp(props: Props): React.ReactElement {
             </div>
 
             <JournalPanel api={api} workspaceid={state.workspaceid} t={t} />
-
-            {submitButton && <div className="vimipad-submit-bar mt-3">{submitButton}</div>}
 
             <p className="text-muted small mt-2">{t('editor:revision')}: {state.revision}</p>
         </div>

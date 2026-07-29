@@ -125,6 +125,37 @@ if ($targetuserid) {
     $baseparams['targettype'] = 'user';
     $baseparams['targetid'] = $targetuserid;
 }
+
+// Handle a submission started from the Journal & submission tab (own map).
+if (
+    $tab === 'journal' && $canedit && !$readonly
+        && optional_param('dosubmit', 0, PARAM_BOOL) && confirm_sesskey()
+) {
+    $journalurl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']);
+    $ownws = (new \mod_vimipad\local\service\workspace_service())
+        ->get_or_create_for_user($instance, $context, (int) $USER->id, $activegroupid ?: null);
+    try {
+        $result = (new \mod_vimipad\local\service\snapshot_service())
+            ->create_submission($instance, $ownws, $context, (int) $USER->id);
+    } catch (\moodle_exception $e) {
+        redirect($journalurl, $e->getMessage(), null, \core\output\notification::NOTIFY_ERROR);
+    }
+    if ($result['snapshot'] !== null) {
+        \mod_vimipad\event\snapshot_submitted::create([
+            'context' => $context,
+            'objectid' => (int) $result['snapshot']->id,
+            'other' => ['workspaceid' => (int) $ownws->id],
+        ])->trigger();
+        $completion = new completion_info($course);
+        if ($completion->is_enabled($cm)) {
+            $completion->update_state($cm, COMPLETION_UNKNOWN, (int) $USER->id);
+        }
+        $notice = get_string('submitted', 'mod_vimipad');
+    } else {
+        $notice = get_string('submitpendingcount', 'mod_vimipad', $result['pending']);
+    }
+    redirect($journalurl, $notice);
+}
 $tabtree = [];
 foreach ($availabletabs as $key) {
     $taburl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => $key]);
@@ -260,8 +291,92 @@ switch ($tab) {
         }
         break;
 
+    case 'journal':
+        $wsservice = new \mod_vimipad\local\service\workspace_service();
+        $journalservice = new \mod_vimipad\local\service\journal_service();
+
+        // Resolve the workspace to display (own, or the inspected foreign one).
+        if ($readonly && $targetuserid) {
+            $ws = $wsservice->find_for_user($instance, $targetuserid);
+        } else if ($readonly && $isgroup && $activegroupid) {
+            $ws = $DB->get_record(
+                'vimipad_workspace',
+                ['vimipadid' => $instance->id, 'groupid' => $activegroupid]
+            ) ?: null;
+        } else {
+            $ws = $wsservice->get_or_create_for_user($instance, $context, (int) $USER->id, $activegroupid ?: null);
+        }
+
+        // Submission block (own map only): the submit button now lives here.
+        if (!$readonly && $canedit && $ws !== null) {
+            echo $OUTPUT->heading(get_string('submission', 'mod_vimipad'), 4);
+            if ((int) $ws->locked === 1) {
+                echo html_writer::div(
+                    get_string('editor:submitted', 'mod_vimipad'),
+                    'alert alert-success'
+                );
+            } else {
+                echo html_writer::start_tag('form', [
+                    'method' => 'post',
+                    'action' => (new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']))->out(false),
+                    'class' => 'mb-4',
+                ]);
+                echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+                echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'dosubmit', 'value' => 1]);
+                echo html_writer::empty_tag('input', [
+                    'type' => 'submit',
+                    'value' => get_string('editor:submit', 'mod_vimipad'),
+                    'class' => 'btn btn-primary',
+                ]);
+                echo html_writer::end_tag('form');
+            }
+        }
+
+        // Journal display: entries in growing, collapsible time buckets.
+        echo $OUTPUT->heading(get_string('tab:journal', 'mod_vimipad'), 4);
+        $entries = ($ws === null) ? [] : ($readonly
+            ? $journalservice->get_teacher_visible((int) $ws->id)
+            : $journalservice->get_entries_for_user((int) $ws->id, (int) $USER->id));
+
+        if (empty($entries)) {
+            echo html_writer::tag('p', get_string('journal:none', 'mod_vimipad'), ['class' => 'text-muted']);
+            break;
+        }
+
+        $authorids = [];
+        foreach ($entries as $entry) {
+            $authorids[(int) $entry->userid] = true;
+        }
+        $authors = $DB->get_records_list('user', 'id', array_keys($authorids));
+        $buckets = \mod_vimipad\local\output\journal_buckets::bucketise($entries, time());
+
+        foreach ($buckets as $bucketkey => $group) {
+            echo html_writer::start_tag('details', ['class' => 'vimipad-journal-bucket', 'open' => 'open']);
+            echo html_writer::tag(
+                'summary',
+                get_string('journal:bucket:' . $bucketkey, 'mod_vimipad') . ' (' . count($group) . ')'
+            );
+            foreach ($group as $entry) {
+                $author = $authors[$entry->userid] ?? null;
+                echo html_writer::start_tag('div', ['class' => 'vimipad-journal-entry']);
+                if ($author) {
+                    echo $OUTPUT->user_picture($author, ['size' => 35, 'link' => true, 'includefullname' => true]);
+                    echo ' ' . html_writer::link(
+                        new moodle_url('/message/index.php', ['id' => $author->id]),
+                        get_string('journal:message', 'mod_vimipad'),
+                        ['class' => 'small']
+                    );
+                }
+                echo html_writer::tag('span', ' · ' . userdate($entry->timecreated), ['class' => 'text-muted small']);
+                echo html_writer::div(format_text($entry->entrytext, FORMAT_PLAIN), 'vimipad-journal-text');
+                echo html_writer::end_tag('div');
+            }
+            echo html_writer::end_tag('details');
+        }
+        break;
+
     default:
-        // Journal, feedback and tools content follows in later steps.
+        // Feedback and tools content follows in later steps.
         echo html_writer::tag('p', get_string('tab:comingsoon', 'mod_vimipad'), ['class' => 'text-muted']);
         break;
 }

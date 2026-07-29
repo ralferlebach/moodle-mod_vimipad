@@ -4,7 +4,22 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.9** (2026072689).
+> release is **0.5.10** (2026072690).
+
+## 0.5.10 (2026072690) — Journal & submission tab (stage 1)
+
+- **Journal & submission tab.** The tab now renders the workspace journal
+  server-side: entries in collapsible, growing time buckets (this week, last
+  week, this month, this year, older), each with the author's avatar, profile
+  and message links, and date. Owners see their own entries; teachers inspecting
+  a learner see the teacher-visible ones.
+- **Submit moved out of the editor.** The submit button is gone from the React
+  editor and now lives at the top of this tab (own map only); a locked map shows
+  a submitted notice. Group consensus still resolves server-side, with a pending
+  notice when not all members have submitted.
+- Pure bucketing logic extracted to a tested helper (`journal_buckets`). The
+  consensus state machine and the per-entry revision view follow in the next
+  stages.
 
 ## 0.5.9 (2026072689) — editor surface finalised
 
