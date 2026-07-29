@@ -18,6 +18,8 @@ namespace mod_vimipad\external;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
+use core_external\external_multiple_structure;
+use core_external\external_single_structure;
 use core_external\external_value;
 use mod_vimipad\local\access;
 
@@ -45,6 +47,56 @@ class helper {
             'targettype' => new external_value(PARAM_ALPHA, 'Element type: node or relation'),
             'targetstableid' => new external_value(PARAM_ALPHANUMEXT, 'Element stable id'),
         ]);
+    }
+
+    /**
+     * The parameter definition shared by all consensus functions.
+     *
+     * @return external_function_parameters
+     */
+    public static function consensus_parameters(): external_function_parameters {
+        return new external_function_parameters([
+            'cmid' => new external_value(PARAM_INT, 'Course module id'),
+            'groupid' => new external_value(PARAM_INT, 'Group id (0 to auto-select)', VALUE_DEFAULT, 0),
+        ]);
+    }
+
+    /**
+     * The return structure shared by all consensus functions.
+     *
+     * @return external_single_structure
+     */
+    public static function consensus_returns(): external_single_structure {
+        return new external_single_structure([
+            'state' => new external_value(PARAM_INT, 'Consensus state: 0 open, 1 voting, 2 submitted'),
+            'snapshotid' => new external_value(PARAM_INT, 'Snapshot id if just submitted, else 0'),
+            'startedby' => new external_value(PARAM_INT, 'User id who started the process, or 0'),
+            'timestarted' => new external_value(PARAM_INT, 'Unix time the process started, or 0'),
+            'members' => new external_multiple_structure(new external_single_structure([
+                'userid' => new external_value(PARAM_INT, 'Group member user id'),
+                'confirmed' => new external_value(PARAM_BOOL, 'Whether the member has confirmed'),
+            ])),
+        ]);
+    }
+
+    /**
+     * Build the consensus return payload from a service status array.
+     *
+     * @param array $status The status from consensus_service::get_status().
+     * @param int $snapshotid The snapshot id if just submitted, else 0.
+     * @return array
+     */
+    public static function consensus_payload(array $status, int $snapshotid): array {
+        return [
+            'state' => (int) $status['state'],
+            'snapshotid' => $snapshotid,
+            'startedby' => (int) $status['startedby'],
+            'timestarted' => (int) $status['timestarted'],
+            'members' => array_map(static fn($member) => [
+                'userid' => (int) $member['userid'],
+                'confirmed' => (bool) $member['confirmed'],
+            ], $status['members']),
+        ];
     }
     /**
      * Resolve and validate a workspace for editing by the current user.

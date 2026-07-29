@@ -193,36 +193,56 @@ class snapshot_service {
                 }
             }
 
-            $normalized = $this->build_normalized($fresh, $instance->defaultprofile);
-
-            $transaction = $DB->start_delegated_transaction();
-
-            $snapshot = (object) [
-                'workspaceid' => (int) $fresh->id,
-                'revision' => (int) $fresh->currentrevision,
-                'snapshotjson' => json_encode($normalized),
-                'submittedby' => $userid,
-                'status' => self::STATUS_SUBMITTED,
-                'timecreated' => time(),
-            ];
-            $snapshot->id = $DB->insert_record('vimipad_snapshot', $snapshot);
-
-            $DB->update_record('vimipad_workspace', (object) [
-                'id' => (int) $fresh->id,
-                'submittedsnapshotid' => $snapshot->id,
-                'locked' => 1,
-                'timemodified' => time(),
-            ]);
-
-            // The consensus is consumed once the snapshot exists.
-            $DB->delete_records('vimipad_submissionintent', ['workspaceid' => (int) $fresh->id]);
-
-            $transaction->allow_commit();
+            $snapshot = $this->finalize($instance, $fresh, $userid);
 
             return ['snapshot' => $snapshot, 'pending' => 0];
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * Create the snapshot, lock the workspace and consume any pending consensus.
+     *
+     * This is the terminal step shared by direct submission and the completed
+     * group-consensus flow. Callers are responsible for the per-workspace lock
+     * and any cut-off / already-submitted guards.
+     *
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $fresh The freshly re-read workspace record.
+     * @param int $userid The submitting user id.
+     * @return stdClass The created snapshot record.
+     */
+    public function finalize(stdClass $instance, stdClass $fresh, int $userid): stdClass {
+        global $DB;
+
+        $normalized = $this->build_normalized($fresh, $instance->defaultprofile);
+
+        $transaction = $DB->start_delegated_transaction();
+
+        $snapshot = (object) [
+            'workspaceid' => (int) $fresh->id,
+            'revision' => (int) $fresh->currentrevision,
+            'snapshotjson' => json_encode($normalized),
+            'submittedby' => $userid,
+            'status' => self::STATUS_SUBMITTED,
+            'timecreated' => time(),
+        ];
+        $snapshot->id = $DB->insert_record('vimipad_snapshot', $snapshot);
+
+        $DB->update_record('vimipad_workspace', (object) [
+            'id' => (int) $fresh->id,
+            'submittedsnapshotid' => $snapshot->id,
+            'locked' => 1,
+            'timemodified' => time(),
+        ]);
+
+        // The consensus is consumed once the snapshot exists.
+        $DB->delete_records('vimipad_submissionintent', ['workspaceid' => (int) $fresh->id]);
+
+        $transaction->allow_commit();
+
+        return $snapshot;
     }
 
     /**
@@ -233,7 +253,7 @@ class snapshot_service {
      * @param \context $context The module context.
      * @return int[] The required user ids.
      */
-    private function consensus_required_userids(stdClass $workspace, \context $context): array {
+    public function consensus_required_userids(stdClass $workspace, \context $context): array {
         $members = groups_get_members((int) $workspace->groupid, 'u.id');
         $required = [];
         foreach ($members as $member) {

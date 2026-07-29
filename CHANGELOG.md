@@ -4,7 +4,23 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.12** (2026072692).
+> release is **0.5.13** (2026072693).
+
+## 0.5.13 (2026072693) — consensus state machine (backend)
+
+- **Explicit consensus state machine.** New `consensus_service` models group
+  submission as `open → voting → submitted`, with cancel returning to `open`.
+  The state is derived from existing data (a locked workspace is submitted, an
+  existing confirmation means voting), so no schema change is needed. Starting
+  records the initiator's confirmation, confirming records a member's and
+  finalises the snapshot once everyone has, and cancelling clears confirmations.
+- **Web services.** Four AJAX functions — `start_consensus`,
+  `confirm_consensus`, `cancel_consensus` and `get_consensus_status` — expose the
+  machine, returning the state plus a per-member confirmation list. Guards reject
+  acting out of turn, acting as a non-member, or when consensus is not enabled.
+- The snapshot-creation core is extracted (`snapshot_service::finalize`) and
+  shared by direct submission and the completed consensus flow. Covered by unit
+  tests. The member overview UI and system messaging follow in the next stage.
 
 ## 0.5.12 (2026072692) — fullscreen canvas height fix
 
