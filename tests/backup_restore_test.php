@@ -140,6 +140,7 @@ final class backup_restore_test extends \advanced_testcase {
         $DB->update_record('vimipad', (object) [
             'id' => $instance->id, 'grade' => 55,
             'completionsubmit' => 1, 'completionminnodes' => 3, 'completiongraded' => 1,
+            'referencesnapshotid' => $snapshotid,
         ]);
         // A grade (referencing the snapshot) and a journal entry.
         $DB->insert_record('vimipad_grade', (object) [
@@ -176,6 +177,9 @@ final class backup_restore_test extends \advanced_testcase {
         $this->assertCount(1, $newsnapshots);
         $newsnapshot = reset($newsnapshots);
         $this->assertEquals($newsnapshot->id, $newworkspace->submittedsnapshotid);
+
+        // The reference snapshot pointer is remapped to the restored snapshot.
+        $this->assertEquals($newsnapshot->id, $newinstance->referencesnapshotid);
 
         $this->assertSame(1, $DB->count_records('vimipad_annotation', ['snapshotid' => $newsnapshot->id]));
 

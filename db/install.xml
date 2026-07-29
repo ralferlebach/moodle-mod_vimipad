@@ -23,6 +23,7 @@
         <FIELD NAME="duedate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Submissions after this time are marked late (0 = no due date)"/>
         <FIELD NAME="cutoffdate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Submissions are blocked after this time (0 = no cut-off)"/>
         <FIELD NAME="requireallteamsubmit" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if every group member must submit before the group map is submitted"/>
+        <FIELD NAME="referencesnapshotid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Snapshot marked as the reference (model) solution for automatic scoring, null if none"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>

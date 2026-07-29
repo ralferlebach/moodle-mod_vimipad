@@ -45,6 +45,13 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
     private $pendinggradesnapshot = [];
 
     /**
+     * Maps new vimipad instance id to the old reference snapshot id for later remap.
+     *
+     * @var array<int,int>
+     */
+    private $pendingreference = [];
+
+    /**
      * Restored advanced-grading links: new grading instance id => new snapshot id,
      * used to realign the core grading instance's itemid after restore.
      *
@@ -133,8 +140,16 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
         $data = (object) $data;
         $data->course = $this->get_courseid();
 
+        // The reference snapshot id can only be remapped once snapshots exist.
+        $oldreference = !empty($data->referencesnapshotid) ? (int) $data->referencesnapshotid : 0;
+        $data->referencesnapshotid = null;
+
         $newitemid = $DB->insert_record('vimipad', $data);
         $this->apply_activity_instance($newitemid);
+
+        if ($oldreference) {
+            $this->pendingreference[$newitemid] = $oldreference;
+        }
     }
 
     /**
@@ -411,6 +426,14 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
             $newsnapshotid = $this->get_mappingid('vimipad_snapshot', $oldsnapshotid);
             if ($newsnapshotid) {
                 $DB->set_field('vimipad_grade', 'snapshotid', $newsnapshotid, ['id' => $newgradeid]);
+            }
+        }
+
+        // Resolve the activity's reference snapshot now that snapshots are mapped.
+        foreach ($this->pendingreference as $newvimipadid => $oldsnapshotid) {
+            $newsnapshotid = $this->get_mappingid('vimipad_snapshot', $oldsnapshotid);
+            if ($newsnapshotid) {
+                $DB->set_field('vimipad', 'referencesnapshotid', $newsnapshotid, ['id' => $newvimipadid]);
             }
         }
 

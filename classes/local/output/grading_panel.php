@@ -22,6 +22,8 @@ use html_table;
 use moodle_url;
 use stdClass;
 use mod_vimipad\local\service\ai_feedback_service;
+use mod_vimipad\local\assess\result;
+use mod_vimipad\local\service\assess_service;
 use mod_vimipad\local\service\grading_service;
 use mod_vimipad\local\service\journal_service;
 use mod_vimipad\local\service\workspace_service;
@@ -106,6 +108,16 @@ class grading_panel {
                 ]);
             }
             redirect($pageurl, get_string('annotationadded', 'mod_vimipad'));
+        }
+
+        if (optional_param('setreference', 0, PARAM_BOOL) && confirm_sesskey()) {
+            require_capability('mod/vimipad:grade', $context);
+            $makeref = optional_param('makeref', 0, PARAM_BOOL);
+            $DB->set_field('vimipad', 'referencesnapshotid', $makeref ? $snapshotid : null, ['id' => $instance->id]);
+            redirect(
+                $pageurl,
+                get_string($makeref ? 'referenceset' : 'referencecleared', 'mod_vimipad')
+            );
         }
 
         if (optional_param('genai', 0, PARAM_BOOL) && confirm_sesskey()) {
@@ -307,11 +319,120 @@ class grading_panel {
 
         self::render_annotation_form($pageurl, $data, $labels);
         $acceptedforfeedback = self::render_ai_assistance($context, $instance, $snapshot, $pageurl);
+        self::render_assessment($cm, $instance, $snapshot, $pageurl);
         if (self::$advancedform !== null) {
             echo html_writer::tag('h4', get_string('gradingmethod', 'mod_vimipad'), ['class' => 'mt-4']);
             self::$advancedform->display();
         } else {
             self::render_grade_form($instance, $workspace, $pageurl, $acceptedforfeedback);
+        }
+    }
+
+    /**
+     * Render the automatic-assessment aid: reference marking and the scorer's suggestion.
+     *
+     * @param stdClass $cm The course module.
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $snapshot The snapshot being graded.
+     * @param moodle_url $pageurl The detail page URL.
+     * @return void
+     */
+    private static function render_assessment(
+        stdClass $cm,
+        stdClass $instance,
+        stdClass $snapshot,
+        moodle_url $pageurl
+    ): void {
+        global $OUTPUT;
+
+        $snapshotid = (int) $snapshot->id;
+        $referenceid = (int) ($instance->referencesnapshotid ?? 0);
+
+        echo html_writer::tag('h4', get_string('assessment', 'mod_vimipad'), ['class' => 'mt-4']);
+
+        if ($referenceid === $snapshotid) {
+            echo $OUTPUT->notification(get_string('isreference', 'mod_vimipad'), 'info');
+            echo self::reference_button($pageurl, false);
+            return;
+        }
+
+        echo self::reference_button($pageurl, true);
+
+        if ($referenceid === 0) {
+            echo html_writer::div(get_string('noreference', 'mod_vimipad'), 'text-muted small mt-2');
+            return;
+        }
+
+        $result = (new assess_service())->score($instance, $snapshotid);
+        if ($result === null) {
+            echo html_writer::div(get_string('scoreunavailable', 'mod_vimipad'), 'text-muted small mt-2');
+            return;
+        }
+        self::render_score($instance, $result);
+    }
+
+    /**
+     * The reference mark/unmark button (a small self-posting form).
+     *
+     * @param moodle_url $pageurl The detail page URL.
+     * @param bool $makeref True to offer marking as reference, false to offer removing it.
+     * @return string
+     */
+    private static function reference_button(moodle_url $pageurl, bool $makeref): string {
+        $label = get_string($makeref ? 'markreference' : 'unmarkreference', 'mod_vimipad');
+        $class = 'btn btn-sm ' . ($makeref ? 'btn-outline-primary' : 'btn-outline-secondary');
+        $fields = html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()])
+            . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'setreference', 'value' => 1])
+            . html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'makeref', 'value' => $makeref ? 1 : 0])
+            . html_writer::empty_tag('input', ['type' => 'submit', 'value' => $label, 'class' => $class]);
+        return html_writer::tag('form', $fields, ['method' => 'post', 'action' => $pageurl->out(false)]);
+    }
+
+    /**
+     * Render a scorer result as a grading aid (a suggestion, never applied).
+     *
+     * @param stdClass $instance The activity instance.
+     * @param result $result The scorer result.
+     * @return void
+     */
+    private static function render_score(stdClass $instance, result $result): void {
+        $max = (float) $instance->grade;
+        if ($max <= 0) {
+            $max = 100.0;
+        }
+        $data = (object) [
+            'percent' => round($result->score * 100),
+            'grade' => format_float($result->suggested_grade($max), 2),
+            'max' => format_float($max, 2),
+        ];
+        echo html_writer::div(get_string('scoresuggestion', 'mod_vimipad', $data), 'alert alert-secondary mt-2');
+
+        $parts = (object) [
+            'concepts' => round(($result->partscores['concepts'] ?? 0) * 100),
+            'propositions' => round(($result->partscores['propositions'] ?? 0) * 100),
+        ];
+        echo html_writer::tag('p', get_string('scoreparts', 'mod_vimipad', $parts), ['class' => 'small']);
+
+        self::render_breakdown(get_string('concepts', 'mod_vimipad'), $result->concepts);
+        self::render_breakdown(get_string('propositions', 'mod_vimipad'), $result->propositions);
+    }
+
+    /**
+     * Render one matched/missing/extra breakdown block.
+     *
+     * @param string $title The dimension title.
+     * @param array<string,string[]> $breakdown The matched/missing/extra lists.
+     * @return void
+     */
+    private static function render_breakdown(string $title, array $breakdown): void {
+        echo html_writer::tag('p', $title, ['class' => 'mb-0 mt-2 font-weight-bold']);
+        foreach (['matched' => 'success', 'missing' => 'danger', 'extra' => 'warning'] as $key => $variant) {
+            $items = $breakdown[$key] ?? [];
+            if (empty($items)) {
+                continue;
+            }
+            $line = get_string('breakdown_' . $key, 'mod_vimipad') . ': ' . implode(', ', $items);
+            echo html_writer::div(s($line), 'small text-' . $variant);
         }
     }
 

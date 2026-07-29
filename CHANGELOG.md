@@ -4,7 +4,25 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.25** (2026072705).
+> release is **0.5.26** (2026072706).
+
+## 0.5.26 (2026072706) — reference solution + scoring in the grading tab
+
+- **Mark a submission as the activity's reference solution.** A new
+  `referencesnapshotid` on the activity records which snapshot is the model
+  answer; the grading detail offers "Mark as reference solution" / "Remove
+  reference solution" and shows a badge on the reference itself. Backed up and
+  restored (the pointer is remapped to the restored snapshot).
+- **Automatic scoring suggestion in the grading tab.** When a reference is
+  marked, other submissions show the `reference` scorer's suggestion — overall
+  match percentage, a rough suggested grade, per-dimension part scores, and the
+  matched / missing / extra concepts and propositions. It is explicitly a
+  suggestion; the teacher still sets the grade. Wired through a new
+  `assess_service` that turns a snapshot into a submission and runs the scorer.
+- **Verified on a real Moodle 4.5.12 instance:** `mod_vimipad` 143 tests
+  (incl. a new `assess_service` test and a reference-remap assertion in the
+  backup/restore roundtrip) and `vimipadassess` 17 tests pass; phpcs, phpcpd,
+  savepoints, validate and mustache are clean.
 
 ## 0.5.25 (2026072705) — assessment subplugin type + reference scorer
 

@@ -213,5 +213,16 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072700, 'vimipad');
     }
 
+    if ($oldversion < 2026072706) {
+        // Snapshot marked as the reference (model) solution for automatic scoring.
+        $table = new xmldb_table('vimipad');
+        $field = new xmldb_field('referencesnapshotid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'requireallteamsubmit');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026072706, 'vimipad');
+    }
+
     return true;
 }
