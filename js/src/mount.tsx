@@ -135,7 +135,13 @@ export function mount(element: HTMLElement, config: MountConfig): void {
     const t = config.getString ?? resolveString;
 
     const root = createRoot(element);
-    root.render(<EditorApp api={api} t={t} groupid={config.groupid ?? 0} initialView={config.initialView ?? 'canvas'} />);
+    root.render(<EditorApp
+        api={api}
+        t={t}
+        groupid={config.groupid ?? 0}
+        initialView={config.initialView ?? 'canvas'}
+        targetUserid={config.targetUserid ?? 0}
+    />);
 }
 
 // The bundle is emitted as the AMD module mod_vimipad/editor_lazy. The init

@@ -76,6 +76,20 @@ if ($isgroup && $activegroupid) {
     $readonly = !groups_is_member($activegroupid, $USER->id);
 }
 
+// Individual mode: teachers may inspect a specific learner's map read-only via a
+// user selector. The choice travels in the URL (two typed params, no separator).
+$isindividual = (int) $instance->collaborationmode === \mod_vimipad\local\service\workspace_service::MODE_INDIVIDUAL;
+$showuserselector = $isindividual && $cangrade;
+$targetuserid = 0;
+if ($showuserselector) {
+    $targettype = optional_param('targettype', 'self', PARAM_ALPHA);
+    $targetid = optional_param('targetid', 0, PARAM_INT);
+    if ($targettype === 'user' && $targetid > 0) {
+        $targetuserid = $targetid;
+        $readonly = $readonly || ($targetuserid !== (int) $USER->id);
+    }
+}
+
 // Server-rendered, role-gated tabs. The active tab travels in the URL so it is
 // shareable and persists alongside the group selection.
 $tabgates = [
@@ -106,6 +120,10 @@ if ($canedit && in_array($tab, $editortabs, true)) {
 $baseparams = ['id' => $cm->id];
 if ($activegroupid) {
     $baseparams['group'] = $activegroupid;
+}
+if ($targetuserid) {
+    $baseparams['targettype'] = 'user';
+    $baseparams['targetid'] = $targetuserid;
 }
 $tabtree = [];
 foreach ($availabletabs as $key) {
@@ -138,6 +156,34 @@ switch ($tab) {
             groups_print_activity_menu($cm, new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => $tab]));
         }
 
+        // User selector (individual mode, teachers): inspect a learner's map.
+        if ($showuserselector) {
+            $enrolled = get_enrolled_users(
+                $context,
+                'mod/vimipad:editown',
+                0,
+                'u.*',
+                'u.lastname, u.firstname'
+            );
+            $options = [];
+            $selfurl = new moodle_url('/mod/vimipad/view.php', ['id' => $cm->id, 'tab' => $tab]);
+            $options[$selfurl->out(false)] = get_string('yourmap', 'mod_vimipad');
+            foreach ($enrolled as $enrolleduser) {
+                $userurl = new moodle_url('/mod/vimipad/view.php', [
+                    'id' => $cm->id, 'tab' => $tab, 'targettype' => 'user', 'targetid' => $enrolleduser->id,
+                ]);
+                $options[$userurl->out(false)] = fullname($enrolleduser);
+            }
+            $selected = $targetuserid
+                ? (new moodle_url('/mod/vimipad/view.php', [
+                    'id' => $cm->id, 'tab' => $tab, 'targettype' => 'user', 'targetid' => $targetuserid,
+                ]))->out(false)
+                : $selfurl->out(false);
+            $userselect = new url_select($options, $selected, null, 'vimipaduserselect');
+            $userselect->set_label(get_string('viewmap', 'mod_vimipad'));
+            echo $OUTPUT->render($userselect);
+        }
+
         if ($canedit) {
             echo html_writer::div(
                 get_string('editorloading', 'mod_vimipad'),
@@ -149,6 +195,7 @@ switch ($tab) {
                     'data-groupid' => $activegroupid,
                     'data-view' => $tab,
                     'data-readonly' => $readonly ? 1 : 0,
+                    'data-targetuserid' => $targetuserid,
                 ]
             );
         } else {

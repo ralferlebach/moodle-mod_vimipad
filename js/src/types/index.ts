@@ -156,6 +156,8 @@ export interface MountConfig {
     initialView?: 'canvas' | 'list';
     /** If true, the map is foreign: view live but block all edits. */
     readonly?: boolean;
+    /** Owner user to view read-only (0 = self), for teacher inspection. */
+    targetUserid?: number;
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */

@@ -41,6 +41,28 @@ class workspace_service {
     public const MODE_COURSE = 2;
 
     /**
+     * Find an individual-mode workspace for a user without creating one.
+     *
+     * Used for read-only foreign viewing (e.g. a teacher inspecting a learner's
+     * map). Returns null if the user has no workspace yet.
+     *
+     * @param stdClass $instance The vimipad instance record.
+     * @param int $userid The owner user id.
+     * @return stdClass|null The workspace record, or null if none exists.
+     */
+    public function find_for_user(stdClass $instance, int $userid): ?stdClass {
+        global $DB;
+
+        $record = $DB->get_record('vimipad_workspace', [
+            'vimipadid' => (int) $instance->id,
+            'userid' => $userid,
+            'groupid' => null,
+        ]);
+
+        return $record ?: null;
+    }
+
+    /**
      * Resolve (and lazily create) the workspace the given user should edit.
      *
      * The caller is responsible for require_login on the course module. This

@@ -90,14 +90,16 @@ export class ApiClient {
     }
 
     /**
-     * Resolve and load the current user's workspace state.
+     * Resolve and load a workspace state.
      *
      * @param groupid Optional group id (group mode).
+     * @param targetuserid Optional owner user to view read-only (0 = self).
      */
-    async getWorkspace(groupid = 0): Promise<WorkspaceState> {
+    async getWorkspace(groupid = 0, targetuserid = 0): Promise<WorkspaceState> {
         const result = await this.transport('mod_vimipad_get_workspace', {
             cmid: this.cmid,
             groupid,
+            targetuserid,
         });
         return result as WorkspaceState;
     }

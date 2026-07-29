@@ -42,22 +42,29 @@ class get_workspace extends external_api {
         return new external_function_parameters([
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'groupid' => new external_value(PARAM_INT, 'Group id (group mode), 0 to auto-select', VALUE_DEFAULT, 0),
+            'targetuserid' => new external_value(
+                PARAM_INT,
+                'Owner user to view read-only (0 = self); requires grade capability',
+                VALUE_DEFAULT,
+                0
+            ),
         ]);
     }
 
     /**
-     * Resolve the workspace for the current user and return its full state.
+     * Resolve the workspace and return its full state.
      *
      * @param int $cmid Course module id.
      * @param int $groupid Requested group id (group mode).
+     * @param int $targetuserid Owner user to view read-only (0 = self).
      * @return array
      */
-    public static function execute(int $cmid, int $groupid = 0): array {
-        global $USER;
+    public static function execute(int $cmid, int $groupid = 0, int $targetuserid = 0): array {
+        global $USER, $DB;
 
         $params = self::validate_parameters(
             self::execute_parameters(),
-            ['cmid' => $cmid, 'groupid' => $groupid]
+            ['cmid' => $cmid, 'groupid' => $groupid, 'targetuserid' => $targetuserid]
         );
 
         [, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
@@ -65,16 +72,26 @@ class get_workspace extends external_api {
         self::validate_context($context);
         require_capability('mod/vimipad:view', $context);
 
-        global $DB;
         $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
-
         $service = new workspace_service();
-        $workspace = $service->get_or_create_for_user(
-            $instance,
-            $context,
-            (int) $USER->id,
-            $params['groupid'] ?: null
-        );
+
+        $target = (int) $params['targetuserid'];
+        if ($target > 0 && $target !== (int) $USER->id) {
+            // Foreign, read-only view: only graders may inspect another user's map.
+            require_capability('mod/vimipad:grade', $context);
+            $workspace = $service->find_for_user($instance, $target);
+            if ($workspace === null) {
+                return self::empty_state($instance);
+            }
+        } else {
+            $workspace = $service->get_or_create_for_user(
+                $instance,
+                $context,
+                (int) $USER->id,
+                $params['groupid'] ?: null
+            );
+        }
+
         $state = $service->get_state((int) $workspace->id);
 
         $layoutservice = new layout_service();
@@ -89,6 +106,26 @@ class get_workspace extends external_api {
             'layoutjson' => $layoutjson,
             'nodes' => array_map([self::class, 'map_node'], $state['nodes']),
             'relations' => array_map([self::class, 'map_relation'], $state['relations']),
+            'collab' => helper::collab_config(),
+        ];
+    }
+
+    /**
+     * Empty state for a foreign user who has no workspace yet.
+     *
+     * @param \stdClass $instance The activity instance.
+     * @return array
+     */
+    private static function empty_state(\stdClass $instance): array {
+        return [
+            'workspaceid' => 0,
+            'revision' => 0,
+            'locked' => 0,
+            'profile' => $instance->defaultprofile,
+            'formconfig' => registry::for_profile($instance->defaultprofile)->to_array(),
+            'layoutjson' => '',
+            'nodes' => [],
+            'relations' => [],
             'collab' => helper::collab_config(),
         ];
     }

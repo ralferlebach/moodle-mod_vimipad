@@ -4,7 +4,18 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.7** (2026072687).
+> release is **0.5.8** (2026072688).
+
+## 0.5.8 (2026072688) — single-view editor tabs + learner inspection
+
+- **Editor tabs removed from React.** The Canvas/List switch that lived inside
+  the editor is gone: each view is now driven purely by the surrounding Moodle
+  tab, so the editor renders only the view its tab selected.
+- **Teacher inspection of learner maps.** In individual mode, a teacher can pick
+  a learner from a user selector and view their map read-only and live. The
+  `get_workspace` service accepts a target user (grade capability required) and
+  resolves it without creating a workspace (`find_for_user`); a learner with no
+  map yet shows an empty read-only view.
 
 ## 0.5.7 (2026072687) — read-only foreign viewing
 

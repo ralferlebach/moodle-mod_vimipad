@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.5.7 — tabbed activity UI (shell + read-only foreign viewing), continuing the 0.5.x line.**
+**Development status: 0.5.8 — tabbed UI: single-view editor tabs plus teacher read-only inspection of learner maps.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

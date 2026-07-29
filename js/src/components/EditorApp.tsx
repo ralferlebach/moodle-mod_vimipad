@@ -83,6 +83,8 @@ interface Props {
     groupid?: number;
     /** Which view opens first (set by the surrounding Moodle tab). */
     initialView?: ViewMode;
+    /** Owner user to view read-only (0 = self). */
+    targetUserid?: number;
 }
 
 type ViewMode = 'canvas' | 'list';
@@ -100,9 +102,9 @@ const EMPTY: EditorState = {
  * @returns The rendered editor.
  */
 export function EditorApp(props: Props): React.ReactElement {
-    const {api, t, groupid = 0, initialView = 'canvas'} = props;
+    const {api, t, groupid = 0, initialView = 'canvas', targetUserid = 0} = props;
     const [state, dispatch] = useReducer(reduce, EMPTY);
-    const [view, setView] = useState<ViewMode>(initialView);
+    const view = initialView;
     const [stored, setStored] = useState<LayoutMap>({});
     const [sizes, setSizes] = useState<SizeMap>({});
     const [loading, setLoading] = useState(true);
@@ -147,7 +149,7 @@ export function EditorApp(props: Props): React.ReactElement {
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const ws = await api.getWorkspace(groupid);
+            const ws = await api.getWorkspace(groupid, targetUserid);
             dispatch({kind: 'load', state: ws});
             const decoded = decodeLayout(ws.layoutjson);
             setStored(decoded.positions);
@@ -160,7 +162,7 @@ export function EditorApp(props: Props): React.ReactElement {
         } finally {
             setLoading(false);
         }
-    }, [api, groupid, syncHistory]);
+    }, [api, groupid, targetUserid, syncHistory]);
 
     useEffect(() => {
         load();
@@ -758,40 +760,7 @@ export function EditorApp(props: Props): React.ReactElement {
                 <div className="alert alert-warning" role="status">{t('editor:locked')}</div>
             )}
 
-            <ul className="nav nav-tabs mb-3" role="tablist">
-                <li className="nav-item" role="presentation">
-                    <button
-                        type="button"
-                        className={`nav-link ${view === 'canvas' ? 'active' : ''}`}
-                        aria-selected={view === 'canvas'}
-                        role="tab"
-                        id="vimipad-tab-canvas"
-                        aria-controls="vimipad-tabpanel"
-                        onClick={() => setView('canvas')}
-                    >
-                        <Icon name={FA.canvasView} /> {t('editor:canvasview')}
-                    </button>
-                </li>
-                <li className="nav-item" role="presentation">
-                    <button
-                        type="button"
-                        className={`nav-link ${view === 'list' ? 'active' : ''}`}
-                        aria-selected={view === 'list'}
-                        role="tab"
-                        id="vimipad-tab-list"
-                        aria-controls="vimipad-tabpanel"
-                        onClick={() => setView('list')}
-                    >
-                        <Icon name={FA.listView} /> {t('editor:listview')}
-                    </button>
-                </li>
-            </ul>
-
-            <div
-                role="tabpanel"
-                id="vimipad-tabpanel"
-                aria-labelledby={view === 'canvas' ? 'vimipad-tab-canvas' : 'vimipad-tab-list'}
-            >
+            <div className="vimipad-viewpanel">
             {view === 'canvas' ? (
                 <>
                     <CanvasView

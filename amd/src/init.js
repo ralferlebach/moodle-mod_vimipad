@@ -124,6 +124,7 @@ export const init = async(cmid, selector = 'vimipad-editor-root') => {
             groupid: parseInt(element.dataset.groupid || '0', 10),
             initialView: element.dataset.view === 'list' ? 'list' : 'canvas',
             readonly: element.dataset.readonly === '1',
+            targetUserid: parseInt(element.dataset.targetuserid || '0', 10),
             callService: buildTransport(),
             getString: (key) => strings[key] ?? key,
         });

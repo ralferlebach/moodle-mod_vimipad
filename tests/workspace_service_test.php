@@ -163,4 +163,34 @@ final class workspace_service_test extends \advanced_testcase {
         // The revision (and thus the map) is untouched.
         $this->assertSame(3, (int) $DB->get_field('vimipad_workspace', 'currentrevision', ['id' => $wsid]));
     }
+
+    /**
+     * find_for_user returns an existing individual workspace, or null if none.
+     *
+     * @return void
+     */
+    public function test_find_for_user(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module(
+            'vimipad',
+            ['course' => $course->id, 'collaborationmode' => 0]
+        );
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $service = new workspace_service();
+
+        $this->assertNull($service->find_for_user($instance, (int) $user->id));
+
+        $now = time();
+        $wsid = $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => $user->id, 'groupid' => null,
+            'currentrevision' => 0, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+
+        $found = $service->find_for_user($instance, (int) $user->id);
+        $this->assertNotNull($found);
+        $this->assertSame((int) $wsid, (int) $found->id);
+    }
 }
