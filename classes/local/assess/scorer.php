@@ -53,6 +53,16 @@ abstract class scorer {
     abstract public function supports_profile(string $profile): bool;
 
     /**
+     * Whether this scorer calls the AI subsystem and must therefore run on demand
+     * (not automatically on page load).
+     *
+     * @return bool
+     */
+    public function uses_ai(): bool {
+        return false;
+    }
+
+    /**
      * Whether this scorer needs at least one reference solution to run.
      *
      * @return bool

@@ -177,4 +177,56 @@ final class assess_service_test extends \advanced_testcase {
         $this->assertContains('Plant', $submission->concept_labels());
         $this->assertCount(1, $submission->propositions);
     }
+
+    /**
+     * score_all runs the synchronous scorers but never the on-demand AI scorer.
+     *
+     * @return void
+     */
+    public function test_score_all_skips_ai(): void {
+        $this->resetAfterTest();
+        [$instance, $wsid] = $this->setup_activity();
+        $subid = $this->snapshot($wsid, ['Plant', 'Oxygen'], [['Plant', 'produces', 'Oxygen']]);
+
+        $results = (new assess_service())->score_all($instance, $subid);
+
+        $this->assertArrayNotHasKey('llm', $results);
+        // The reference-free structural scorer runs without a reference.
+        $this->assertArrayHasKey('structure', $results);
+    }
+
+    /**
+     * Without a reference, score_all still runs reference-free scorers.
+     *
+     * @return void
+     */
+    public function test_score_all_reference_free_without_reference(): void {
+        $this->resetAfterTest();
+        [$instance, $wsid] = $this->setup_activity();
+        $subid = $this->snapshot($wsid, ['A', 'B'], [['A', 'r', 'B']]);
+
+        $results = (new assess_service())->score_all($instance, $subid);
+
+        $this->assertArrayHasKey('structure', $results);
+        $this->assertArrayNotHasKey('reference', $results);
+        $this->assertTrue($results['structure']['result']->informational);
+    }
+
+    /**
+     * With a reference marked, score_all runs both reference-free and reference scorers.
+     *
+     * @return void
+     */
+    public function test_score_all_includes_reference_when_marked(): void {
+        $this->resetAfterTest();
+        [$instance, $wsid] = $this->setup_activity();
+        $refid = $this->snapshot($wsid, ['A', 'B'], [['A', 'r', 'B']]);
+        $subid = $this->snapshot($wsid, ['A', 'B'], [['A', 'r', 'B']]);
+        $instance->referencesnapshotid = $refid;
+
+        $results = (new assess_service())->score_all($instance, $subid);
+
+        $this->assertArrayHasKey('structure', $results);
+        $this->assertArrayHasKey('reference', $results);
+    }
 }

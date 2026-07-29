@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.5.26 — reference solution can be marked per activity; the reference scorer's suggestion (match %, part scores, matched/missing/extra) shows in the grading tab. Verified on a real Moodle 4.5.12 instance.**
+**Development status: 0.5.28 — AI (LLM) scorer added: on-demand assessment via Moodle's AI subsystem, with tuple-to-text prompts. Verified on a real Moodle 4.5.12 instance.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

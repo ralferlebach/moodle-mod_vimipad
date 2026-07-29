@@ -40,19 +40,36 @@ class result {
     /** @var array<string,string[]> Proposition breakdown: matched, missing, extra. */
     public array $propositions;
 
+    /** @var array<string,string> Named informational metrics (label => value), for reference-free scorers. */
+    public array $metrics;
+
+    /** @var bool True when the result is a structural overview, not a grade suggestion. */
+    public bool $informational;
+
     /**
      * Constructor.
      *
      * @param float $score Overall score (0.0–1.0).
-     * @param array<string,float> $partscores Part scores per dimension.
-     * @param array<string,string[]> $concepts Concept breakdown (matched/missing/extra).
-     * @param array<string,string[]> $propositions Proposition breakdown (matched/missing/extra).
+     * @param array $partscores Part scores per dimension.
+     * @param array $concepts Concept breakdown (matched/missing/extra).
+     * @param array $propositions Proposition breakdown (matched/missing/extra).
+     * @param array $metrics Named metrics (label => value) for informational scorers.
+     * @param bool $informational True to present as an overview rather than a grade suggestion.
      */
-    public function __construct(float $score, array $partscores, array $concepts, array $propositions) {
+    public function __construct(
+        float $score,
+        array $partscores,
+        array $concepts,
+        array $propositions,
+        array $metrics = [],
+        bool $informational = false
+    ) {
         $this->score = max(0.0, min(1.0, $score));
         $this->partscores = $partscores;
         $this->concepts = $concepts;
         $this->propositions = $propositions;
+        $this->metrics = $metrics;
+        $this->informational = $informational;
     }
 
     /**

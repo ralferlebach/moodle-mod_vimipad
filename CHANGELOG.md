@@ -4,7 +4,44 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.26** (2026072706).
+> release is **0.5.28** (2026072708).
+
+## 0.5.28 (2026072708) — AI (LLM) scorer + tuple-to-text
+
+- **New `vimipadassess_llm` scorer** assesses a map through Moodle's AI
+  subsystem. It runs *on demand* (a "Run AI assessment" button in the grading
+  tab), never automatically, because the call is slow and costs apply. Prompt
+  building and reply interpretation are deterministic and unit-tested; only the
+  model round-trip needs a configured AI provider.
+- **Tuple-to-text core service** renders a map's concepts and propositions as
+  plain sentences — the shared bridge between the structured map and any
+  prompt-based scorer.
+- **Contract additions:** scorers can declare `uses_ai()` (so `score_all` skips
+  them on page load) and AI scorers implement a `prompt_scorer` interface
+  (`build_prompt` / `interpret`); the assess service orchestrates the AI call
+  and reuses `ai_feedback_service` for gating.
+- **CI fix:** phpdoc rejected the generic array syntax (`array<...>`) in two
+  `@param` tags; changed to plain `array`.
+- **Verified on a real Moodle 4.5.12 instance:** 146 `mod_vimipad` + 49
+  `vimipadassess` tests pass; phpcs, phpdoc, phpcpd, savepoints, validate and
+  mustache are clean.
+
+## 0.5.27 (2026072707) — reference-free structural scorer
+
+- **New scorer `vimipadassess_structure`** — a reference-free structural overview
+  of a submission: concept and proposition counts, links per concept, isolated
+  concepts and well-connected hubs. It is explicitly *informational* (a new
+  `informational` flag and `metrics` list on the assess `result`); the grading
+  tab shows the numbers with a clear note that rich structure alone is not a
+  grade. It needs no reference solution, so it always applies.
+- **Grading tab runs every applicable scorer.** A new `assess_service::score_all`
+  runs each scorer that supports the submission's profile — reference-free ones
+  always, reference-based ones only when a reference is marked — and the tab
+  renders each under its own name (structural metrics for `structure`, the
+  match breakdown and suggested grade for `reference`).
+- **Verified on a real Moodle 4.5.12 instance:** `mod_vimipad` 145 tests and
+  `vimipadassess` 33 tests (incl. the new structure-scorer and score_all tests)
+  pass; phpcs, phpcpd, savepoints, validate and mustache are clean.
 
 ## 0.5.26 (2026072706) — reference solution + scoring in the grading tab
 

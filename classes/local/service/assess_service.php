@@ -17,9 +17,11 @@
 namespace mod_vimipad\local\service;
 
 use mod_vimipad\local\assess\exact_matcher;
+use mod_vimipad\local\assess\prompt_scorer;
 use mod_vimipad\local\assess\registry;
 use mod_vimipad\local\assess\result;
 use mod_vimipad\local\assess\submission;
+use mod_vimipad\local\service\ai_feedback_service;
 use stdClass;
 
 /**
@@ -83,5 +85,81 @@ class assess_service {
             return null;
         }
         return $scorer->score($submission, [$reference], new exact_matcher());
+    }
+
+    /**
+     * Run every scorer that applies to the submission's profile.
+     *
+     * Reference-free scorers always run; reference-based scorers run only when a
+     * reference is marked and the snapshot is not the reference itself.
+     *
+     * @param stdClass $instance The activity instance.
+     * @param int $snapshotid The snapshot to assess.
+     * @return array<string,array{name: string, result: result}> Keyed by scorer key.
+     */
+    public function score_all(stdClass $instance, int $snapshotid): array {
+        $submission = $this->submission_from_snapshot($snapshotid);
+        if ($submission === null) {
+            return [];
+        }
+        $referenceid = (int) ($instance->referencesnapshotid ?? 0);
+        $reference = ($referenceid > 0 && $referenceid !== $snapshotid)
+            ? $this->submission_from_snapshot($referenceid)
+            : null;
+        $matcher = new exact_matcher();
+
+        $results = [];
+        foreach (registry::for_profile($submission->profile) as $key => $scorer) {
+            if ($scorer->uses_ai()) {
+                // AI scorers are slow and run on demand, not automatically.
+                continue;
+            }
+            if ($scorer->requires_reference()) {
+                if ($reference === null) {
+                    continue;
+                }
+                $result = $scorer->score($submission, [$reference], $matcher);
+            } else {
+                $result = $scorer->score($submission, [], $matcher);
+            }
+            $results[$key] = ['name' => $scorer->get_name(), 'result' => $result];
+        }
+        return $results;
+    }
+
+    /**
+     * Run an AI (prompt-based) scorer on demand, calling the AI subsystem.
+     *
+     * @param \context $context The module context.
+     * @param stdClass $instance The activity instance.
+     * @param int $snapshotid The snapshot to assess.
+     * @param int $userid The acting teacher's user id.
+     * @param string $scorerkey The AI scorer key.
+     * @return result|null The suggestion, or null if the scorer or map is unavailable.
+     * @throws \moodle_exception If the AI subsystem is unavailable or the call fails.
+     */
+    public function score_ai(
+        \context $context,
+        stdClass $instance,
+        int $snapshotid,
+        int $userid,
+        string $scorerkey = 'llm'
+    ): ?result {
+        $scorer = registry::get($scorerkey);
+        if (!$scorer instanceof prompt_scorer) {
+            return null;
+        }
+        $submission = $this->submission_from_snapshot($snapshotid);
+        if ($submission === null) {
+            return null;
+        }
+        $referenceid = (int) ($instance->referencesnapshotid ?? 0);
+        $references = ($referenceid > 0 && $referenceid !== $snapshotid)
+            ? array_filter([$this->submission_from_snapshot($referenceid)])
+            : [];
+
+        $prompt = $scorer->build_prompt($submission, $references);
+        $airesponse = (new ai_feedback_service())->generate_text($context, $userid, $prompt);
+        return $scorer->interpret($airesponse['text'], $submission, $references);
     }
 }

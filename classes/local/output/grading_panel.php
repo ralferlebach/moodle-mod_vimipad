@@ -22,6 +22,7 @@ use html_table;
 use moodle_url;
 use stdClass;
 use mod_vimipad\local\service\ai_feedback_service;
+use mod_vimipad\local\assess\registry;
 use mod_vimipad\local\assess\result;
 use mod_vimipad\local\service\assess_service;
 use mod_vimipad\local\service\grading_service;
@@ -319,7 +320,7 @@ class grading_panel {
 
         self::render_annotation_form($pageurl, $data, $labels);
         $acceptedforfeedback = self::render_ai_assistance($context, $instance, $snapshot, $pageurl);
-        self::render_assessment($cm, $instance, $snapshot, $pageurl);
+        self::render_assessment($cm, $context, $instance, $snapshot, $pageurl);
         if (self::$advancedform !== null) {
             echo html_writer::tag('h4', get_string('gradingmethod', 'mod_vimipad'), ['class' => 'mt-4']);
             self::$advancedform->display();
@@ -332,6 +333,7 @@ class grading_panel {
      * Render the automatic-assessment aid: reference marking and the scorer's suggestion.
      *
      * @param stdClass $cm The course module.
+     * @param context_module $context The module context.
      * @param stdClass $instance The activity instance.
      * @param stdClass $snapshot The snapshot being graded.
      * @param moodle_url $pageurl The detail page URL.
@@ -339,6 +341,7 @@ class grading_panel {
      */
     private static function render_assessment(
         stdClass $cm,
+        context_module $context,
         stdClass $instance,
         stdClass $snapshot,
         moodle_url $pageurl
@@ -353,22 +356,75 @@ class grading_panel {
         if ($referenceid === $snapshotid) {
             echo $OUTPUT->notification(get_string('isreference', 'mod_vimipad'), 'info');
             echo self::reference_button($pageurl, false);
-            return;
+        } else {
+            echo self::reference_button($pageurl, true);
+            if ($referenceid === 0) {
+                echo html_writer::div(get_string('noreference', 'mod_vimipad'), 'text-muted small mt-2');
+            }
         }
 
-        echo self::reference_button($pageurl, true);
-
-        if ($referenceid === 0) {
-            echo html_writer::div(get_string('noreference', 'mod_vimipad'), 'text-muted small mt-2');
-            return;
+        $results = (new assess_service())->score_all($instance, $snapshotid);
+        foreach ($results as $entry) {
+            echo html_writer::tag('h5', $entry['name'], ['class' => 'mt-3']);
+            self::render_result($instance, $entry['result']);
         }
 
-        $result = (new assess_service())->score($instance, $snapshotid);
-        if ($result === null) {
+        self::render_ai_assessment($context, $instance, $snapshot, $pageurl);
+
+        if (empty($results) && registry::get('llm') === null) {
             echo html_writer::div(get_string('scoreunavailable', 'mod_vimipad'), 'text-muted small mt-2');
+        }
+    }
+
+    /**
+     * Render the on-demand AI scorer: a button, and its suggestion once requested.
+     *
+     * @param context_module $context The module context.
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $snapshot The snapshot being graded.
+     * @param moodle_url $pageurl The detail page URL.
+     * @return void
+     */
+    private static function render_ai_assessment(
+        context_module $context,
+        stdClass $instance,
+        stdClass $snapshot,
+        moodle_url $pageurl
+    ): void {
+        global $USER, $OUTPUT;
+
+        $scorer = registry::get('llm');
+        if ($scorer === null || !$scorer->uses_ai()) {
             return;
         }
-        self::render_score($instance, $result);
+
+        echo html_writer::tag('h5', $scorer->get_name(), ['class' => 'mt-3']);
+
+        if (!optional_param('runai', 0, PARAM_BOOL)) {
+            $runurl = new moodle_url($pageurl, ['runai' => 1, 'sesskey' => sesskey()]);
+            echo html_writer::link(
+                $runurl,
+                get_string('runai', 'mod_vimipad'),
+                ['class' => 'btn btn-sm btn-outline-info']
+            );
+            echo html_writer::div(get_string('runaihint', 'mod_vimipad'), 'text-muted small mt-1');
+            return;
+        }
+
+        if (!confirm_sesskey()) {
+            return;
+        }
+        try {
+            $result = (new assess_service())->score_ai($context, $instance, (int) $snapshot->id, (int) $USER->id);
+        } catch (\moodle_exception $e) {
+            echo $OUTPUT->notification($e->getMessage(), 'error');
+            return;
+        }
+        if ($result === null) {
+            echo html_writer::div(get_string('scoreunavailable', 'mod_vimipad'), 'text-muted small');
+            return;
+        }
+        self::render_result($instance, $result);
     }
 
     /**
@@ -395,7 +451,18 @@ class grading_panel {
      * @param result $result The scorer result.
      * @return void
      */
-    private static function render_score(stdClass $instance, result $result): void {
+    private static function render_result(stdClass $instance, result $result): void {
+        if ($result->informational) {
+            foreach ($result->metrics as $label => $value) {
+                echo html_writer::div(
+                    html_writer::tag('span', s($label) . ': ', ['class' => 'font-weight-bold']) . s($value),
+                    'small'
+                );
+            }
+            echo html_writer::div(get_string('structuralnote', 'mod_vimipad'), 'text-muted small mt-1');
+            return;
+        }
+
         $max = (float) $instance->grade;
         if ($max <= 0) {
             $max = 100.0;
@@ -407,21 +474,29 @@ class grading_panel {
         ];
         echo html_writer::div(get_string('scoresuggestion', 'mod_vimipad', $data), 'alert alert-secondary mt-2');
 
-        $parts = (object) [
-            'concepts' => round(($result->partscores['concepts'] ?? 0) * 100),
-            'propositions' => round(($result->partscores['propositions'] ?? 0) * 100),
-        ];
-        echo html_writer::tag('p', get_string('scoreparts', 'mod_vimipad', $parts), ['class' => 'small']);
+        $hasbreakdown = !empty($result->concepts['matched']) || !empty($result->concepts['missing'])
+            || !empty($result->concepts['extra']) || !empty($result->propositions['matched'])
+            || !empty($result->propositions['missing']) || !empty($result->propositions['extra']);
+        if ($hasbreakdown) {
+            $parts = (object) [
+                'concepts' => round(($result->partscores['concepts'] ?? 0) * 100),
+                'propositions' => round(($result->partscores['propositions'] ?? 0) * 100),
+            ];
+            echo html_writer::tag('p', get_string('scoreparts', 'mod_vimipad', $parts), ['class' => 'small']);
+            self::render_breakdown(get_string('concepts', 'mod_vimipad'), $result->concepts);
+            self::render_breakdown(get_string('propositions', 'mod_vimipad'), $result->propositions);
+        }
 
-        self::render_breakdown(get_string('concepts', 'mod_vimipad'), $result->concepts);
-        self::render_breakdown(get_string('propositions', 'mod_vimipad'), $result->propositions);
+        if (!empty($result->metrics['rationale'])) {
+            echo html_writer::div(s($result->metrics['rationale']), 'small mt-1');
+        }
     }
 
     /**
      * Render one matched/missing/extra breakdown block.
      *
      * @param string $title The dimension title.
-     * @param array<string,string[]> $breakdown The matched/missing/extra lists.
+     * @param array $breakdown The matched/missing/extra lists.
      * @return void
      */
     private static function render_breakdown(string $title, array $breakdown): void {
