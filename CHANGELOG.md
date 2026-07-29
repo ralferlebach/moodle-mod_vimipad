@@ -4,7 +4,38 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.18** (2026072698).
+> release is **0.5.20** (2026072700).
+
+## 0.5.20 (2026072700) — grading through the rubric
+
+- **Grade with the rubric / marking guide.** When an advanced grading method is
+  active, the submission's grading detail now shows the editable rubric (a
+  moodleform grading element); saving derives the grade from the rubric filling
+  and stores it as the grade. The filling is remembered per submission and
+  grader (new `vimipad_gradeinstance` table, itemid = snapshot) so re-opening a
+  grade shows the previous filling.
+- **Additive and safe by design.** The rubric path engages *only* when a method
+  is defined; with no method active the numeric grade path is unchanged. Privacy
+  covers the new table (metadata, per-user and context deletion via cleanup).
+- **Known limitation:** advanced-grading rubric fillings are not yet included in
+  course backup/restore (the numeric grade and gradebook value are). Backup of
+  the grading area is a later, separately tested step.
+- Needs verification on a live instance (the advanced-grading instance lifecycle
+  cannot be exercised without one). Run the DB upgrade and clear caches.
+
+## 0.5.19 (2026072699) — advanced grading (define & preview)
+
+- **Core advanced grading enabled.** The activity now declares
+  `FEATURE_ADVANCED_GRADING` and a `submissions` grading area, so Moodle's
+  standard "Advanced grading" administration appears and teachers can define a
+  rubric or marking guide the usual way.
+- **Rubric shown in the grading tab.** When an advanced grading method is active,
+  its definition is rendered read-only in the submission's grading detail as a
+  reference while grading.
+- Grading *through* the rubric (storing the rubric filling and deriving the
+  grade from it) is the next step — it needs a stored grading-instance reference
+  (a small schema addition) and the grading-form submit lifecycle. For now the
+  numeric grade still records the grade.
 
 ## 0.5.18 (2026072698) — grading in the tab + CI fixes
 

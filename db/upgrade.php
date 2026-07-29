@@ -195,5 +195,23 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072685, 'vimipad');
     }
 
+    if ($oldversion < 2026072700) {
+        // Advanced-grading (rubric) form instance per submission and grader.
+        $gradeinstance = new xmldb_table('vimipad_gradeinstance');
+        if (!$dbman->table_exists($gradeinstance)) {
+            $gradeinstance->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $gradeinstance->add_field('snapshotid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $gradeinstance->add_field('raterid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $gradeinstance->add_field('instanceid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $gradeinstance->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $gradeinstance->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $gradeinstance->add_key('snapshotid', XMLDB_KEY_FOREIGN, ['snapshotid'], 'vimipad_snapshot', ['id']);
+            $gradeinstance->add_index('snapshotid-raterid', XMLDB_INDEX_UNIQUE, ['snapshotid', 'raterid']);
+            $dbman->create_table($gradeinstance);
+        }
+
+        upgrade_mod_savepoint(true, 2026072700, 'vimipad');
+    }
+
     return true;
 }

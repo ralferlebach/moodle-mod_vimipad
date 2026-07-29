@@ -107,6 +107,10 @@ class provider implements
             'grader' => 'privacy:metadata:vimipad_grade:grader',
         ], 'privacy:metadata:vimipad_grade');
 
+        $collection->add_database_table('vimipad_gradeinstance', [
+            'raterid' => 'privacy:metadata:vimipad_gradeinstance:raterid',
+        ], 'privacy:metadata:vimipad_gradeinstance');
+
         $collection->add_database_table('vimipad_lock', [
             'userid' => 'privacy:metadata:vimipad_lock:userid',
         ], 'privacy:metadata:vimipad_lock');
@@ -439,6 +443,16 @@ class provider implements
 
             // Remove the user's own grade record.
             $DB->delete_records('vimipad_grade', ['vimipadid' => $cm->instance, 'userid' => $userid]);
+
+            // Remove the user's advanced-grading instance links (as a grader).
+            $DB->delete_records_select(
+                'vimipad_gradeinstance',
+                'raterid = :rater AND snapshotid IN (
+                    SELECT s.id FROM {vimipad_snapshot} s
+                      JOIN {vimipad_workspace} w ON w.id = s.workspaceid
+                     WHERE w.vimipadid = :vid)',
+                ['rater' => $userid, 'vid' => $cm->instance]
+            );
 
             // Anonymise contributions to shared (group/course) workspaces the user does not own.
             self::anonymise_shared_contributions($cm->instance, $userid);

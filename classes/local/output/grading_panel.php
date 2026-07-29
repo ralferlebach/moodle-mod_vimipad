@@ -25,6 +25,7 @@ use mod_vimipad\local\service\ai_feedback_service;
 use mod_vimipad\local\service\grading_service;
 use mod_vimipad\local\service\journal_service;
 use mod_vimipad\local\service\workspace_service;
+use mod_vimipad\form\grade_form;
 
 /**
  * Renders the grading detail for one submission and processes its actions.
@@ -38,6 +39,11 @@ use mod_vimipad\local\service\workspace_service;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class grading_panel {
+    /** @var grade_form|null The advanced-grading form, built once per request. */
+    private static $advancedform = null;
+
+    /** @var array|null Cached [form, gradinginstance, itemid] for the advanced path. */
+    private static $advancedcached = null;
     /**
      * The Grading-tab URL showing a single submission's detail.
      *
@@ -147,7 +153,27 @@ class grading_panel {
             redirect($pageurl, get_string('ai:draftaccepted', 'mod_vimipad'));
         }
 
-        if (optional_param('savegrade', 0, PARAM_BOOL) && confirm_sesskey()) {
+        $advanced = self::resolve_advanced($cm, $context, $instance, $snapshot);
+        if ($advanced !== null) {
+            [$form, $gradinginstance, $itemid] = $advanced;
+            if ($data = $form->get_data()) {
+                $grade = $gradinginstance->submit_and_get_grade($data->advancedgrading, $itemid);
+                self::store_instance($itemid, (int) $USER->id, (int) $gradinginstance->get_id());
+                (new grading_service())->save_grade(
+                    $instance,
+                    $workspace,
+                    $itemid,
+                    ($grade < 0 ? null : (float) $grade),
+                    $data->feedback,
+                    FORMAT_PLAIN,
+                    (int) $USER->id
+                );
+                redirect(
+                    new moodle_url('/mod/vimipad/view.php', ['id' => $cm->id, 'tab' => 'grade']),
+                    get_string('gradesaved', 'mod_vimipad')
+                );
+            }
+        } else if (optional_param('savegrade', 0, PARAM_BOOL) && confirm_sesskey()) {
             $gradeval = optional_param('grade', '', PARAM_RAW_TRIMMED);
             $feedback = optional_param('feedback', '', PARAM_TEXT);
             $rawgrade = ($gradeval === '') ? null : (float) $gradeval;
@@ -281,7 +307,97 @@ class grading_panel {
 
         self::render_annotation_form($pageurl, $data, $labels);
         $acceptedforfeedback = self::render_ai_assistance($context, $instance, $snapshot, $pageurl);
-        self::render_grade_form($instance, $workspace, $pageurl, $acceptedforfeedback);
+        if (self::$advancedform !== null) {
+            echo html_writer::tag('h4', get_string('gradingmethod', 'mod_vimipad'), ['class' => 'mt-4']);
+            self::$advancedform->display();
+        } else {
+            self::render_grade_form($instance, $workspace, $pageurl, $acceptedforfeedback);
+        }
+    }
+
+    /**
+     * Resolve the active advanced-grading form for this submission, if any.
+     *
+     * Builds the grade form (with the rubric / marking guide element) once per
+     * request and stashes it for rendering. Returns null when no advanced method
+     * is active, so the caller falls back to the numeric grade.
+     *
+     * @param stdClass $cm The course module.
+     * @param context_module $context The module context.
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $snapshot The snapshot being graded.
+     * @return array|null [grade_form $form, \gradingform_instance $gradinginstance, int $itemid] or null.
+     */
+    private static function resolve_advanced(
+        stdClass $cm,
+        context_module $context,
+        stdClass $instance,
+        stdClass $snapshot
+    ): ?array {
+        global $CFG, $DB, $USER;
+
+        if (self::$advancedform !== null) {
+            return self::$advancedcached;
+        }
+
+        require_once($CFG->dirroot . '/grade/grading/lib.php');
+        $manager = get_grading_manager($context, 'mod_vimipad', 'submissions');
+        if (!$manager->get_active_method()) {
+            return null;
+        }
+        $controller = $manager->get_active_controller();
+        if (!$controller || !$controller->is_form_available()) {
+            return null;
+        }
+
+        $itemid = (int) $snapshot->id;
+        $storedid = (int) ($DB->get_field(
+            'vimipad_gradeinstance',
+            'instanceid',
+            ['snapshotid' => $itemid, 'raterid' => (int) $USER->id]
+        ) ?: 0);
+        $gradinginstance = $controller->get_or_create_instance($storedid, (int) $USER->id, $itemid);
+
+        $feedbackrecord = $DB->get_records('vimipad_grade', ['snapshotid' => $itemid], '', 'id, feedback', 0, 1);
+        $feedback = $feedbackrecord ? (string) reset($feedbackrecord)->feedback : '';
+
+        $form = new grade_form(self::detail_url($cm, $itemid)->out(false), [
+            'cmid' => (int) $cm->id,
+            'snapshotid' => $itemid,
+            'maxgrade' => $instance->grade,
+            'gradinginstance' => $gradinginstance,
+            'feedback' => $feedback,
+        ]);
+
+        self::$advancedform = $form;
+        self::$advancedcached = [$form, $gradinginstance, $itemid];
+        return self::$advancedcached;
+    }
+
+    /**
+     * Persist the advanced-grading instance id for this submission and grader.
+     *
+     * @param int $snapshotid The snapshot (itemid).
+     * @param int $raterid The grader.
+     * @param int $instanceid The gradingform instance id.
+     * @return void
+     */
+    private static function store_instance(int $snapshotid, int $raterid, int $instanceid): void {
+        global $DB;
+
+        $existing = $DB->get_record('vimipad_gradeinstance', ['snapshotid' => $snapshotid, 'raterid' => $raterid]);
+        $record = (object) [
+            'snapshotid' => $snapshotid,
+            'raterid' => $raterid,
+            'instanceid' => $instanceid,
+            'timemodified' => time(),
+        ];
+        if ($existing) {
+            $record->id = $existing->id;
+            $DB->update_record('vimipad_gradeinstance', $record);
+        } else {
+            $DB->insert_record('vimipad_gradeinstance', $record);
+        }
     }
 
     /**

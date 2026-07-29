@@ -327,5 +327,22 @@
         <INDEX NAME="timeexpires" UNIQUE="false" FIELDS="timeexpires"/>
       </INDEXES>
     </TABLE>
+
+    <TABLE NAME="vimipad_gradeinstance" COMMENT="Links a submission and grader to their advanced-grading (rubric) form instance">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="snapshotid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Graded snapshot (advanced-grading itemid)"/>
+        <FIELD NAME="raterid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="User who filled the grading form"/>
+        <FIELD NAME="instanceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="gradingform instance id"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="snapshotid" TYPE="foreign" FIELDS="snapshotid" REFTABLE="vimipad_snapshot" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="snapshotid-raterid" UNIQUE="true" FIELDS="snapshotid, raterid"/>
+      </INDEXES>
+    </TABLE>
   </TABLES>
 </XMLDB>

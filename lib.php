@@ -49,11 +49,25 @@ function vimipad_supports($feature) {
             return true;
         case FEATURE_GRADE_HAS_GRADE:
             return true;
+        case FEATURE_ADVANCED_GRADING:
+            return true;
         case FEATURE_MOD_PURPOSE:
             return MOD_PURPOSE_COLLABORATION;
         default:
             return null;
     }
+}
+
+/**
+ * Advanced grading areas supported by this activity.
+ *
+ * Enables Moodle's core advanced grading (rubric, marking guide) on the
+ * activity's submissions.
+ *
+ * @return array Area name => human-readable title.
+ */
+function mod_vimipad_grading_areas_list(): array {
+    return ['submissions' => get_string('gradingarea_submissions', 'mod_vimipad')];
 }
 
 /**
