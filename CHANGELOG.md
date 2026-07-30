@@ -4,7 +4,29 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.28** (2026072708).
+> release is **0.5.29** (2026072709).
+
+## 0.5.29 (2026072709) — configurable matching + hierarchy scorer
+
+- **Choice of label matching for automatic scoring.** A new activity setting
+  ("Concept matching") selects how concept and proposition labels are compared:
+  *exact* (normalised), *fuzzy* (edit distance, tolerates typos) or *word
+  overlap* (Jaccard, ignores order and filler words). Implemented as
+  `levenshtein_matcher` and `token_matcher` behind the existing `matcher`
+  interface, chosen through a `matcher_factory`; every content scorer benefits.
+  The choice (`matchmode`) is stored on the activity, shown in the form, and
+  carried through backup/restore.
+- **New `vimipadassess_tree` scorer** compares hierarchy rather than wording:
+  it reads directed relations as parent → child links, identifies the root and
+  measures how well the submission reproduces the reference's root and links
+  (precision/recall F1). Suited to tree and mind-map profiles; relation labels
+  are ignored. Uses the injected matcher, so fuzzy/word-overlap applies here too.
+- The grading tab now shows each scorer's part scores generically (e.g. root and
+  hierarchy for the tree scorer, concepts and propositions for the reference
+  scorer).
+- **Verified on a real Moodle 4.5.12 instance:** 150 `mod_vimipad` + 65
+  `vimipadassess` tests pass; phpcs, phpdoc, phpcpd, savepoints, validate and
+  mustache are clean.
 
 ## 0.5.28 (2026072708) — AI (LLM) scorer + tuple-to-text
 

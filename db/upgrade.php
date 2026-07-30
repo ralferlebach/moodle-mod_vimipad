@@ -224,5 +224,16 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072706, 'vimipad');
     }
 
+    if ($oldversion < 2026072709) {
+        // Label matching strategy for content scorers.
+        $table = new xmldb_table('vimipad');
+        $field = new xmldb_field('matchmode', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0', 'referencesnapshotid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026072709, 'vimipad');
+    }
+
     return true;
 }

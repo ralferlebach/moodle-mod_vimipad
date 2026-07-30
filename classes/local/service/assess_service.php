@@ -16,7 +16,7 @@
 
 namespace mod_vimipad\local\service;
 
-use mod_vimipad\local\assess\exact_matcher;
+use mod_vimipad\local\assess\matcher_factory;
 use mod_vimipad\local\assess\prompt_scorer;
 use mod_vimipad\local\assess\registry;
 use mod_vimipad\local\assess\result;
@@ -84,7 +84,8 @@ class assess_service {
         if (!$scorer->supports_profile($submission->profile)) {
             return null;
         }
-        return $scorer->score($submission, [$reference], new exact_matcher());
+        $matcher = matcher_factory::create((int) ($instance->matchmode ?? 0));
+        return $scorer->score($submission, [$reference], $matcher);
     }
 
     /**
@@ -106,7 +107,7 @@ class assess_service {
         $reference = ($referenceid > 0 && $referenceid !== $snapshotid)
             ? $this->submission_from_snapshot($referenceid)
             : null;
-        $matcher = new exact_matcher();
+        $matcher = matcher_factory::create((int) ($instance->matchmode ?? 0));
 
         $results = [];
         foreach (registry::for_profile($submission->profile) as $key => $scorer) {

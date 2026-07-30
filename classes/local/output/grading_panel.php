@@ -478,11 +478,13 @@ class grading_panel {
             || !empty($result->concepts['extra']) || !empty($result->propositions['matched'])
             || !empty($result->propositions['missing']) || !empty($result->propositions['extra']);
         if ($hasbreakdown) {
-            $parts = (object) [
-                'concepts' => round(($result->partscores['concepts'] ?? 0) * 100),
-                'propositions' => round(($result->partscores['propositions'] ?? 0) * 100),
-            ];
-            echo html_writer::tag('p', get_string('scoreparts', 'mod_vimipad', $parts), ['class' => 'small']);
+            $partlines = [];
+            foreach ($result->partscores as $dimension => $value) {
+                $partlines[] = get_string('scorepart:' . $dimension, 'mod_vimipad') . ' ' . round($value * 100) . '%';
+            }
+            if (!empty($partlines)) {
+                echo html_writer::tag('p', implode(', ', $partlines) . '.', ['class' => 'small']);
+            }
             self::render_breakdown(get_string('concepts', 'mod_vimipad'), $result->concepts);
             self::render_breakdown(get_string('propositions', 'mod_vimipad'), $result->propositions);
         }

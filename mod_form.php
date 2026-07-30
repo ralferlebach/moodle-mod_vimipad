@@ -93,6 +93,16 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->addHelpButton('requireallteamsubmit', 'requireallteamsubmit', 'mod_vimipad');
         $mform->hideIf('requireallteamsubmit', 'collaborationmode', 'neq', 1);
 
+        // Automatic assessment: how concept/proposition labels are matched.
+        $mform->addElement(
+            'select',
+            'matchmode',
+            get_string('matchmode', 'mod_vimipad'),
+            \mod_vimipad\local\assess\matcher_factory::menu()
+        );
+        $mform->setDefault('matchmode', \mod_vimipad\local\assess\matcher_factory::MODE_EXACT);
+        $mform->addHelpButton('matchmode', 'matchmode', 'mod_vimipad');
+
         // Availability: optional due and cut-off dates.
         $mform->addElement('header', 'availability', get_string('availability', 'mod_vimipad'));
 
