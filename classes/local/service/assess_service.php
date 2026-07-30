@@ -73,7 +73,7 @@ class assess_service {
             return null;
         }
         $scorer = registry::get($scorerkey);
-        if ($scorer === null) {
+        if ($scorer === null || !$this->scorer_enabled($instance, $scorerkey)) {
             return null;
         }
         $submission = $this->submission_from_snapshot($snapshotid);
@@ -115,6 +115,9 @@ class assess_service {
                 // AI scorers are slow and run on demand, not automatically.
                 continue;
             }
+            if (!$this->scorer_enabled($instance, $key)) {
+                continue;
+            }
             if ($scorer->requires_reference()) {
                 if ($reference === null) {
                     continue;
@@ -126,6 +129,21 @@ class assess_service {
             $results[$key] = ['name' => $scorer->get_name(), 'result' => $result];
         }
         return $results;
+    }
+
+    /**
+     * Whether a scorer key is enabled for this activity.
+     *
+     * An empty selection means every installed scorer runs, so activities created
+     * before the setting existed keep their previous behaviour.
+     *
+     * @param stdClass $instance The activity instance.
+     * @param string $key The scorer key.
+     * @return bool
+     */
+    public function scorer_enabled(stdClass $instance, string $key): bool {
+        $selected = array_filter(array_map('trim', explode(',', (string) ($instance->activescorers ?? ''))));
+        return empty($selected) || in_array($key, $selected, true);
     }
 
     /**
@@ -147,7 +165,7 @@ class assess_service {
         string $scorerkey = 'llm'
     ): ?result {
         $scorer = registry::get($scorerkey);
-        if (!$scorer instanceof prompt_scorer) {
+        if (!$scorer instanceof prompt_scorer || !$this->scorer_enabled($instance, $scorerkey)) {
             return null;
         }
         $submission = $this->submission_from_snapshot($snapshotid);

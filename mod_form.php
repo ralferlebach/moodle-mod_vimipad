@@ -93,6 +93,37 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->addHelpButton('requireallteamsubmit', 'requireallteamsubmit', 'mod_vimipad');
         $mform->hideIf('requireallteamsubmit', 'collaborationmode', 'neq', 1);
 
+        // Which automatic scorers run (empty selection = all installed scorers).
+        $scoreroptions = [];
+        foreach (\mod_vimipad\local\assess\registry::all() as $key => $scorer) {
+            $scoreroptions[$key] = $scorer->get_name();
+        }
+        if (!empty($scoreroptions)) {
+            $mform->addElement(
+                'select',
+                'activescorers',
+                get_string('activescorers', 'mod_vimipad'),
+                $scoreroptions,
+                ['multiple' => true, 'size' => min(6, count($scoreroptions))]
+            );
+            $mform->addHelpButton('activescorers', 'activescorers', 'mod_vimipad');
+        }
+
+        // Peer review: allocate submitted maps to other students.
+        $mform->addElement('advcheckbox', 'peerreviewmode', get_string('peerreviewmode', 'mod_vimipad'));
+        $mform->setDefault('peerreviewmode', 0);
+        $mform->addHelpButton('peerreviewmode', 'peerreviewmode', 'mod_vimipad');
+
+        $mform->addElement(
+            'select',
+            'peerreviewcount',
+            get_string('peerreviewcount', 'mod_vimipad'),
+            [1 => 1, 2 => 2, 3 => 3, 4 => 4, 5 => 5]
+        );
+        $mform->setDefault('peerreviewcount', 2);
+        $mform->addHelpButton('peerreviewcount', 'peerreviewcount', 'mod_vimipad');
+        $mform->hideIf('peerreviewcount', 'peerreviewmode', 'notchecked');
+
         // Automatic assessment: how concept/proposition labels are matched.
         $mform->addElement(
             'select',

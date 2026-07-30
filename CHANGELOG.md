@@ -4,7 +4,47 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.31** (2026072711).
+> release is **0.5.32** (2026072712).
+
+## 0.5.32 (2026072712) — configuration UI for assessment and peer review
+
+- **Peer review settings in the activity form.** "Peer review" turns the feature
+  on and "Reviews per submission" (1-5) sets the allocation target, the latter
+  hidden until peer review is enabled. Both carry help text explaining that peer
+  scores are advisory.
+- **Per-activity scorer selection.** A new "Automatic scorers" multi-select lists
+  every installed scorer; leaving it empty keeps the previous behaviour of running
+  all of them. The choice is stored in `activescorers` and honoured by
+  `assess_service` for the automatic run, the single-scorer path and the on-demand
+  AI scorer alike.
+- **New peer review tab.** Reviewers see their allocated submissions as
+  "Submission 1", "Submission 2" — never the author's name — and open one to get
+  the map read-only, the automatic scorers' hints, and a form for an optional
+  score out of 100 plus written feedback. Opening a review allocated to someone
+  else falls back to the reviewer's own list. A new `mod/vimipad:peerreview`
+  capability governs access (students by default).
+- **Teacher side.** The grading tab gains an "Allocate peer reviews" action, and a
+  submission's grading detail shows the aggregated peer verdict (count, mean,
+  median, outstanding) plus the review comments, without reviewer identities.
+- **Fixed a Moodle schema rule:** `activescorers` was declared CHAR NOT NULL with
+  an empty-string default, which Moodle rejects (it rewrites the default and the
+  install.xml structure check fails). The column is now nullable with no default;
+  null and empty both mean "all scorers".
+- **Fixed: the scorer selection was lost on restore.** `activescorers` was not
+  included in the backup field list, so a restored activity silently fell back to
+  running every scorer. It is now backed up, and the backup/restore roundtrip test
+  asserts that the matching mode, scorer selection and both peer-review settings
+  survive.
+- **Panel rendering is now covered by tests.** `peer_review_panel_test` drives the
+  reviewer list, the empty-allocation case, the detail URL and the no-op action
+  path with a real `cm_info` — the same guard added for the grading panel in
+  0.5.31, so a parameter-type mismatch in a panel fails in PHPUnit instead of only
+  in a browser.
+- **Verified on real Moodle 4.5.12 and 5.0.8 instances:** 176 `mod_vimipad` + 97
+  `vimipadassess` tests pass on both (exit 0), every file also passing in
+  isolation; phpcs, phpdoc, phpcpd, savepoints, validate and mustache clean. Every
+  `get_string()` key referenced in the plugin was cross-checked against the
+  language files.
 
 ## 0.5.31 (2026072711) — peer review backend + description (ROUGE) scorer
 

@@ -268,5 +268,16 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072711, 'vimipad');
     }
 
+    if ($oldversion < 2026072712) {
+        // Which automatic scorers this activity runs (empty = all installed).
+        $table = new xmldb_table('vimipad');
+        $field = new xmldb_field('activescorers', XMLDB_TYPE_CHAR, '255', null, null, null, null, 'peerreviewcount');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026072712, 'vimipad');
+    }
+
     return true;
 }

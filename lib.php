@@ -60,6 +60,22 @@ function vimipad_supports($feature) {
 
 
 /**
+ * Normalise the multi-select scorer list into the stored comma-separated form.
+ *
+ * @param stdClass $data Form data, modified in place.
+ * @return void
+ */
+function vimipad_prepare_scorer_fields(stdClass $data): void {
+    if (!property_exists($data, 'activescorers')) {
+        return;
+    }
+    if (is_array($data->activescorers)) {
+        $keys = array_filter(array_map(static fn($key) => clean_param($key, PARAM_ALPHANUMEXT), $data->activescorers));
+        $data->activescorers = implode(',', $keys);
+    }
+}
+
+/**
  * Add a new vimipad instance.
  *
  * @param stdClass $data Form data from mod_form.
@@ -72,6 +88,7 @@ function vimipad_add_instance(stdClass $data, ?mod_vimipad_mod_form $mform = nul
     $data->timecreated = time();
     $data->timemodified = $data->timecreated;
     vimipad_prepare_completion_fields($data);
+    vimipad_prepare_scorer_fields($data);
 
     $id = $DB->insert_record('vimipad', $data);
 
@@ -94,6 +111,7 @@ function vimipad_update_instance(stdClass $data, ?mod_vimipad_mod_form $mform = 
     $data->id = $data->instance;
     $data->timemodified = time();
     vimipad_prepare_completion_fields($data);
+    vimipad_prepare_scorer_fields($data);
 
     $result = $DB->update_record('vimipad', $data);
 

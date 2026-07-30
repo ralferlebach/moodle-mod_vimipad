@@ -96,6 +96,7 @@ $tabgates = [
     'canvas' => $canview,
     'list' => $canview,
     'journal' => $canview,
+    'peer' => !empty($instance->peerreviewmode) && has_capability('mod/vimipad:peerreview', $context),
     'grade' => $cangrade,
     'feedback' => $canview,
     'tools' => $cangrade,
@@ -234,6 +235,20 @@ if ($gradesnapshotid && $cangrade) {
     );
 }
 
+// Peer review: a teacher allocating reviews for all submitted maps.
+if ($tab === 'grade' && $cangrade && optional_param('allocatereviews', 0, PARAM_BOOL) && confirm_sesskey()) {
+    $allocated = (new \mod_vimipad\local\service\peer_review_service())->allocate($instance);
+    redirect(
+        new moodle_url('/mod/vimipad/view.php', ['id' => $cm->id, 'tab' => 'grade']),
+        get_string('peerreviewallocated', 'mod_vimipad', $allocated)
+    );
+}
+
+// Peer review: save a review if one was posted.
+if ($tab === 'peer' && !empty($instance->peerreviewmode)) {
+    \mod_vimipad\local\output\peer_review_panel::handle_action($cm, $context, $instance, (int) $USER->id);
+}
+
 $tabtree = [];
 foreach ($availabletabs as $key) {
     $taburl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => $key]);
@@ -334,6 +349,17 @@ switch ($tab) {
             ['class' => 'btn btn-secondary']
         ), 'mb-3');
 
+        if (!empty($instance->peerreviewmode)) {
+            $allocateurl = new moodle_url('/mod/vimipad/view.php', [
+                'id' => $cm->id, 'tab' => 'grade', 'allocatereviews' => 1, 'sesskey' => sesskey(),
+            ]);
+            echo html_writer::div(html_writer::link(
+                $allocateurl,
+                get_string('peerreviewallocate', 'mod_vimipad'),
+                ['class' => 'btn btn-outline-secondary']
+            ), 'mb-3');
+        }
+
         $sql = "SELECT s.id AS snapshotid, s.status, s.timecreated, ws.id AS workspaceid, ws.userid, ws.groupid
                   FROM {vimipad_snapshot} s
                   JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
@@ -402,6 +428,10 @@ switch ($tab) {
             }
             echo html_writer::table($table);
         }
+        break;
+
+    case 'peer':
+        \mod_vimipad\local\output\peer_review_panel::render($cm, $context, $instance, (int) $USER->id);
         break;
 
     case 'journal':

@@ -43,7 +43,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             'collaborationmode', 'gradingmode', 'aienabled', 'channelurl',
             'grade', 'completionsubmit', 'completionminnodes', 'completiongraded',
             'duedate', 'cutoffdate', 'requireallteamsubmit', 'referencesnapshotid',
-            'matchmode', 'peerreviewmode', 'peerreviewcount',
+            'matchmode', 'activescorers', 'peerreviewmode', 'peerreviewcount',
             'timecreated', 'timemodified',
         ]);
 

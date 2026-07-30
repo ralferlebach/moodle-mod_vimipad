@@ -141,6 +141,10 @@ final class backup_restore_test extends \advanced_testcase {
             'id' => $instance->id, 'grade' => 55,
             'completionsubmit' => 1, 'completionminnodes' => 3, 'completiongraded' => 1,
             'referencesnapshotid' => $snapshotid,
+            'matchmode' => 1,
+            'activescorers' => 'reference,structure',
+            'peerreviewmode' => 1,
+            'peerreviewcount' => 3,
         ]);
         // A grade (referencing the snapshot) and a journal entry.
         $DB->insert_record('vimipad_grade', (object) [
@@ -187,6 +191,12 @@ final class backup_restore_test extends \advanced_testcase {
 
         // The reference snapshot pointer is remapped to the restored snapshot.
         $this->assertEquals($newsnapshot->id, $newinstance->referencesnapshotid);
+
+        // Assessment and peer-review settings survive the restore.
+        $this->assertSame(1, (int) $newinstance->matchmode);
+        $this->assertSame('reference,structure', $newinstance->activescorers);
+        $this->assertSame(1, (int) $newinstance->peerreviewmode);
+        $this->assertSame(3, (int) $newinstance->peerreviewcount);
 
         // The peer review is restored against the new snapshot with a real reviewer.
         $newreviews = $DB->get_records('vimipad_peerreview', ['snapshotid' => $newsnapshot->id]);

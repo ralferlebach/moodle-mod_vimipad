@@ -28,6 +28,7 @@ use mod_vimipad\local\assess\result;
 use mod_vimipad\local\service\assess_service;
 use mod_vimipad\local\service\grading_service;
 use mod_vimipad\local\service\journal_service;
+use mod_vimipad\local\service\peer_review_service;
 use mod_vimipad\local\service\workspace_service;
 use mod_vimipad\form\grade_form;
 
@@ -322,11 +323,49 @@ class grading_panel {
         self::render_annotation_form($pageurl, $data, $labels);
         $acceptedforfeedback = self::render_ai_assistance($context, $instance, $snapshot, $pageurl);
         self::render_assessment($cm, $context, $instance, $snapshot, $pageurl);
+        self::render_peer_summary($instance, $snapshot);
         if (self::$advancedform !== null) {
             echo html_writer::tag('h4', get_string('gradingmethod', 'mod_vimipad'), ['class' => 'mt-4']);
             self::$advancedform->display();
         } else {
             self::render_grade_form($instance, $workspace, $pageurl, $acceptedforfeedback);
+        }
+    }
+
+    /**
+     * Render the aggregated peer reviews for this submission, if any exist.
+     *
+     * Reviewer identities are deliberately omitted: the teacher sees the spread of
+     * peer judgements, not who said what.
+     *
+     * @param stdClass $instance The activity instance.
+     * @param stdClass $snapshot The snapshot being graded.
+     * @return void
+     */
+    private static function render_peer_summary(stdClass $instance, stdClass $snapshot): void {
+        if (empty($instance->peerreviewmode)) {
+            return;
+        }
+
+        $service = new peer_review_service();
+        $aggregate = $service->aggregate((int) $snapshot->id);
+        if ($aggregate['count'] === 0 && $aggregate['pending'] === 0) {
+            return;
+        }
+
+        echo html_writer::tag('h4', get_string('peerreviewaggregate', 'mod_vimipad'), ['class' => 'mt-4']);
+        echo html_writer::div(get_string('peerreviewaggregatedetail', 'mod_vimipad', (object) [
+            'count' => $aggregate['count'],
+            'mean' => ($aggregate['mean'] === null) ? '-' : round($aggregate['mean'] * 100),
+            'median' => ($aggregate['median'] === null) ? '-' : round($aggregate['median'] * 100),
+            'pending' => $aggregate['pending'],
+        ]), 'alert alert-secondary');
+
+        foreach ($service->for_snapshot((int) $snapshot->id, true) as $review) {
+            if (trim((string) $review->reviewcomment) === '') {
+                continue;
+            }
+            echo html_writer::div(s($review->reviewcomment), 'small border-left pl-2 mb-1');
         }
     }
 

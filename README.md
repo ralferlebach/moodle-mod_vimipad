@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.5.31 — peer review backend (allocation, reviews, aggregation, fuzzy guidance) and ROUGE-based description scorer; Behat type-error fixed. Verified on real Moodle 4.5.12 AND 5.0.8 instances.**
+**Development status: 0.5.32 — configuration UI for assessment and peer review (settings, scorer selection, reviewer tab, teacher aggregate). Verified on real Moodle 4.5.12 AND 5.0.8 instances.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.
