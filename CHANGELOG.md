@@ -4,7 +4,26 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.4** (2026072718).
+> release is **0.6.5** (2026072719).
+
+## 0.6.5 (2026072719) — non-blocking constraint status endpoint
+
+Backend half of the soft, edit-time constraint hints: the editor can now ask for
+the current map's constraint status without blocking anything. Same resolver as
+the hard gate, so hints and enforcement never diverge.
+
+- **New external function `mod_vimipad_get_constraint_status`** (read, ajax):
+  given a workspace, it evaluates the live map with `constraint_policy` and
+  returns `configured`, `satisfied`, localized `messages`, and the structured
+  `requiredmissing` / `forbiddenpresent` / `typeviolations` lists (for future
+  element highlighting). View capability required; inspecting another user's map
+  needs grade capability, as elsewhere. It never mutates and never blocks.
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **199 `mod_vimipad`**
+  (incl. new `get_constraint_status_test`, run in isolation, with the return value
+  validated against the declared structure via `clean_returnvalue`) **+ 97
+  `vimipadassess`** green; whole-plugin phpcs clean (`--ignore=tools/`).
+- Frontend consumption (a hint banner in the editor that calls this endpoint,
+  debounced) is the next slice.
 
 ## 0.6.4 (2026072718) — template structural locks + lint fix
 

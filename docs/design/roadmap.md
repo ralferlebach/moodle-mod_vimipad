@@ -83,8 +83,7 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 > Engine + hartes Abgabe-Gate (0.6.2) und die Lehrenden-Eingabefelder
 > (Pflicht-/Verbotsbegriffe, erlaubte Typen, Mindestumfang) in Form/Schema/
 > Backup (0.6.3) → **Gate produktiv aktiv**. Offen: die Canvas-Oberflächen
-> (Container zeichnen, Template-Autorenwerkzeug), weiche Edit-Zeit-Hinweise und
-> die Template-Struktursperren sind serverseitig **durchgesetzt** (0.6.4, `error:elementlocked`); offen bleibt die Autorenoberflaeche, die die Sperren setzt.
+> (Container zeichnen, Template-Autorenwerkzeug), weiche Edit-Zeit-Hinweise (Backend-Endpoint `get_constraint_status` ✅ 0.6.5, Editor-Anzeige offen); die Template-Struktursperren sind serverseitig **durchgesetzt** (0.6.4, `error:elementlocked`); offen bleibt die Autorenoberflaeche, die die Sperren setzt.
 
 - Vorlagen/Templates durch Lehrende mit einschränkbaren Änderungen
 - Hintergründe zeichnen (Kästen/Abschnitte/Container auf dem Canvas) — Backend

@@ -33,6 +33,14 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/vimipad:view',
     ],
+    'mod_vimipad_get_constraint_status' => [
+        'classname' => 'mod_vimipad\\external\\get_constraint_status',
+        'methodname' => 'execute',
+        'description' => 'Report the current map constraint status for non-blocking edit-time hints.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:view',
+    ],
     'mod_vimipad_apply_operation' => [
         'classname' => 'mod_vimipad\external\apply_operation',
         'methodname' => 'execute',

@@ -109,6 +109,16 @@
 - Test `tests/element_lock_test.php` (Loeschen/Update gesperrt, Whitelist,
   ungesperrt frei, gesperrte Relation).
 
+**0.6.5 - Nicht-blockierender Constraint-Status-Endpoint**
+- Neue externe Funktion `mod_vimipad_get_constraint_status` (read, ajax):
+  wertet die Live-Map mit `constraint_policy` aus und liefert `configured`,
+  `satisfied`, lokalisierte `messages` sowie strukturiert `requiredmissing`/
+  `forbiddenpresent`/`typeviolations` (fuer spaeteres Element-Highlighting).
+  View-Capability; fremde Map -> grade. Mutiert nicht, blockiert nicht.
+- Registrierung in `db/services.php`; Test `tests/get_constraint_status_test.php`
+  (isoliert, Rueckgabe via `clean_returnvalue` gegen die Struktur validiert).
+- Editor-Anzeige (Hinweis-Banner, ruft den Endpoint debounced) = Frontend-Folgeschritt.
+
 ---
 
 ### Entscheidungen getroffen
@@ -155,7 +165,7 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 197 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 199 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
           betroffene Service-Tests einzeln grün (operation/snapshot/workspace/import/consensus/collab/reconstruction/layout)
 PHPCS:    OK — 0 auf allen geänderten/neuen Dateien (moodle-Standard, severity=1)
 Frontend: tsc 0 · Jest 22 Suites/147 · Bundle reproduzierbar (Vorbereitungsrunde)
@@ -166,7 +176,7 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072718 / 0.6.4, package.json + lock.
+- [x] Version konsistent: version.php 2026072719 / 0.6.5, package.json + lock.
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -176,17 +186,16 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.6.4 — 0.5.x abgeschlossen; 0.6-Autoren-Grundlage steht: Container-Ops +
-> Import-Round-Trip (0.6.1); Constraint-Engine + Gate (0.6.2) + Eingabefelder
-> (0.6.3); Template-Struktursperren durchgesetzt (0.6.4). Real auf Moodle 4.5.12
-> verifiziert (197+97 grün); ganzes Plugin phpcs-clean.
+> 0.6.5 — 0.5.x abgeschlossen; 0.6-Autoren-Backend steht: Container-Ops + Import
+> (0.6.1); Constraint-Engine + Gate (0.6.2) + Felder (0.6.3); Struktursperren
+> (0.6.4); Constraint-Status-Endpoint fuer weiche Hinweise (0.6.5). Real auf
+> Moodle 4.5.12 verifiziert (199+97 grün); ganzes Plugin phpcs-clean.
 
 **Zuletzt abgeschlossen:**
-> 0.6.1 Container-Ops + Import; 0.6.2 Constraint-Engine + Gate; 0.6.3 Constraint-
-> Felder (Gate produktiv); 0.6.4 Template-Struktursperren + Lint-Fix. Konvention:
-> 0.6.x ohne alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
+> 0.6.1 Container+Import; 0.6.2 Constraint-Engine+Gate; 0.6.3 Constraint-Felder;
+> 0.6.4 Struktursperren+Lint; 0.6.5 Constraint-Status-Endpoint. Konvention: 0.6.x
+> ohne alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
 
 **Als nächstes geplant:**
-> Container auf dem Canvas zeichnen (Frontend) und der Template-Editor, der die
-> jetzt durchgesetzten `locked`/`editable`-Sperren setzt; dazu weiche Edit-Zeit-
-> Constraint-Hinweise (gleicher Resolver).
+> Frontend: Hinweis-Banner im Editor (ruft `get_constraint_status` debounced),
+> Container auf dem Canvas zeichnen, Template-Editor (setzt `locked`/`editable`).
