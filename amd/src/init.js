@@ -38,6 +38,7 @@ import Notification from 'core/notification';
 
 /** @type {string[]} Editor string keys, kept in sync with lang/en/vimipad.php. */
 const STRING_KEYS = [
+    'constraint:hintsheading',
     'editor:add', 'editor:addnode', 'editor:addrelation', 'editor:actions',
     'editor:beingedited', 'editor:cancel', 'editor:canvasaria', 'editor:canvashint',
     'editor:canvasview', 'editor:canvasplaceholder',

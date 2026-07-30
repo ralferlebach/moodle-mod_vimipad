@@ -97,6 +97,7 @@ $string['consensus:youconfirmed'] = 'Du hast bestätigt. Warten auf die übrigen
 $string['constraint:belowminnodes'] = 'Zu wenige Begriffe ({$a->actual} von {$a->min} erforderlich)';
 $string['constraint:belowminrelations'] = 'Zu wenige Relationen ({$a->actual} von {$a->min} erforderlich)';
 $string['constraint:forbiddenpresent'] = 'Verbotene(r) Begriff(e) vorhanden: {$a}';
+$string['constraint:hintsheading'] = 'Diese Map erfüllt die Vorgaben noch nicht:';
 $string['constraint:requiredmissing'] = 'Fehlende(r) Pflichtbegriff(e): {$a}';
 $string['constraint:typenotallowed'] = 'Nicht erlaubte(r) Relationstyp(en): {$a}';
 $string['constraints'] = 'Vorgaben an die Map';

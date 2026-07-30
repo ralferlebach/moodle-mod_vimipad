@@ -26,7 +26,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {JournalEntry, Lease, PolledOperation, ServiceTransport, WorkspaceState} from '../types';
+import {ConstraintStatus, JournalEntry, Lease, PolledOperation, ServiceTransport, WorkspaceState} from '../types';
 import {AdaptiveConfig} from '../collab/adaptive';
 import {PollClient} from '../collab/poll_client';
 import {LockClient} from '../collab/lock_client';
@@ -117,6 +117,21 @@ export class ApiClient {
             revision,
         });
         return result as WorkspaceState;
+    }
+
+    /**
+     * Fetch the current map's non-blocking constraint status for edit-time
+     * hints. A read; available even in read-only mode.
+     *
+     * @param workspaceid The workspace id.
+     * @returns The constraint status (configured/satisfied + messages).
+     */
+    async getConstraintStatus(workspaceid: number): Promise<ConstraintStatus> {
+        const result = await this.transport('mod_vimipad_get_constraint_status', {
+            cmid: this.cmid,
+            workspaceid,
+        });
+        return result as ConstraintStatus;
     }
 
     /**

@@ -83,6 +83,7 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:line_straight': 'Straight line',
     'editor:listview': 'List',
     'editor:loading': 'Loading…',
+    'constraint:hintsheading': 'This map does not yet meet the requirements:',
     'editor:locked': 'This map is locked and can no longer be edited.',
     'editor:nodelabel': 'Concept label',
     'editor:norelations': 'No relations yet. Add concepts, then connect them.',

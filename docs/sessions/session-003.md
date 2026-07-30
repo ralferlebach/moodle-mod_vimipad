@@ -1,8 +1,8 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.7** (2026072721)
-**Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend statisch.
+**Bogen:** 0.5.32 (2026072712) → **0.6.8** (2026072722)
+**Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
 > [`session-003-arbeitsplan.md`](session-003-arbeitsplan.md) (Gate-Liste aus dem
@@ -139,6 +139,20 @@
   Pfade), auf 5.2 uebernimmt die AMD-Reproduzierbarkeit der versionsunabhaengige
   „Bundle reproducibility"-Job. `moodle-ci.yml` unveraendert.
 
+**0.6.8 - Editor: weiche Constraint-Hinweise (Frontend-Autoren 1/3)**
+- Erster der drei Frontend/Canvas-Punkte. Der Editor zeigt die Map-Vorgaben als
+  weiche, nicht-blockierende Hinweise (Endpoint `get_constraint_status` aus 0.6.5).
+- API-Methode `getConstraintStatus` + Typ `ConstraintStatus`; Hook
+  `useConstraintHints` (600 ms debounced, Burst -> 1 Request, latest-wins,
+  Fehler geschluckt; nur eigener, offener Map); Komponente `ConstraintBanner`
+  (nichts, wenn nicht konfiguriert/erfuellt; sonst Warn-Alert mit backend-
+  lokalisierten Messages), in `EditorApp` ueber dem Canvas.
+- Lang `constraint:hintsheading` (en/de 420/420) + init.js-Keyliste + mount-Fallback.
+- Verifiziert: tsc clean; Jest 25 Suites/155 (neu: constraint_status_api,
+  use_constraint_hints [Fake-Timer], constraint_banner); Bundle reproduzierbar;
+  PHP unveraendert (200+97), phpcs clean. Kein visuelles/Behat-Rendering in Sandbox.
+- Naechste: Container auf dem Canvas (2/3), dann Template-Lock-Editor (3/3).
+
 ---
 
 ### Entscheidungen getroffen
@@ -186,17 +200,18 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 
 ```
 PHPUnit:  OK - 200 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
-          betroffene Service-Tests einzeln grün (operation/snapshot/workspace/import/consensus/collab/reconstruction/layout)
-PHPCS:    OK — 0 auf allen geänderten/neuen Dateien (moodle-Standard, severity=1)
-Frontend: tsc 0 · Jest 22 Suites/147 · Bundle reproduzierbar (Vorbereitungsrunde)
-Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
+PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
+PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
+Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
+Frontend: tsc 0 · Jest 25 Suites/155 · esbuild-Bundle byte-reproduzierbar
+Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ```
 
 ---
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072721 / 0.6.7, package.json + lock (CI-only).
+- [x] Version konsistent: version.php 2026072722 / 0.6.8, package.json + lock (inkl. Frontend-package.json).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -206,14 +221,14 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.6.7 — 0.6-Autoren-Backend komplett (0.6.1–0.6.6) + Release-CI-Fix fuer
-> Moodle 5.2 `public/` (0.6.7, CI-only). Real auf Moodle 4.5.12 (200+97 grün);
-> ganzes Plugin phpcs- und phpcpd-clean.
+> 0.6.8 — Autoren-Backend komplett (0.6.1–0.6.6); Release-CI-Fix 5.2 public/
+> (0.6.7); Frontend-Autoren 1/3: weiche Constraint-Hinweise (0.6.8). PHP real auf
+> Moodle 4.5.12 (200+97 grün); Frontend tsc/Jest 25/155, Bundle reproduzierbar.
 
 **Zuletzt abgeschlossen:**
-> 0.6.1–0.6.6 Autoren-Backend; 0.6.7 Release-CI-Fix (Moodle-5.2 public/). Konvention:
-> 0.6.x ohne alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
+> 0.6.1–0.6.6 Autoren-Backend; 0.6.7 Release-CI-Fix; 0.6.8 Constraint-Hinweise
+> (Frontend 1/3). Konvention: 0.6.x ohne alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
 
 **Als nächstes geplant:**
-> Frontend: Hinweis-Banner im Editor (ruft `get_constraint_status` debounced),
-> Container auf dem Canvas zeichnen, Template-Editor (setzt `locked`/`editable`).
+> Frontend 2/3: Container auf dem Canvas zeichnen (braucht get_workspace-Erweiterung
+> um Container); Frontend 3/3: Template-Editor (setzt `locked`/`editable`).

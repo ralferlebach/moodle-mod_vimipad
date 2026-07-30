@@ -97,6 +97,7 @@ $string['consensus:youconfirmed'] = 'You have confirmed. Waiting for the other m
 $string['constraint:belowminnodes'] = 'Too few concepts ({$a->actual} of {$a->min} required)';
 $string['constraint:belowminrelations'] = 'Too few relations ({$a->actual} of {$a->min} required)';
 $string['constraint:forbiddenpresent'] = 'Forbidden concept(s) present: {$a}';
+$string['constraint:hintsheading'] = 'This map does not yet meet the requirements:';
 $string['constraint:requiredmissing'] = 'Missing required concept(s): {$a}';
 $string['constraint:typenotallowed'] = 'Relation type(s) not allowed: {$a}';
 $string['constraints'] = 'Map requirements';

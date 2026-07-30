@@ -39,6 +39,8 @@ import {FA, Icon} from '../canvas/icons';
 import {LayoutMap, Point, PolledOperation, Size, SizeMap, VimiNode, VimiRelation} from '../types';
 import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
 import {useCollaboration} from '../collab/use_collaboration';
+import {useConstraintHints} from '../hooks/use_constraint_hints';
+import {ConstraintBanner} from './ConstraintBanner';
 import {operationToAction} from '../collab/apply_remote';
 
 /**
@@ -241,6 +243,15 @@ export function EditorApp(props: Props): React.ReactElement {
     );
     const readonly = api.isReadonly();
     const disabled = busy || loading || state.locked === 1 || readonly;
+
+    // Soft, non-blocking constraint hints, refreshed (debounced) as the map
+    // changes. Only for the editing owner of an open map.
+    const constraintStatus = useConstraintHints(
+        api,
+        state.workspaceid,
+        state.revision,
+        !readonly && state.locked !== 1
+    );
 
     const runOperation = useCallback(async (
         type: string,
@@ -722,6 +733,7 @@ export function EditorApp(props: Props): React.ReactElement {
             {state.locked === 1 && (
                 <div className="alert alert-warning" role="status">{t('editor:locked')}</div>
             )}
+            <ConstraintBanner status={constraintStatus} t={t} />
 
             <div className="vimipad-viewpanel">
             {view === 'canvas' ? (

@@ -144,6 +144,22 @@ export interface JournalEntry {
     timecreated: number;
 }
 
+/** The non-blocking constraint status of the current map (edit-time hints). */
+export interface ConstraintStatus {
+    /** Whether any constraint is configured for the activity. */
+    configured: boolean;
+    /** Whether the current map satisfies every constraint. */
+    satisfied: boolean;
+    /** Localised hint messages for display. */
+    messages: string[];
+    /** Required concept labels still missing. */
+    requiredmissing: string[];
+    /** Forbidden concept labels currently present. */
+    forbiddenpresent: string[];
+    /** Relation types used but not allowed. */
+    typeviolations: string[];
+}
+
 /** A transport that dispatches a single Moodle external function call. */
 export type ServiceTransport = (methodname: string, args: Record<string, unknown>) => Promise<unknown>;
 

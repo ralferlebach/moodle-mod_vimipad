@@ -4,7 +4,34 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.7** (2026072721).
+> release is **0.6.8** (2026072722).
+
+## 0.6.8 (2026072722) — editor: soft constraint hints (frontend authoring 1/3)
+
+First of the three 0.6 frontend/canvas authoring pieces. The editor now surfaces
+the activity's map requirements as soft, non-blocking hints while editing, using
+the 0.6.5 `get_constraint_status` endpoint. This never blocks; the hard gate
+still runs only at submission.
+
+- New API client method `getConstraintStatus(workspaceid)` and a `ConstraintStatus`
+  type (`js/src/api/service.ts`, `js/src/types`).
+- New hook `useConstraintHints(api, workspaceid, revision, enabled)`
+  (`js/src/hooks/use_constraint_hints.ts`): debounced (600 ms), coalesces a burst
+  of edits into one request, latest-request-wins, failures swallowed (advisory).
+  Only active for the editing owner of an open map (not read-only, not submitted).
+- New presentational `ConstraintBanner` (`js/src/components/ConstraintBanner.tsx`):
+  renders nothing when no constraint is configured or the map is satisfied; else a
+  warning alert listing the (backend-localised) hint messages. Wired into
+  `EditorApp` above the canvas.
+- Lang `constraint:hintsheading` (en/de, 420/420 parity); added to the editor's
+  `core/str` key list (`amd/src/init.js`) and the mount fallbacks (`mount.tsx`).
+- **Verification:** `tsc --noEmit` clean; **Jest 25 suites / 155 tests** green
+  (new: `constraint_status_api`, `use_constraint_hints` with fake timers,
+  `constraint_banner`); esbuild bundle rebuilt and **byte-reproducible**; PHP
+  unchanged (**200 `mod_vimipad`** + **97 `vimipadassess`**), whole-plugin phpcs
+  clean. Note: visual rendering and `@javascript` Behat run in CI, not verifiable
+  in the sandbox.
+- Next: container drawing on the canvas (2/3), then the template lock editor (3/3).
 
 ## 0.6.7 (2026072721) — CI: release workflow handles Moodle 5.2+ public/ layout
 
