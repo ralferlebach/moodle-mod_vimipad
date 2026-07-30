@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="mod/vimipad/db" VERSION="20260726" COMMENT="XMLDB file for Moodle mod/vimipad"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
+>
+  <TABLES>
+    <TABLE NAME="vimipad" COMMENT="ViMi Pad activity instances (visual knowledge construction)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="course" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Course this activity belongs to"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Activity name"/>
+        <FIELD NAME="intro" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Activity description / task"/>
+        <FIELD NAME="introformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Format of intro field"/>
+        <FIELD NAME="defaultprofile" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT="conceptmap" SEQUENCE="false" COMMENT="Default diagram profile"/>
+        <FIELD NAME="collaborationmode" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0=individual, 1=group, 2=course"/>
+        <FIELD NAME="gradingmode" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0=none, 1=points, 2=rubric/guide (reserved)"/>
+        <FIELD NAME="aienabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="AI feedback assistance enabled for this activity"/>
+        <FIELD NAME="channelurl" TYPE="char" LENGTH="1333" NOTNULL="false" SEQUENCE="false" COMMENT="Optional companion channel URL (forum/chat/BBB)"/>
+        <FIELD NAME="grade" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="100" SEQUENCE="false" COMMENT="Maximum grade or negative scale id"/>
+        <FIELD NAME="completionsubmit" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if submitting a snapshot completes the activity"/>
+        <FIELD NAME="completionminnodes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Minimum number of concepts required to complete (0 = rule off)"/>
+        <FIELD NAME="completiongraded" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if the activity completes once the submission is graded"/>
+        <FIELD NAME="duedate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Submissions after this time are marked late (0 = no due date)"/>
+        <FIELD NAME="cutoffdate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Submissions are blocked after this time (0 = no cut-off)"/>
+        <FIELD NAME="requireallteamsubmit" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if every group member must submit before the group map is submitted"/>
+        <FIELD NAME="referencesnapshotid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Snapshot marked as the reference (model) solution for automatic scoring, null if none"/>
+        <FIELD NAME="matchmode" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Label matching strategy for content scorers: 0 exact, 1 fuzzy, 2 word-overlap"/>
+        <FIELD NAME="peerreviewmode" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if students review each other's submitted maps"/>
+        <FIELD NAME="peerreviewcount" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="2" SEQUENCE="false" COMMENT="How many peer reviews each submission should receive"/>
+        <FIELD NAME="activescorers" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Comma-separated scorer keys to run; empty or null means every installed scorer"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="course" UNIQUE="false" FIELDS="course"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_workspace" COMMENT="A single editable map: per user, per group, or one per course">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="vimipadid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="FK to vimipad instance"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Owner user for individual mode, NULL otherwise"/>
+        <FIELD NAME="groupid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Owner group for group mode, NULL otherwise"/>
+        <FIELD NAME="name" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="currentrevision" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Latest server-assigned revision"/>
+        <FIELD NAME="submittedsnapshotid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="FK to the submitted snapshot, if any"/>
+        <FIELD NAME="locked" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if editing is locked (e.g. after submission)"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="vimipadid" TYPE="foreign" FIELDS="vimipadid" REFTABLE="vimipad" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="vimipadid-userid" UNIQUE="false" FIELDS="vimipadid, userid"/>
+        <INDEX NAME="vimipadid-groupid" UNIQUE="false" FIELDS="vimipadid, groupid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_node" COMMENT="Nodes (concepts) within a workspace">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="FK to workspace"/>
+        <FIELD NAME="stableid" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false" COMMENT="Stable identifier for snapshot/export/backup"/>
+        <FIELD NAME="type" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT="concept" SEQUENCE="false" COMMENT="Profile-defined node type"/>
+        <FIELD NAME="label" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="content" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Optional rich content"/>
+        <FIELD NAME="contentformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="metadatajson" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Schema-validated profile metadata"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="deleted" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Soft delete flag"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-stableid" UNIQUE="true" FIELDS="workspaceid, stableid"/>
+        <INDEX NAME="workspaceid-deleted" UNIQUE="false" FIELDS="workspaceid, deleted"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_relation" COMMENT="Directed/undirected relations between nodes">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="stableid" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="sourceid" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false" COMMENT="Stable id of source node"/>
+        <FIELD NAME="targetid" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false" COMMENT="Stable id of target node"/>
+        <FIELD NAME="type" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT="related" SEQUENCE="false" COMMENT="Profile-defined relation type"/>
+        <FIELD NAME="label" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="direction" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="-1=arrow to source, 0=undirected, 1=source to target, 2=bidirectional"/>
+        <FIELD NAME="metadatajson" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="createdby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="deleted" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-stableid" UNIQUE="true" FIELDS="workspaceid, stableid"/>
+        <INDEX NAME="workspaceid-deleted" UNIQUE="false" FIELDS="workspaceid, deleted"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_container" COMMENT="Grouping containers (clusters, sets, regions)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="stableid" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="type" TYPE="char" LENGTH="64" NOTNULL="true" DEFAULT="group" SEQUENCE="false"/>
+        <FIELD NAME="label" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="geometryjson" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="metadatajson" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="deleted" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-stableid" UNIQUE="true" FIELDS="workspaceid, stableid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_membership" COMMENT="Membership of nodes/relations in containers">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="containerid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="itemtype" TYPE="char" LENGTH="16" NOTNULL="true" SEQUENCE="false" COMMENT="node|relation|container"/>
+        <FIELD NAME="itemstableid" TYPE="char" LENGTH="40" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="role" TYPE="char" LENGTH="64" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="sortorder" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="containerid" TYPE="foreign" FIELDS="containerid" REFTABLE="vimipad_container" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="containerid-itemtype" UNIQUE="false" FIELDS="containerid, itemtype"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_layout" COMMENT="Per-profile layout and viewport state of a workspace">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="profile" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="viewportjson" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="layoutjson" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-profile" UNIQUE="true" FIELDS="workspaceid, profile"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_operation" COMMENT="Server-validated operation log (source of truth for changes)">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="revision" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Server-assigned revision for this operation"/>
+        <FIELD NAME="operationtype" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="payloadjson" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-revision" UNIQUE="true" FIELDS="workspaceid, revision"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_snapshot" COMMENT="Immutable normalized state used as grading basis">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="revision" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Revision this snapshot was taken at"/>
+        <FIELD NAME="snapshotjson" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Full normalized nodes+relations+containers+memberships+layout"/>
+        <FIELD NAME="submittedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Phase: 0=draft,1=submitted,2=inreview,3=graded,4=returned"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-status" UNIQUE="false" FIELDS="workspaceid, status"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_submissionintent" COMMENT="Per-member submit intent for group consensus submission">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="FK to the group workspace"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Group member who signalled readiness to submit"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-userid" UNIQUE="true" FIELDS="workspaceid, userid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_annotation" COMMENT="Teacher/peer annotations attached to a snapshot target">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="snapshotid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="targettype" TYPE="char" LENGTH="16" NOTNULL="true" SEQUENCE="false" COMMENT="node|relation|container|map"/>
+        <FIELD NAME="targetstableid" TYPE="char" LENGTH="40" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="commenttext" TYPE="text" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="commentformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="snapshotid" TYPE="foreign" FIELDS="snapshotid" REFTABLE="vimipad_snapshot" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="snapshotid-targettype" UNIQUE="false" FIELDS="snapshotid, targettype"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_aifeedback" COMMENT="AI feedback drafts and approved teacher feedback per snapshot">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="snapshotid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="graderid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="promptcontextjson" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Data-minimized context (optionally stored per admin setting)"/>
+        <FIELD NAME="drafttext" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="AI-generated draft, never sent to learners as-is"/>
+        <FIELD NAME="draftformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="acceptedtext" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Teacher-approved feedback"/>
+        <FIELD NAME="acceptedformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="providerinfo" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="snapshotid" TYPE="foreign" FIELDS="snapshotid" REFTABLE="vimipad_snapshot" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="snapshotid" UNIQUE="false" FIELDS="snapshotid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_grade" COMMENT="Per-user grade and feedback, the source of truth pushed to the gradebook">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="vimipadid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="grade" TYPE="number" LENGTH="10" DECIMALS="5" NOTNULL="false" SEQUENCE="false" COMMENT="Raw grade, null if not graded"/>
+        <FIELD NAME="feedback" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Overall teacher feedback"/>
+        <FIELD NAME="feedbackformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="snapshotid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Snapshot that was graded"/>
+        <FIELD NAME="grader" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="vimipadid" TYPE="foreign" FIELDS="vimipadid" REFTABLE="vimipad" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="vimipadid-userid" UNIQUE="true" FIELDS="vimipadid, userid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_journalentry" COMMENT="Learner journaling/backchannel entries during map construction">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Author of the entry"/>
+        <FIELD NAME="revisionref" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Map revision the entry refers to, if any"/>
+        <FIELD NAME="entrytext" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="May contain recorded audio via the Moodle editor"/>
+        <FIELD NAME="entryformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="visibility" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0=private,1=teacher-visible"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-userid" UNIQUE="false" FIELDS="workspaceid, userid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_lock" COMMENT="Short-lived per-element editing leases for collaborative locking and presence">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="targettype" TYPE="char" LENGTH="16" NOTNULL="true" SEQUENCE="false" COMMENT="node or relation"/>
+        <FIELD NAME="targetstableid" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false" COMMENT="stable id of the locked element"/>
+        <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="lease holder"/>
+        <FIELD NAME="timeacquired" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timeexpires" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="server-enforced lease expiry; renewed by heartbeat"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-target" UNIQUE="true" FIELDS="workspaceid, targettype, targetstableid"/>
+        <INDEX NAME="timeexpires" UNIQUE="false" FIELDS="timeexpires"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="vimipad_gradeinstance" COMMENT="Links a submission and grader to their advanced-grading (rubric) form instance">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="snapshotid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Graded snapshot (advanced-grading itemid)"/>
+        <FIELD NAME="raterid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="User who filled the grading form"/>
+        <FIELD NAME="instanceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="gradingform instance id"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="snapshotid" TYPE="foreign" FIELDS="snapshotid" REFTABLE="vimipad_snapshot" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="snapshotid-raterid" UNIQUE="true" FIELDS="snapshotid, raterid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="vimipad_peerreview" COMMENT="Peer review allocations and the reviews students submit">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="snapshotid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Reviewed submission"/>
+        <FIELD NAME="reviewerid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Reviewing user"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0 allocated, 1 submitted"/>
+        <FIELD NAME="score" TYPE="number" LENGTH="10" DECIMALS="5" NOTNULL="false" SEQUENCE="false" COMMENT="Peer score 0..1, null until reviewed"/>
+        <FIELD NAME="reviewcomment" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="The reviewer's written feedback"/>
+        <FIELD NAME="commentformat" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timeallocated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="snapshotid" TYPE="foreign" FIELDS="snapshotid" REFTABLE="vimipad_snapshot" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="snapshotid-reviewerid" UNIQUE="true" FIELDS="snapshotid, reviewerid"/>
+        <INDEX NAME="reviewerid" UNIQUE="false" FIELDS="reviewerid"/>
+      </INDEXES>
+    </TABLE>
+  </TABLES>
+</XMLDB>

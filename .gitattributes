@@ -1,0 +1,42 @@
+# Enforce LF line endings for all text files.
+* text=auto eol=lf
+
+# Binary files — no conversion.
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
+*.min.js binary
+*.min.css binary
+
+# Exclude developer artefacts from release archives.
+.github/       export-ignore
+docs/          export-ignore
+tools/         export-ignore
+makefile       export-ignore
+.gitattributes export-ignore
+.gitignore     export-ignore
+.phpcsignore   export-ignore
+
+# Development-only frontend tooling: exclude from release archive.
+# The prebuilt amd/build/ (init module + bundled React editor_lazy) IS shipped;
+# sources and toolchain are not required on a production server.
+/node_modules      export-ignore
+/package.json       export-ignore
+/package-lock.json  export-ignore
+/tsconfig.json      export-ignore
+/build.mjs          export-ignore
+/js/src             export-ignore
+/js/tests           export-ignore
+/amd/src            export-ignore
+/jest.config.js     export-ignore
+/.eslintrc.js       export-ignore
+/.eslintrc.json     export-ignore
+/eslint.config.js   export-ignore
+/.stylelintrc.json  export-ignore
+/babel.config.js    export-ignore
+/.browserslistrc    export-ignore

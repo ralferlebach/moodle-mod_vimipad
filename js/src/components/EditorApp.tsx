@@ -1,0 +1,816 @@
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * The editor application shell.
+ *
+ * M3 scope: a graphical canvas (draggable nodes, auto-layout, persisted
+ * positions) and an equal-rights relation list view with retarget-by-dropdown
+ * and drag-and-drop. Both views share one optimistic state reconciled against
+ * the server revision; layout is persisted separately (non-revisioned).
+ *
+ * @module     mod_vimipad/components/EditorApp
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
+import {ApiClient} from '../api/service';
+import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
+import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg} from '../canvas/svg_export';
+import {EditorState, reduce} from '../store/reducer';
+import {History, HistoryEntry, OpSpec} from '../store/history';
+import {CanvasView} from './CanvasView';
+import {JournalPanel} from './JournalPanel';
+import {RelationListView} from './RelationListView';
+import {FA, Icon} from '../canvas/icons';
+import {LayoutMap, Point, PolledOperation, Size, SizeMap, VimiNode, VimiRelation} from '../types';
+import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
+import {useCollaboration} from '../collab/use_collaboration';
+import {operationToAction} from '../collab/apply_remote';
+
+/**
+ * Operation that recreates a node (used to undo a deletion / redo a creation).
+ *
+ * @param node The node to reconstruct.
+ * @returns The node_create op spec.
+ */
+function nodeCreateSpec(node: VimiNode): OpSpec {
+    const payload: Record<string, unknown> = {
+        stableid: node.stableid, type: node.type, label: node.label,
+    };
+    if (node.content !== undefined) {
+        payload.content = node.content;
+    }
+    if (node.metadatajson !== undefined) {
+        payload.metadatajson = node.metadatajson;
+    }
+    return {type: 'node_create', payload};
+}
+
+/**
+ * Operation that recreates a relation (used to undo a deletion).
+ *
+ * @param rel The relation to reconstruct.
+ * @returns The relation_create op spec.
+ */
+function relationCreateSpec(rel: VimiRelation): OpSpec {
+    return {
+        type: 'relation_create',
+        payload: {
+            stableid: rel.stableid, sourceid: rel.sourceid, targetid: rel.targetid,
+            type: rel.type, label: rel.label, direction: rel.direction,
+        },
+    };
+}
+
+interface Props {
+    api: ApiClient;
+    t: (key: string) => string;
+    /** Active group id for group collaboration mode (0 = auto-select). */
+    groupid?: number;
+    /** Which view opens first (set by the surrounding Moodle tab). */
+    initialView?: ViewMode;
+    /** Owner user to view read-only (0 = self). */
+    targetUserid?: number;
+}
+
+type ViewMode = 'canvas' | 'list';
+
+const EMPTY: EditorState = {
+    workspaceid: 0, revision: 0, locked: 0, profile: 'conceptmap', layoutjson: '', nodes: [], relations: [],
+};
+
+
+
+/**
+ * The editor root component.
+ *
+ * @param props Component props.
+ * @returns The rendered editor.
+ */
+export function EditorApp(props: Props): React.ReactElement {
+    const {api, t, groupid = 0, initialView = 'canvas', targetUserid = 0} = props;
+    const [state, dispatch] = useReducer(reduce, EMPTY);
+    const view = initialView;
+    const [stored, setStored] = useState<LayoutMap>({});
+    const [sizes, setSizes] = useState<SizeMap>({});
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [nodeLabel, setNodeLabel] = useState('');
+    const [relSource, setRelSource] = useState('');
+    const [relTarget, setRelTarget] = useState('');
+    const [relLabel, setRelLabel] = useState('');
+
+    // Undo/redo. In a server-authoritative editor an undo is the inverse
+    // operation sent to the server, not a local rollback (see store/history).
+    const rootRef = useRef<HTMLDivElement>(null);
+    // Absolute export endpoint URL. A relative "export.php" can resolve wrongly
+    // depending on the Moodle base URL / subdirectory, so anchor it at wwwroot.
+    const exportBase = useMemo(() => {
+        const cfg = (window as unknown as {M?: {cfg?: {wwwroot?: string}}}).M?.cfg;
+        return `${cfg?.wwwroot ?? ''}/mod/vimipad/export.php`;
+    }, []);
+    const historyRef = useRef(new History());
+    const [canUndo, setCanUndo] = useState(false);
+    const [canRedo, setCanRedo] = useState(false);
+    // Polite screen-reader announcements for actions with little visual feedback.
+    const [status, setStatus] = useState('');
+    const statusTick = useRef(false);
+    const announce = useCallback((text: string) => {
+        // Toggle a trailing non-breaking space so repeating the same action still
+        // changes the node text and is re-announced by assistive technology.
+        statusTick.current = !statusTick.current;
+        setStatus(statusTick.current ? text : `${text}\u00a0`);
+    }, []);
+    const syncHistory = useCallback(() => {
+        setCanUndo(historyRef.current.canUndo());
+        setCanRedo(historyRef.current.canRedo());
+    }, []);
+    const pushHistory = useCallback((entry: HistoryEntry) => {
+        historyRef.current.push(entry);
+        syncHistory();
+    }, [syncHistory]);
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const ws = await api.getWorkspace(groupid, targetUserid);
+            dispatch({kind: 'load', state: ws});
+            const decoded = decodeLayout(ws.layoutjson);
+            setStored(decoded.positions);
+            setSizes(decoded.sizes);
+            historyRef.current.clear();
+            syncHistory();
+            setError(null);
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setLoading(false);
+        }
+    }, [api, groupid, targetUserid, syncHistory]);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    const importInputRef = useRef<HTMLInputElement>(null);
+    const [importReplace, setImportReplace] = useState(false);
+
+    const onImportFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) {
+            return;
+        }
+        try {
+            const text = await file.text();
+            await api.importMap(stateRef.current.workspaceid, text, importReplace ? 'replace' : 'append');
+            await load();
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [api, load, importReplace]);
+
+    // Feed operations polled from collaborators into the local state. Layout
+    // changes travel on the separate layout channel and are reconciled below.
+    const applyRemoteOperations = useCallback((operations: PolledOperation[]) => {
+        let maxRevision = 0;
+        operations.forEach((op) => {
+            const action = operationToAction(op);
+            if (action) {
+                dispatch(action);
+            }
+            if (op.revision > maxRevision) {
+                maxRevision = op.revision;
+            }
+        });
+        // Keep our base revision in step with what we have applied, so the next
+        // local edit does not send a stale base revision and hit a needless
+        // revision conflict (which would force a full reload).
+        if (maxRevision > 0) {
+            dispatch({kind: 'setRevision', revision: maxRevision});
+        }
+    }, []);
+
+    // Reconcile remote layout (positions + sizes) live. Merge rather than
+    // replace so a node the remote map does not mention keeps its local value,
+    // and so an in-progress local drag/resize (which CanvasView renders from its
+    // own gesture state) is not disturbed.
+    const onRemoteLayout = useCallback((layoutjson: string) => {
+        const decoded = decodeLayout(layoutjson);
+        setStored(prev => ({...prev, ...decoded.positions}));
+        setSizes(prev => ({...prev, ...decoded.sizes}));
+    }, []);
+
+    const currentUserId = useMemo(() => {
+        const cfg = (window as unknown as {M?: {cfg?: {userId?: number}}}).M?.cfg;
+        return cfg?.userId ?? 0;
+    }, []);
+
+    const collab = useCollaboration(
+        api,
+        state.workspaceid,
+        currentUserId,
+        state.collab,
+        applyRemoteOperations,
+        onRemoteLayout,
+        (s) => {
+            dispatch({kind: 'setLocked', locked: s.locked});
+            dispatch({kind: 'setProfile', profile: s.profile});
+        },
+        (e) => setError(e.message)
+    );
+
+    const layout = useMemo(
+        () => computeLayout(state.nodes, stored, state.relations, state.profile),
+        [state.nodes, stored, state.relations, state.profile]
+    );
+    const readonly = api.isReadonly();
+    const disabled = busy || loading || state.locked === 1 || readonly;
+
+    const runOperation = useCallback(async (
+        type: string,
+        payload: Record<string, unknown>,
+        optimistic: () => void
+    ): Promise<{revision: number; stableid: string} | null> => {
+        setBusy(true);
+        try {
+            const res = await api.applyOperation(state.workspaceid, state.revision, type, payload);
+            optimistic();
+            dispatch({kind: 'setRevision', revision: res.revision});
+            setError(null);
+            return res;
+        } catch (e) {
+            setError((e as Error).message);
+            await load();
+            return null;
+        } finally {
+            setBusy(false);
+        }
+    }, [api, state.workspaceid, state.revision, load]);
+
+    // Latest state/revision for the replay executor, without widening deps.
+    const stateRef = useRef(state);
+    stateRef.current = state;
+    const revisionRef = useRef(state.revision);
+    revisionRef.current = state.revision;
+
+    // Apply a sequence of operations to the server and locally (used by undo and
+    // redo). Not recorded in history; the stack is managed by undo()/redo().
+    const runOps = useCallback(async (specs: OpSpec[]): Promise<void> => {
+        setBusy(true);
+        let revision = revisionRef.current;
+        try {
+            for (const spec of specs) {
+                if (spec.type === '__layout') {
+                    // Non-revisioned layout change (node move/resize/re-arrange):
+                    // restore positions/sizes and persist on the layout channel.
+                    const positions = spec.payload.positions as LayoutMap;
+                    const layoutSizes = spec.payload.sizes as SizeMap;
+                    setStored(positions);
+                    setSizes(layoutSizes);
+                    await api.saveLayout(stateRef.current.workspaceid, encodeLayout(positions, layoutSizes));
+                    continue;
+                }
+                const res = await api.applyOperation(
+                    stateRef.current.workspaceid, revision, spec.type, spec.payload
+                );
+                revision = res.revision;
+                const action = operationToAction({
+                    operationtype: spec.type,
+                    payloadjson: JSON.stringify(spec.payload),
+                    revision: res.revision,
+                    userid: currentUserId,
+                });
+                if (action) {
+                    dispatch(action);
+                }
+            }
+            revisionRef.current = revision;
+            dispatch({kind: 'setRevision', revision});
+            setError(null);
+        } catch (e) {
+            setError((e as Error).message);
+            await load();
+        } finally {
+            setBusy(false);
+        }
+    }, [api, currentUserId, load]);
+
+    const undo = useCallback(async () => {
+        const entry = historyRef.current.takeUndo();
+        syncHistory();
+        if (entry) {
+            await runOps(entry.undo);
+            announce(t('editor:undo'));
+        }
+    }, [runOps, syncHistory, announce, t]);
+
+    const redo = useCallback(async () => {
+        const entry = historyRef.current.takeRedo();
+        syncHistory();
+        if (entry) {
+            await runOps(entry.redo);
+            announce(t('editor:redo'));
+        }
+    }, [runOps, syncHistory, announce, t]);
+
+    // Keyboard: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redo. Skipped
+    // while a text field or contentEditable has focus so native text undo keeps
+    // working during label/relation editing.
+    useEffect(() => {
+        const onKey = (event: KeyboardEvent): void => {
+            if (!(event.ctrlKey || event.metaKey)) {
+                return;
+            }
+            const target = document.activeElement as HTMLElement | null;
+            if (target && (target.isContentEditable
+                || target.tagName === 'INPUT'
+                || target.tagName === 'TEXTAREA'
+                || target.tagName === 'SELECT')) {
+                return;
+            }
+            if (stateRef.current.locked === 1) {
+                return;
+            }
+            const key = event.key.toLowerCase();
+            if (key === 'z' && !event.shiftKey) {
+                event.preventDefault();
+                void undo();
+            } else if ((key === 'z' && event.shiftKey) || key === 'y') {
+                event.preventDefault();
+                void redo();
+            }
+        };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [undo, redo]);
+
+    // Export the current map as a standalone SVG file (client-side).
+    const exportSvg = useCallback(() => {
+        const svg = rootRef.current?.querySelector('svg.vimipad-canvas') as SVGSVGElement | null;
+        if (!svg) {
+            return;
+        }
+        const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
+            x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
+        });
+        downloadCanvasSvg(svg, bounds, `vimipad-${state.profile}.svg`);
+    }, [state.nodes, state.profile, stored, sizes]);
+
+    // Export the current map as a rasterized PNG file (client-side).
+    const exportPng = useCallback(() => {
+        const svg = rootRef.current?.querySelector('svg.vimipad-canvas') as SVGSVGElement | null;
+        if (!svg) {
+            return;
+        }
+        const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
+            x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
+        });
+        downloadCanvasPng(svg, bounds, `vimipad-${state.profile}.png`);
+    }, [state.nodes, state.profile, stored, sizes]);
+
+    // Export the current map as a single-page PDF (client-side).
+    const exportPdf = useCallback(() => {
+        const svg = rootRef.current?.querySelector('svg.vimipad-canvas') as SVGSVGElement | null;
+        if (!svg) {
+            return;
+        }
+        const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
+            x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
+        });
+        downloadCanvasPdf(svg, bounds, `vimipad-${state.profile}.pdf`);
+    }, [state.nodes, state.profile, stored, sizes]);
+
+    const addNode = useCallback(async () => {
+        const label = nodeLabel.trim();
+        if (!label) {
+            return;
+        }
+        const res = await runOperation('node_create', {type: 'concept', label}, () => undefined);
+        if (res) {
+            dispatch({kind: 'addNode', node: {stableid: res.stableid, type: 'concept', label}});
+            pushHistory({
+                undo: [{type: 'node_delete', payload: {stableid: res.stableid}}],
+                redo: [{type: 'node_create', payload: {stableid: res.stableid, type: 'concept', label}}],
+            });
+            setNodeLabel('');
+        }
+    }, [runOperation, nodeLabel, pushHistory]);
+
+    const addRelation = useCallback(async () => {
+        if (!relSource || !relTarget || relSource === relTarget) {
+            return;
+        }
+        const label = relLabel.trim();
+        const res = await runOperation('relation_create',
+            {sourceid: relSource, targetid: relTarget, type: 'related', label}, () => undefined);
+        if (res) {
+            dispatch({
+                kind: 'addRelation',
+                relation: {
+                    stableid: res.stableid, sourceid: relSource, targetid: relTarget,
+                    type: 'related', label, direction: 1,
+                },
+            });
+            pushHistory({
+                undo: [{type: 'relation_delete', payload: {stableid: res.stableid}}],
+                redo: [relationCreateSpec({
+                    stableid: res.stableid, sourceid: relSource, targetid: relTarget,
+                    type: 'related', label, direction: 1,
+                })],
+            });
+            setRelLabel('');
+        }
+    }, [runOperation, relSource, relTarget, relLabel, pushHistory]);
+
+    const createRelation = useCallback(async (sourceid: string, targetid: string) => {
+        if (sourceid === targetid) {
+            return;
+        }
+        const res = await runOperation('relation_create',
+            {sourceid, targetid, type: 'related', label: ''}, () => undefined);
+        if (res) {
+            dispatch({
+                kind: 'addRelation',
+                relation: {
+                    stableid: res.stableid, sourceid, targetid, type: 'related', label: '', direction: 1,
+                },
+            });
+            pushHistory({
+                undo: [{type: 'relation_delete', payload: {stableid: res.stableid}}],
+                redo: [relationCreateSpec({
+                    stableid: res.stableid, sourceid, targetid, type: 'related', label: '', direction: 1,
+                })],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const deleteRelation = useCallback(async (stableid: string) => {
+        const rel = stateRef.current.relations.find(r => r.stableid === stableid);
+        const res = await runOperation('relation_delete', {stableid},
+            () => dispatch({kind: 'deleteRelation', stableid}));
+        if (res && rel) {
+            pushHistory({
+                undo: [relationCreateSpec(rel)],
+                redo: [{type: 'relation_delete', payload: {stableid}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const deleteNode = useCallback(async (stableid: string) => {
+        const node = stateRef.current.nodes.find(n => n.stableid === stableid);
+        const attached = stateRef.current.relations.filter(
+            r => r.sourceid === stableid || r.targetid === stableid
+        );
+        const res = await runOperation('node_delete', {stableid},
+            () => dispatch({kind: 'deleteNode', stableid}));
+        if (res && node) {
+            // Undo recreates the node first, then its relations (endpoints must
+            // exist); redo deletes the node (which cascades its relations).
+            pushHistory({
+                undo: [nodeCreateSpec(node), ...attached.map(relationCreateSpec)],
+                redo: [{type: 'node_delete', payload: {stableid}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const renameNode = useCallback(async (stableid: string, label: string) => {
+        const trimmed = label.trim();
+        if (!trimmed) {
+            return;
+        }
+        const prev = stateRef.current.nodes.find(n => n.stableid === stableid)?.label ?? '';
+        const res = await runOperation('node_update', {stableid, label: trimmed},
+            () => dispatch({kind: 'updateNode', stableid, label: trimmed}));
+        if (res && prev !== trimmed) {
+            pushHistory({
+                undo: [{type: 'node_update', payload: {stableid, label: prev}}],
+                redo: [{type: 'node_update', payload: {stableid, label: trimmed}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const changeNodeStyle = useCallback(async (stableid: string, metadatajson: string) => {
+        const prev = stateRef.current.nodes.find(n => n.stableid === stableid)?.metadatajson ?? '';
+        const res = await runOperation('node_update', {stableid, metadatajson},
+            () => dispatch({kind: 'updateNode', stableid, metadatajson}));
+        if (res) {
+            pushHistory({
+                undo: [{type: 'node_update', payload: {stableid, metadatajson: prev}}],
+                redo: [{type: 'node_update', payload: {stableid, metadatajson}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const renameRelation = useCallback(async (stableid: string, label: string) => {
+        const trimmed = label.trim();
+        const prev = stateRef.current.relations.find(r => r.stableid === stableid)?.label ?? '';
+        const res = await runOperation('relation_update', {stableid, label: trimmed},
+            () => dispatch({kind: 'updateRelation', stableid, label: trimmed}));
+        if (res && prev !== trimmed) {
+            pushHistory({
+                undo: [{type: 'relation_update', payload: {stableid, label: prev}}],
+                redo: [{type: 'relation_update', payload: {stableid, label: trimmed}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const changeDirection = useCallback(async (stableid: string, direction: number) => {
+        const prev = stateRef.current.relations.find(r => r.stableid === stableid)?.direction ?? 1;
+        const res = await runOperation('relation_update', {stableid, direction},
+            () => dispatch({kind: 'updateRelation', stableid, direction}));
+        if (res && prev !== direction) {
+            pushHistory({
+                undo: [{type: 'relation_update', payload: {stableid, direction: prev}}],
+                redo: [{type: 'relation_update', payload: {stableid, direction}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const retarget = useCallback(async (stableid: string, change: {sourceid?: string; targetid?: string}) => {
+        const prev = stateRef.current.relations.find(r => r.stableid === stableid);
+        const payload: Record<string, unknown> = {stableid};
+        if (change.sourceid) {
+            payload.newsource = change.sourceid;
+        }
+        if (change.targetid) {
+            payload.newtarget = change.targetid;
+        }
+        const res = await runOperation('relation_retarget', payload,
+            () => dispatch({kind: 'retargetRelation', stableid, ...change}));
+        if (res && prev) {
+            const undoPayload: Record<string, unknown> = {stableid};
+            if (change.sourceid) {
+                undoPayload.newsource = prev.sourceid;
+            }
+            if (change.targetid) {
+                undoPayload.newtarget = prev.targetid;
+            }
+            pushHistory({
+                undo: [{type: 'relation_retarget', payload: undoPayload}],
+                redo: [{type: 'relation_retarget', payload}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const onNodeMoved = useCallback(async (stableid: string, point: Point) => {
+        const prevPos = stored;
+        const nextPos = {...stored, [stableid]: point};
+        setStored(nextPos);
+        try {
+            // Send only the moved node so concurrent moves of other nodes are not
+            // clobbered; the server merges this patch into the stored layout.
+            await api.saveLayout(state.workspaceid, encodeLayout({[stableid]: point}, {}), '', 'merge');
+            pushHistory({
+                undo: [{type: '__layout', payload: {positions: prevPos, sizes}}],
+                redo: [{type: '__layout', payload: {positions: nextPos, sizes}}],
+            });
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [api, state.workspaceid, stored, sizes, pushHistory]);
+
+    // Discard the stored positions for the active profile and re-apply the
+    // automatic layout (tidy tree for the tree profile, circle otherwise),
+    // persisting the result so collaborators receive it too.
+    const reArrangeLayout = useCallback(async () => {
+        const prevPos = stored;
+        const auto = computeLayout(state.nodes, {}, state.relations, state.profile);
+        setStored(auto);
+        try {
+            await api.saveLayout(state.workspaceid, encodeLayout(auto, sizes));
+            pushHistory({
+                undo: [{type: '__layout', payload: {positions: prevPos, sizes}}],
+                redo: [{type: '__layout', payload: {positions: auto, sizes}}],
+            });
+            announce(t('editor:rearrange'));
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [api, state.workspaceid, state.nodes, state.relations, state.profile, stored, sizes, pushHistory, announce, t]);
+
+    const onNodeResized = useCallback(async (stableid: string, size: Size) => {
+        const prevSizes = sizes;
+        const nextSizes = {...sizes, [stableid]: size};
+        setSizes(nextSizes);
+        try {
+            await api.saveLayout(state.workspaceid, encodeLayout(stored, nextSizes));
+            pushHistory({
+                undo: [{type: '__layout', payload: {positions: stored, sizes: prevSizes}}],
+                redo: [{type: '__layout', payload: {positions: stored, sizes: nextSizes}}],
+            });
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [api, state.workspaceid, stored, sizes, pushHistory]);
+
+    const duplicateNode = useCallback(async (stableid: string) => {
+        const src = state.nodes.find(n => n.stableid === stableid);
+        if (!src) {
+            return;
+        }
+        const res = await runOperation('node_create',
+            {type: src.type, label: src.label, metadatajson: src.metadatajson ?? ''},
+            () => undefined);
+        if (!res) {
+            return;
+        }
+        dispatch({kind: 'addNode', node: {
+            stableid: res.stableid, type: src.type, label: src.label, metadatajson: src.metadatajson,
+        }});
+        // Offset the copy so it does not sit exactly on the original.
+        const base = layout[stableid] ?? {x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2};
+        const pos = clampToCanvas({x: base.x + 40, y: base.y + 40});
+        const next = {...stored, [res.stableid]: pos};
+        const srcSize = sizes[stableid];
+        const nextSizes = srcSize ? {...sizes, [res.stableid]: srcSize} : sizes;
+        setStored(next);
+        if (srcSize) {
+            setSizes(nextSizes);
+        }
+        try {
+            await api.saveLayout(state.workspaceid, encodeLayout(next, nextSizes));
+        } catch (e) {
+            setError((e as Error).message);
+        }
+    }, [runOperation, state.nodes, state.workspaceid, api, layout, stored, sizes]);
+
+    if (loading) {
+        return <div className="vimipad-editor-loading">{t('editor:loading')}</div>;
+    }
+
+    const addNodeControls = (
+        <fieldset disabled={disabled} className="vimipad-control">
+            <legend className="h6">{t('editor:addnode')}</legend>
+            <div className="form-inline">
+                <label className="sr-only" htmlFor="vimipad-node-label">{t('editor:nodelabel')}</label>
+                <input
+                    id="vimipad-node-label"
+                    type="text"
+                    className="form-control mr-2"
+                    value={nodeLabel}
+                    placeholder={t('editor:nodelabel')}
+                    onChange={e => setNodeLabel(e.target.value)}
+                />
+                <button type="button" className="btn btn-primary" onClick={addNode}>
+                    <Icon name={FA.addNode} /> {t('editor:add')}
+                </button>
+            </div>
+        </fieldset>
+    );
+
+    const addRelationControls = (
+        <fieldset disabled={disabled || state.nodes.length < 2} className="vimipad-control">
+            <legend className="h6">{t('editor:addrelation')}</legend>
+            <div className="form-inline">
+                <label className="sr-only" htmlFor="vimipad-rel-source">{t('editor:subject')}</label>
+                <select
+                    id="vimipad-rel-source"
+                    className="form-control mr-2"
+                    value={relSource}
+                    onChange={e => setRelSource(e.target.value)}
+                >
+                    <option value="">{t('editor:subject')}</option>
+                    {state.nodes.map(n => <option key={n.stableid} value={n.stableid}>{n.label}</option>)}
+                </select>
+                <input
+                    type="text"
+                    className="form-control mr-2"
+                    value={relLabel}
+                    placeholder={t('editor:relation')}
+                    onChange={e => setRelLabel(e.target.value)}
+                />
+                <label className="sr-only" htmlFor="vimipad-rel-target">{t('editor:object')}</label>
+                <select
+                    id="vimipad-rel-target"
+                    className="form-control mr-2"
+                    value={relTarget}
+                    onChange={e => setRelTarget(e.target.value)}
+                >
+                    <option value="">{t('editor:object')}</option>
+                    {state.nodes.map(n => <option key={n.stableid} value={n.stableid}>{n.label}</option>)}
+                </select>
+                <button type="button" className="btn btn-primary" onClick={addRelation}>
+                    <Icon name={FA.addRelation} /> {t('editor:add')}
+                </button>
+            </div>
+        </fieldset>
+    );
+
+    return (
+        <div className="vimipad-editor" ref={rootRef}>
+            <div className="vimipad-sr-only" role="status" aria-live="polite">{status}</div>
+            {error && <div className="alert alert-danger" role="alert">{error}</div>}
+            {readonly && (
+                <div className="alert alert-info" role="status">{t('editor:readonly')}</div>
+            )}
+            {state.locked === 1 && (
+                <div className="alert alert-warning" role="status">{t('editor:locked')}</div>
+            )}
+
+            <div className="vimipad-viewpanel">
+            {view === 'canvas' ? (
+                <>
+                    <CanvasView
+                        state={state}
+                        layout={layout}
+                        profile={state.profile}
+                        formconfig={state.formconfig}
+                        sizes={sizes}
+                        disabled={disabled}
+                        onNodeMoved={onNodeMoved}
+                        onNodeResized={onNodeResized}
+                        onChangeStyle={changeNodeStyle}
+                        onDuplicateNode={duplicateNode}
+                        onCreateRelation={createRelation}
+                        onChangeDirection={changeDirection}
+                        onDeleteNode={deleteNode}
+                        onDeleteRelation={deleteRelation}
+                        onRenameNode={renameNode}
+                        onRenameRelation={renameRelation}
+                        onUndo={undo}
+                        onRedo={redo}
+                        canUndo={canUndo}
+                        canRedo={canRedo}
+                        onReArrange={reArrangeLayout}
+                        onExportSvg={exportSvg}
+                        onExportPng={exportPng}
+                        onExportPdf={exportPdf}
+                        exportJsonUrl={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
+                        exportXmlUrl={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
+                        t={t}
+                        isLockedByOther={collab.isLockedByOther}
+                        beginEdit={collab.beginEdit}
+                        endEdit={collab.endEdit}
+                    />
+                    <div className="vimipad-controls-row">
+                        {addNodeControls}
+                        {addRelationControls}
+                    </div>
+                </>
+            ) : (
+                <>
+                    <div className="vimipad-controls-row">
+                        {addNodeControls}
+                        {addRelationControls}
+                    </div>
+                    <RelationListView
+                        state={state}
+                        disabled={disabled}
+                        onDeleteRelation={deleteRelation}
+                        onRetarget={retarget}
+                        onRenameRelation={renameRelation}
+                        t={t}
+                    />
+                </>
+            )}
+            </div>
+
+            <div className="vimipad-tools mt-2">
+                <input
+                    ref={importInputRef}
+                    type="file"
+                    accept="application/json,application/xml,text/xml,.json,.xml"
+                    className="vimipad-hidden-input"
+                    onChange={(e) => void onImportFile(e)}
+                />
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() => importInputRef.current?.click()}
+                    disabled={state.locked === 1 || readonly}
+                >
+                    {t('editor:import')}
+                </button>
+                <label className="vimipad-import-replace">
+                    <input
+                        type="checkbox"
+                        checked={importReplace}
+                        onChange={(e) => setImportReplace(e.target.checked)}
+                        disabled={state.locked === 1 || readonly}
+                    />{' '}
+                    {t('editor:importreplace')}
+                </label>
+            </div>
+
+            <JournalPanel api={api} workspaceid={state.workspaceid} t={t} />
+
+            <p className="text-muted small mt-2">{t('editor:revision')}: {state.revision}</p>
+        </div>
+    );
+}

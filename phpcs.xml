@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<ruleset name="mod_vimipad">
+    <description>PHPCS configuration for mod_vimipad.</description>
+    <rule ref="moodle"/>
+    <exclude-pattern>*/tools/*</exclude-pattern>
+    <exclude-pattern>*/vendor/*</exclude-pattern>
+</ruleset>

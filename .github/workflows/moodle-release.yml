@@ -1,0 +1,213 @@
+##############################################################################
+# GitHub Actions Release CI – mod_vimipad
+#
+# Triggered on push / PR to main.
+# Provides the "CI complete" status check for branch protection.
+#
+# Matrix: Moodle 4.5 · 5.0 · 5.2 · 5.3  ×  PHP 8.1–8.3  ×  mariadb · pgsql
+#
+# The plugin has NO external plugin dependencies; nothing extra is installed.
+##############################################################################
+
+name: Moodle Plugin Release CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ci-release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MOODLE_CI: '^4'
+  COMPOSER_NO_INTERACTION: 1
+  COMPOSER_PROCESS_TIMEOUT: 0
+  COMPOSER_NO_AUDIT: 1
+  PGPASSWORD: moodle
+
+jobs:
+
+  # Bundle reproducibility + JS gates (typecheck, jest). The committed
+  # editor_lazy.min.js must match a fresh esbuild of js/src.
+  bundle:
+    name: "Bundle reproducibility"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Typecheck, test and verify the bundle matches the commit
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm test
+          node build.mjs
+          git diff --exit-code -- amd/build/editor_lazy.min.js amd/build/editor_lazy.min.js.map
+
+  ci:
+    name: "CI / ${{ matrix.moodle-branch }} / PHP ${{ matrix.php }} / ${{ matrix.db.engine }}"
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Moodle 4.5.
+          - { moodle-branch: MOODLE_405_STABLE, php: '8.1', db: { engine: pgsql,   type: pgsql,   port: 5432, user: moodle, pass: moodle, name: moodle } }
+          - { moodle-branch: MOODLE_405_STABLE, php: '8.2', db: { engine: mariadb, type: mariadb, port: 3306, user: root,   pass: root,   name: moodle } }
+          - { moodle-branch: MOODLE_405_STABLE, php: '8.3', db: { engine: pgsql,   type: pgsql,   port: 5432, user: moodle, pass: moodle, name: moodle } }
+          # Moodle 5.0 (requires PHP 8.2+).
+          - { moodle-branch: MOODLE_500_STABLE, php: '8.2', db: { engine: pgsql,   type: pgsql,   port: 5432, user: moodle, pass: moodle, name: moodle } }
+          - { moodle-branch: MOODLE_500_STABLE, php: '8.3', db: { engine: mariadb, type: mariadb, port: 3306, user: root,   pass: root,   name: moodle } }
+          # Moodle 5.2 / 5.3 (require PHP 8.3+).
+          - { moodle-branch: MOODLE_502_STABLE, php: '8.3', db: { engine: pgsql,   type: pgsql,   port: 5432, user: moodle, pass: moodle, name: moodle } }
+          # MOODLE_503_STABLE: re-add once the branch is cut upstream.
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER:     moodle
+          POSTGRES_PASSWORD: moodle
+          POSTGRES_DB:       postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s --health-timeout 5s --health-retries 3
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping --silent"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - name: Checkout plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - name: Set up PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: zip, gd, intl, xmlrpc, soap, mbstring, pdo_mysql, pdo_pgsql
+          ini-values: max_input_vars=5000
+          coverage: none
+
+      - name: Install en_AU.UTF-8 locale
+        run: sudo locale-gen en_AU.UTF-8 && sudo update-locale
+
+      - name: Initialise moodle-plugin-ci
+        run: |
+          composer create-project -n --no-dev --prefer-dist \
+            moodlehq/moodle-plugin-ci ci ${{ env.MOODLE_CI }}
+          echo "$GITHUB_WORKSPACE/ci/bin"        >> "$GITHUB_PATH"
+          echo "$GITHUB_WORKSPACE/ci/vendor/bin" >> "$GITHUB_PATH"
+
+      - name: Set TRAVIS_BRANCH
+        run: |
+          BRANCH=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}
+          echo "TRAVIS_BRANCH=${BRANCH:-main}" >> "$GITHUB_ENV"
+
+      - name: Install Moodle and plugin
+        run: |
+          moodle-plugin-ci install \
+            --plugin ./plugin \
+            --db-host 127.0.0.1 \
+            --db-port ${{ matrix.db.port }} \
+            --db-user ${{ matrix.db.user }} \
+            --db-pass ${{ matrix.db.pass }} \
+            --db-name ${{ matrix.db.name }}
+        env:
+          DB:            ${{ matrix.db.type }}
+          MOODLE_BRANCH: ${{ matrix.moodle-branch }}
+
+      - name: PHP Lint
+        run: moodle-plugin-ci phplint
+
+      - name: PHP Copy/Paste Detector
+        run: moodle-plugin-ci phpcpd || true
+
+      - name: Moodle Code Checker (PHPCS)
+        run: moodle-plugin-ci phpcs --max-warnings 0
+
+      - name: Moodle PHPDoc Checker
+        run: moodle-plugin-ci phpdoc --max-warnings 0
+
+      - name: Validate plugin structure
+        run: moodle-plugin-ci validate
+
+      - name: Check upgrade savepoints
+        run: moodle-plugin-ci savepoints
+
+      - name: Mustache lint
+        run: moodle-plugin-ci mustache
+
+      - name: Verify editor bundle installed
+        run: |
+          test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js
+          test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js.map
+
+      - name: Install Node dependencies (Moodle)
+        run: npm install
+        working-directory: ${{ github.workspace }}/moodle
+
+      # Do NOT use "moodle-plugin-ci grunt" for the AMD task: it deletes
+      # amd/build/ before invoking Grunt, removing the prebuilt esbuild bundle
+      # editor_lazy.min.js. Running "npx grunt amd --files" directly builds only
+      # the real Moodle AMD source (init.js) and leaves the bundle intact.
+      - name: Grunt – Moodle AMD module (init.js only)
+        working-directory: ${{ github.workspace }}/moodle/mod/vimipad/amd
+        run: |
+          npx grunt amd \
+            --files=mod/vimipad/amd/src/init.js \
+            --max-lint-warnings=0
+
+      - name: Verify editor bundle survived Moodle Grunt
+        run: |
+          test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js
+          test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js.map
+
+      - name: Grunt – Gherkin / Stylelint
+        run: |
+          moodle-plugin-ci grunt \
+            --tasks gherkinlint \
+            --tasks stylelint \
+            --max-lint-warnings 0
+
+      - name: PHPUnit
+        run: moodle-plugin-ci phpunit --fail-on-warning
+
+      - name: Behat
+        run: |
+          moodle-plugin-ci behat \
+            --profile chrome \
+            --tags "@mod_vimipad&&~@broken" \
+            --start-servers
+
+  ci-complete:
+    name: CI complete
+    needs: [ci, bundle]
+    runs-on: ubuntu-22.04
+    if: always()
+    steps:
+      - name: All matrix jobs must have succeeded
+        run: |
+          ci_result="${{ needs.ci.result }}"
+          bundle_result="${{ needs.bundle.result }}"
+          if [[ "$ci_result" == "success" && "$bundle_result" == "success" ]]; then
+            echo "All CI matrix jobs and the bundle gate passed."
+          else
+            echo "CI result: $ci_result — bundle result: $bundle_result — one or more jobs failed or were cancelled."
+            exit 1
+          fi

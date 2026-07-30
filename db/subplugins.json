@@ -1,0 +1,10 @@
+{
+    "subplugintypes": {
+        "vimipadform": "form",
+        "vimipadassess": "assess"
+    },
+    "plugintypes": {
+        "vimipadform": "mod/vimipad/form",
+        "vimipadassess": "mod/vimipad/assess"
+    }
+}
