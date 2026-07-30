@@ -40,6 +40,7 @@ export const FA = {
     submit: 'fa-solid fa-clipboard-check',
     format: 'fa-solid fa-pen',
     shape: 'fa-solid fa-shapes',
+    container: 'fa-solid fa-vector-square',
     fill: 'fa-solid fa-palette',
     text: 'fa-solid fa-font',
     fontSizeUp: 'fa-solid fa-plus',

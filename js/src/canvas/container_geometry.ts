@@ -1,0 +1,119 @@
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * Pure geometry helpers for canvas containers (background boxes/sections).
+ *
+ * A container's position and size live in its `geometryjson` as {x, y, w, h}
+ * in canvas units. Keeping the codec here (out of React) makes it unit-testable
+ * and lets both the renderer and the drawing interaction share one definition.
+ *
+ * @module     mod_vimipad/canvas/container_geometry
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+import {Point} from '../types';
+
+/** A container's box in canvas units. */
+export interface ContainerBox {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+/** The smallest container a drag is allowed to create, in canvas units. */
+export const MIN_CONTAINER_SIZE = 40;
+
+/**
+ * Parse a container's geometry JSON into a box, or null if invalid/empty.
+ *
+ * @param geometryjson The stored geometry JSON.
+ * @returns The box, or null when the JSON is missing or malformed.
+ */
+export function parseGeometry(geometryjson?: string): ContainerBox | null {
+    if (!geometryjson) {
+        return null;
+    }
+    let raw: unknown;
+    try {
+        raw = JSON.parse(geometryjson);
+    } catch {
+        return null;
+    }
+    if (!raw || typeof raw !== 'object') {
+        return null;
+    }
+    const candidate = raw as Record<string, unknown>;
+    const values = [candidate.x, candidate.y, candidate.w, candidate.h];
+    if (!values.every((v) => typeof v === 'number' && Number.isFinite(v))) {
+        return null;
+    }
+    return normalizeBox({
+        x: candidate.x as number,
+        y: candidate.y as number,
+        w: candidate.w as number,
+        h: candidate.h as number,
+    });
+}
+
+/**
+ * Serialise a box to geometry JSON, rounding to whole canvas units.
+ *
+ * @param box The box.
+ * @returns The geometry JSON string.
+ */
+export function serializeGeometry(box: ContainerBox): string {
+    return JSON.stringify({
+        x: Math.round(box.x),
+        y: Math.round(box.y),
+        w: Math.round(box.w),
+        h: Math.round(box.h),
+    });
+}
+
+/**
+ * Normalise a box so width and height are non-negative (top-left origin).
+ *
+ * @param box The box, possibly with negative extent.
+ * @returns An equivalent box with a top-left origin and positive size.
+ */
+export function normalizeBox(box: ContainerBox): ContainerBox {
+    const x = box.w < 0 ? box.x + box.w : box.x;
+    const y = box.h < 0 ? box.y + box.h : box.y;
+    return {x, y, w: Math.abs(box.w), h: Math.abs(box.h)};
+}
+
+/**
+ * Build a normalised box from the two corners of a drag gesture.
+ *
+ * @param from The drag start point.
+ * @param to The drag end point.
+ * @returns The normalised box spanning the two points.
+ */
+export function boxFromDrag(from: Point, to: Point): ContainerBox {
+    return normalizeBox({x: from.x, y: from.y, w: to.x - from.x, h: to.y - from.y});
+}
+
+/**
+ * Whether a box is at least the minimum container size in both dimensions.
+ *
+ * @param box The box.
+ * @returns True if the box is big enough to become a container.
+ */
+export function isDrawable(box: ContainerBox): boolean {
+    return box.w >= MIN_CONTAINER_SIZE && box.h >= MIN_CONTAINER_SIZE;
+}

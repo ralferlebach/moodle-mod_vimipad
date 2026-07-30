@@ -44,6 +44,16 @@ export interface VimiRelation {
     metadatajson?: string;
 }
 
+export interface VimiContainer {
+    stableid: string;
+    type: string;
+    label: string;
+    /** Geometry JSON with x, y, w, h in canvas units; empty if none. */
+    geometryjson?: string;
+    /** Raw style/lock metadata JSON, empty if none. */
+    metadatajson?: string;
+}
+
 /** Collaboration client configuration, sourced from plugin settings. */
 export interface CollabConfig {
     pollinterval: number;
@@ -65,6 +75,8 @@ export interface WorkspaceState {
     layoutjson: string;
     nodes: VimiNode[];
     relations: VimiRelation[];
+    /** Containers drawn on the canvas (optional; absent = none). */
+    containers?: VimiContainer[];
     collab?: CollabConfig;
 }
 

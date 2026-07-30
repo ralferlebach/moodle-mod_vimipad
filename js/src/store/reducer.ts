@@ -25,7 +25,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {VimiNode, VimiRelation, WorkspaceState} from '../types';
+import {VimiContainer, VimiNode, VimiRelation, WorkspaceState} from '../types';
 
 export type EditorState = WorkspaceState;
 
@@ -41,6 +41,10 @@ export type EditorAction =
         metadatajson?: string}
     | {kind: 'deleteRelation'; stableid: string}
     | {kind: 'retargetRelation'; stableid: string; sourceid?: string; targetid?: string}
+    | {kind: 'addContainer'; container: VimiContainer}
+    | {kind: 'updateContainer'; stableid: string; label?: string; type?: string;
+        geometryjson?: string; metadatajson?: string}
+    | {kind: 'deleteContainer'; stableid: string}
     | {kind: 'setLocked'; locked: number}
     | {kind: 'setProfile'; profile: string};
 
@@ -123,6 +127,34 @@ export function reduce(state: EditorState, action: EditorState | EditorAction): 
                     }
                     : r),
             };
+        case 'addContainer': {
+            const containers = state.containers ?? [];
+            return containers.some(c => c.stableid === act.container.stableid)
+                ? state
+                : {...state, containers: [...containers, act.container]};
+        }
+        case 'updateContainer': {
+            const containers = state.containers ?? [];
+            return {
+                ...state,
+                containers: containers.map(c => c.stableid === act.stableid
+                    ? {
+                        ...c,
+                        label: act.label ?? c.label,
+                        type: act.type ?? c.type,
+                        geometryjson: act.geometryjson ?? c.geometryjson,
+                        metadatajson: act.metadatajson ?? c.metadatajson,
+                    }
+                    : c),
+            };
+        }
+        case 'deleteContainer': {
+            const containers = state.containers ?? [];
+            return {
+                ...state,
+                containers: containers.filter(c => c.stableid !== act.stableid),
+            };
+        }
         default:
             return state;
     }

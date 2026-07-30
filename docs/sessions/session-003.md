@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.8** (2026072722)
+**Bogen:** 0.5.32 (2026072712) → **0.6.9** (2026072723)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -153,6 +153,23 @@
   PHP unveraendert (200+97), phpcs clean. Kein visuelles/Behat-Rendering in Sandbox.
 - Naechste: Container auf dem Canvas (2/3), dann Template-Lock-Editor (3/3).
 
+**0.6.9 - Canvas: Container zeichnen (Frontend-Autoren 2/3)**
+- Backend: `get_workspace` liefert jetzt `containers` (stableid/type/label/
+  geometryjson/metadatajson), `VALUE_OPTIONAL` (get_revision_state bleibt valide).
+  Test `get_workspace_containers_test` (geliefert + soft-deleted ausgeschlossen).
+- Frontend: Typ `VimiContainer` + `containers` im State; Reducer add/update/
+  deleteContainer; reiner Geometrie-Codec `container_geometry.ts`. `CanvasView`
+  rendert Container hinter dem Graphen + isoliertes Draw-Overlay (nur im Tool-
+  Modus aktiv, stoert nie die Node/Connect-Gesten); Toolbar-Toggle, Ziehen
+  erzeugt, Eck-Button loescht. Remote/Undo-Redo via Container-Cases in
+  `operationToAction`.
+- Lang: editor:containers/containerdelete/drawcontainer/drawcontainerdone
+  (en/de 424/424) + init.js + mount-Fallbacks.
+- Verifiziert: tsc clean; Jest 28 Suites/169 (neu: container_geometry,
+  container_reducer, container_apply_remote); Bundle reproduzierbar;
+  202 mod_vimipad + 97 vimipadassess; phpcs/phpcpd clean.
+- Naechste: Template-Lock-Editor (3/3).
+
 ---
 
 ### Entscheidungen getroffen
@@ -199,11 +216,11 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 200 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 202 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
 Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
-Frontend: tsc 0 · Jest 25 Suites/155 · esbuild-Bundle byte-reproduzierbar
+Frontend: tsc 0 · Jest 28 Suites/169 · esbuild-Bundle byte-reproduzierbar
 Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ```
 
@@ -211,7 +228,7 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072722 / 0.6.8, package.json + lock (inkl. Frontend-package.json).
+- [x] Version konsistent: version.php 2026072723 / 0.6.9, package.json + lock (inkl. Frontend).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -221,14 +238,14 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.6.8 — Autoren-Backend komplett (0.6.1–0.6.6); Release-CI-Fix 5.2 public/
-> (0.6.7); Frontend-Autoren 1/3: weiche Constraint-Hinweise (0.6.8). PHP real auf
-> Moodle 4.5.12 (200+97 grün); Frontend tsc/Jest 25/155, Bundle reproduzierbar.
+> 0.6.9 — Autoren-Backend (0.6.1–0.6.6); Release-CI-Fix (0.6.7); Frontend-Autoren
+> 1/3 Constraint-Hinweise (0.6.8), 2/3 Container zeichnen (0.6.9). PHP real auf
+> Moodle 4.5.12 (202+97 grün); Frontend tsc/Jest 28/169, Bundle reproduzierbar.
 
 **Zuletzt abgeschlossen:**
-> 0.6.1–0.6.6 Autoren-Backend; 0.6.7 Release-CI-Fix; 0.6.8 Constraint-Hinweise
-> (Frontend 1/3). Konvention: 0.6.x ohne alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
+> 0.6.1–0.6.6 Autoren-Backend; 0.6.7 Release-CI-Fix; 0.6.8 Constraint-Hinweise;
+> 0.6.9 Container zeichnen (Frontend 2/3). Konvention: 0.6.x ohne alpha-Suffix.
 
 **Als nächstes geplant:**
-> Frontend 2/3: Container auf dem Canvas zeichnen (braucht get_workspace-Erweiterung
-> um Container); Frontend 3/3: Template-Editor (setzt `locked`/`editable`).
+> Frontend 3/3: Template-Editor (setzt die seit 0.6.4 durchgesetzten
+> `locked`/`editable`-Metadaten am ausgewaehlten Element).

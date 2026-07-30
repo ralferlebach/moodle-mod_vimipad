@@ -4,7 +4,37 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.8** (2026072722).
+> release is **0.6.9** (2026072723).
+
+## 0.6.9 (2026072723) — canvas: draw containers (frontend authoring 2/3)
+
+Second of the three 0.6 frontend/canvas authoring pieces. Authors can now draw
+background containers (sections/boxes) directly on the canvas. Container
+operations existed server-side since 0.6.1; this makes them usable and visible.
+
+- **Backend:** `get_workspace` now returns `containers` (stableid, type, label,
+  geometryjson, metadatajson), mapped from the state the service already loads.
+  Added to the return structure as `VALUE_OPTIONAL` so `get_revision_state`
+  (which shares the structure) stays valid. New test
+  `get_workspace_containers_test` (returned + soft-deleted excluded, validated
+  via `clean_returnvalue`).
+- **Frontend:** `VimiContainer` type + `containers` on the workspace state;
+  reducer actions add/update/deleteContainer; pure geometry codec
+  `container_geometry.ts` (parse/serialise/normalise/box-from-drag). `CanvasView`
+  renders containers behind the graph and hosts an isolated draw overlay (active
+  only while the tool is on, so it never interferes with node/connect gestures);
+  a toolbar toggle enters draw mode, a drag creates the container, a corner
+  button deletes it. Remote sync + undo/redo covered by new container cases in
+  `operationToAction`.
+- Lang: `editor:containers`, `editor:containerdelete`, `editor:drawcontainer`,
+  `editor:drawcontainerdone` (en/de, 424/424 parity) + init.js keys + mount fallbacks.
+- **Verification:** `tsc` clean; **Jest 28 suites / 169 tests** (new:
+  `container_geometry`, `container_reducer`, `container_apply_remote`); esbuild
+  bundle rebuilt and **byte-reproducible**; **202 `mod_vimipad`** + **97
+  `vimipadassess`** green; whole-plugin phpcs + phpcpd clean. Visual drawing and
+  `@javascript` Behat run in CI, not verifiable in the sandbox.
+- Next: the template lock editor (3/3) — set `locked`/`editable` metadata,
+  enforced since 0.6.4.
 
 ## 0.6.8 (2026072722) — editor: soft constraint hints (frontend authoring 1/3)
 

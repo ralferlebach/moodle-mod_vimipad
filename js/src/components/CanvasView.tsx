@@ -43,6 +43,7 @@ import {
 import {labelBox, shapeElement} from '../canvas/shapes';
 import {useDismiss} from '../hooks/use_dismiss';
 import {parseNodeStyle} from '../canvas/node_style';
+import {boxFromDrag, ContainerBox, isDrawable, parseGeometry, serializeGeometry} from '../canvas/container_geometry';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {TextEditMenu} from './TextEditMenu';
 import {FA, Icon} from '../canvas/icons';
@@ -101,6 +102,14 @@ interface Props {
     onExportPdf?: () => void;
     exportJsonUrl?: string;
     exportXmlUrl?: string;
+    /** True while the "draw container" tool is active. */
+    drawingContainer?: boolean;
+    /** Create a container from a drawn box (geometry JSON). */
+    onCreateContainer?: (geometryjson: string) => void;
+    /** Delete a container by stable id. */
+    onDeleteContainer?: (stableid: string) => void;
+    /** Called when a draw gesture completes, so the host can exit draw mode. */
+    onFinishDrawContainer?: () => void;
 }
 
 /** Size of a corner resize handle, in canvas units. */
@@ -289,6 +298,44 @@ export function CanvasView(props: Props): React.ReactElement {
             y: v.y + (clientY - rect.top) / rect.height * v.h,
         };
     }, []);
+
+    // Container drawing (isolated from the node/connect pointer state machine:
+    // a dedicated overlay captures these events only while the tool is active).
+    const [drawStart, setDrawStart] = useState<Point | null>(null);
+    const [drawBox, setDrawBox] = useState<ContainerBox | null>(null);
+
+    const onDrawDown = useCallback((event: React.PointerEvent) => {
+        if (!props.drawingContainer) {
+            return;
+        }
+        event.stopPropagation();
+        (event.target as Element).setPointerCapture?.(event.pointerId);
+        const p = toSvgPoint(event.clientX, event.clientY);
+        setDrawStart(p);
+        setDrawBox({x: p.x, y: p.y, w: 0, h: 0});
+    }, [props.drawingContainer, toSvgPoint]);
+
+    const onDrawMove = useCallback((event: React.PointerEvent) => {
+        if (!props.drawingContainer || !drawStart) {
+            return;
+        }
+        event.stopPropagation();
+        setDrawBox(boxFromDrag(drawStart, toSvgPoint(event.clientX, event.clientY)));
+    }, [props.drawingContainer, drawStart, toSvgPoint]);
+
+    const onDrawUp = useCallback((event: React.PointerEvent) => {
+        if (!props.drawingContainer || !drawStart) {
+            return;
+        }
+        event.stopPropagation();
+        const box = drawBox;
+        setDrawStart(null);
+        setDrawBox(null);
+        if (box && isDrawable(box) && props.onCreateContainer) {
+            props.onCreateContainer(serializeGeometry(box));
+        }
+        props.onFinishDrawContainer?.();
+    }, [props.drawingContainer, drawStart, drawBox, props.onCreateContainer, props.onFinishDrawContainer]);
 
     const onNodePointerDown = useCallback(async (event: React.PointerEvent, stableid: string, label: string) => {
         // Manual double-click: two quick clicks on the same node open the text editor.
@@ -776,6 +823,67 @@ export function CanvasView(props: Props): React.ReactElement {
                 onPointerDown={onBackgroundPointerDown}
             />
 
+            {/* Container layer (behind the graph): author/teacher background boxes. */}
+            {(state.containers ?? []).map(container => {
+                const box = parseGeometry(container.geometryjson);
+                if (!box) {
+                    return null;
+                }
+                return (
+                    <g key={`container-${container.stableid}`} className="vimipad-canvas-container">
+                        <rect
+                            x={box.x}
+                            y={box.y}
+                            width={box.w}
+                            height={box.h}
+                            rx={8}
+                            fill="rgba(120, 144, 156, 0.08)"
+                            stroke="rgba(84, 110, 122, 0.55)"
+                            strokeDasharray="6 4"
+                            pointerEvents="none"
+                        />
+                        {container.label && (
+                            <text
+                                x={box.x + 10}
+                                y={box.y + 20}
+                                className="vimipad-container-label"
+                                style={{fontSize: 14, fill: 'rgba(55, 71, 79, 0.9)'}}
+                                pointerEvents="none"
+                            >
+                                {container.label}
+                            </text>
+                        )}
+                        {!disabled && props.onDeleteContainer && (
+                            <g
+                                className="vimipad-container-delete"
+                                role="button"
+                                aria-label={t('editor:containerdelete')}
+                                style={{cursor: 'pointer'}}
+                                onPointerDown={e => {
+                                    e.stopPropagation();
+                                    props.onDeleteContainer?.(container.stableid);
+                                }}
+                            >
+                                <rect
+                                    x={box.x + box.w - 24}
+                                    y={box.y + 6}
+                                    width={18}
+                                    height={18}
+                                    rx={3}
+                                    fill="rgba(84, 110, 122, 0.18)"
+                                />
+                                <text
+                                    x={box.x + box.w - 15}
+                                    y={box.y + 19}
+                                    textAnchor="middle"
+                                    style={{fontSize: 13, fill: 'rgba(55, 71, 79, 0.95)'}}
+                                >&#215;</text>
+                            </g>
+                        )}
+                    </g>
+                );
+            })}
+
             {/* Layer 1 (bottom): connector lines and their hit targets. */}
             {state.relations.map(rel => {
                 const srcNode = state.nodes.find(n => n.stableid === rel.sourceid);
@@ -1177,6 +1285,36 @@ export function CanvasView(props: Props): React.ReactElement {
                     </foreignObject>
                 );
             })()}
+
+            {/* Container draw overlay (topmost): active only while the tool is on. */}
+            {props.drawingContainer && (
+                <g className="vimipad-container-draw">
+                    <rect
+                        x={0}
+                        y={0}
+                        width={CANVAS_WIDTH}
+                        height={CANVAS_HEIGHT}
+                        fill="rgba(38, 50, 56, 0.04)"
+                        style={{touchAction: 'none', cursor: 'crosshair'}}
+                        onPointerDown={onDrawDown}
+                        onPointerMove={onDrawMove}
+                        onPointerUp={onDrawUp}
+                    />
+                    {drawBox && (
+                        <rect
+                            x={drawBox.x}
+                            y={drawBox.y}
+                            width={drawBox.w}
+                            height={drawBox.h}
+                            rx={8}
+                            fill="rgba(120, 144, 156, 0.12)"
+                            stroke="rgba(84, 110, 122, 0.9)"
+                            strokeDasharray="6 4"
+                            pointerEvents="none"
+                        />
+                    )}
+                </g>
+            )}
         </svg>
         </div>
     );

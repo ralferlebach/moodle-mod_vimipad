@@ -27,7 +27,7 @@
  */
 
 import {EditorAction} from '../store/reducer';
-import {PolledOperation, VimiNode} from '../types';
+import {PolledOperation, VimiContainer, VimiNode} from '../types';
 
 /**
  * Convert a polled operation into a reducer action, or null if it has no local
@@ -118,6 +118,39 @@ export function operationToAction(op: PolledOperation): EditorAction | null {
         }
         case 'relation_delete':
             return {kind: 'deleteRelation', stableid: str('stableid')};
+        case 'container_create': {
+            if (!payload.stableid) {
+                return null;
+            }
+            const container: VimiContainer = {
+                stableid: str('stableid'), type: str('type') || 'group', label: str('label'),
+            };
+            if ('geometryjson' in payload) {
+                container.geometryjson = str('geometryjson');
+            }
+            if ('metadatajson' in payload) {
+                container.metadatajson = str('metadatajson');
+            }
+            return {kind: 'addContainer', container};
+        }
+        case 'container_update': {
+            const action: EditorAction = {kind: 'updateContainer', stableid: str('stableid')};
+            if ('label' in payload) {
+                action.label = str('label');
+            }
+            if ('type' in payload) {
+                action.type = str('type');
+            }
+            if ('geometryjson' in payload) {
+                action.geometryjson = str('geometryjson');
+            }
+            if ('metadatajson' in payload) {
+                action.metadatajson = str('metadatajson');
+            }
+            return action;
+        }
+        case 'container_delete':
+            return {kind: 'deleteContainer', stableid: str('stableid')};
         case 'relation_retarget': {
             const action: EditorAction = {kind: 'retargetRelation', stableid: str('stableid')};
             if (payload.newsource) {

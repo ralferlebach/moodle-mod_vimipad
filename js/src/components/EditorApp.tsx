@@ -116,6 +116,7 @@ export function EditorApp(props: Props): React.ReactElement {
     const [relSource, setRelSource] = useState('');
     const [relTarget, setRelTarget] = useState('');
     const [relLabel, setRelLabel] = useState('');
+    const [drawingContainer, setDrawingContainer] = useState(false);
 
     // Undo/redo. In a server-authoritative editor an undo is the inverse
     // operation sent to the server, not a local rollback (see store/history).
@@ -500,6 +501,33 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [runOperation, pushHistory]);
 
+    const createContainer = useCallback(async (geometryjson: string) => {
+        const res = await runOperation('container_create', {type: 'group', geometryjson}, () => undefined);
+        if (res) {
+            dispatch({kind: 'addContainer', container: {
+                stableid: res.stableid, type: 'group', label: '', geometryjson,
+            }});
+            pushHistory({
+                undo: [{type: 'container_delete', payload: {stableid: res.stableid}}],
+                redo: [{type: 'container_create', payload: {stableid: res.stableid, type: 'group', geometryjson}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const deleteContainer = useCallback(async (stableid: string) => {
+        const existing = (stateRef.current.containers ?? []).find(c => c.stableid === stableid);
+        const res = await runOperation('container_delete', {stableid},
+            () => dispatch({kind: 'deleteContainer', stableid}));
+        if (res && existing) {
+            pushHistory({
+                undo: [{type: 'container_create', payload: {
+                    stableid, type: existing.type, geometryjson: existing.geometryjson ?? '',
+                }}],
+                redo: [{type: 'container_delete', payload: {stableid}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
     const renameNode = useCallback(async (stableid: string, label: string) => {
         const trimmed = label.trim();
         if (!trimmed) {
@@ -723,6 +751,20 @@ export function EditorApp(props: Props): React.ReactElement {
         </fieldset>
     );
 
+    const containerControls = (
+        <fieldset disabled={disabled} className="vimipad-control">
+            <legend className="h6">{t('editor:containers')}</legend>
+            <button
+                type="button"
+                className={drawingContainer ? 'btn btn-secondary active' : 'btn btn-outline-secondary'}
+                aria-pressed={drawingContainer}
+                onClick={() => setDrawingContainer(v => !v)}
+            >
+                <Icon name={FA.container} /> {drawingContainer ? t('editor:drawcontainerdone') : t('editor:drawcontainer')}
+            </button>
+        </fieldset>
+    );
+
     return (
         <div className="vimipad-editor" ref={rootRef}>
             <div className="vimipad-sr-only" role="status" aria-live="polite">{status}</div>
@@ -769,10 +811,15 @@ export function EditorApp(props: Props): React.ReactElement {
                         isLockedByOther={collab.isLockedByOther}
                         beginEdit={collab.beginEdit}
                         endEdit={collab.endEdit}
+                        drawingContainer={drawingContainer}
+                        onCreateContainer={createContainer}
+                        onDeleteContainer={deleteContainer}
+                        onFinishDrawContainer={() => setDrawingContainer(false)}
                     />
                     <div className="vimipad-controls-row">
                         {addNodeControls}
                         {addRelationControls}
+                        {containerControls}
                     </div>
                 </>
             ) : (

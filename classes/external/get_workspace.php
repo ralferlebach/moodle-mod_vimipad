@@ -106,6 +106,7 @@ class get_workspace extends external_api {
             'layoutjson' => $layoutjson,
             'nodes' => array_map([self::class, 'map_node'], $state['nodes']),
             'relations' => array_map([self::class, 'map_relation'], $state['relations']),
+            'containers' => array_map([self::class, 'map_container'], $state['containers']),
             'collab' => helper::collab_config(),
         ];
     }
@@ -126,6 +127,7 @@ class get_workspace extends external_api {
             'layoutjson' => '',
             'nodes' => [],
             'relations' => [],
+            'containers' => [],
             'collab' => helper::collab_config(),
         ];
     }
@@ -162,6 +164,22 @@ class get_workspace extends external_api {
             'label' => (string) $relation->label,
             'direction' => (int) $relation->direction,
             'metadatajson' => (string) ($relation->metadatajson ?? ''),
+        ];
+    }
+
+    /**
+     * Map a container record to the external structure.
+     *
+     * @param \stdClass $container The container record.
+     * @return array
+     */
+    public static function map_container(\stdClass $container): array {
+        return [
+            'stableid' => $container->stableid,
+            'type' => $container->type,
+            'label' => (string) ($container->label ?? ''),
+            'geometryjson' => (string) ($container->geometryjson ?? ''),
+            'metadatajson' => (string) ($container->metadatajson ?? ''),
         ];
     }
 
@@ -204,6 +222,13 @@ class get_workspace extends external_api {
                 'direction' => new external_value(PARAM_INT, 'Direction 0/1/2'),
                 'metadatajson' => new external_value(PARAM_RAW, 'Style/profile metadata JSON, empty if none'),
             ])),
+            'containers' => new external_multiple_structure(new external_single_structure([
+                'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable container id'),
+                'type' => new external_value(PARAM_ALPHANUMEXT, 'Container type'),
+                'label' => new external_value(PARAM_TEXT, 'Container label'),
+                'geometryjson' => new external_value(PARAM_RAW, 'Geometry JSON (x,y,w,h), empty if none'),
+                'metadatajson' => new external_value(PARAM_RAW, 'Style/lock metadata JSON, empty if none'),
+            ]), 'Containers drawn on the canvas', VALUE_OPTIONAL),
             'collab' => new external_single_structure([
                 'pollinterval' => new external_value(PARAM_INT, 'Default poll interval (ms)'),
                 'polladaptive' => new external_value(PARAM_INT, '1 if adaptive polling is enabled'),

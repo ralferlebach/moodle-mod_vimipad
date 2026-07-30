@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.6.8 — frontend authoring (1/3): soft, non-blocking constraint hints. The editor shows a debounced banner from get_constraint_status while a required map is not yet satisfied. tsc + Jest (25 suites/155 tests) green, bundle reproducible; 200 mod_vimipad + 97 vimipadassess green.**
+**Development status: 0.6.9 — frontend authoring (2/3): draw containers on the canvas. get_workspace now returns containers; the editor renders them, a "draw container" tool creates them by dragging, and they can be deleted. 202 mod_vimipad + 97 vimipadassess green; tsc + Jest (28 suites/169) green, bundle reproducible.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.
