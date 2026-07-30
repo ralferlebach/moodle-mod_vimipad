@@ -177,6 +177,7 @@ $string['error:aiunavailable'] = 'AI feedback is not available. Check that a pro
 $string['error:alreadysubmitted'] = 'This map has already been submitted.';
 $string['error:consensusnotopen'] = 'A submission process is already under way.';
 $string['error:consensusnotvoting'] = 'No submission process is under way.';
+$string['error:containernotfound'] = 'Container not found';
 $string['error:emptyjournal'] = 'A journal entry cannot be empty.';
 $string['error:importformat'] = 'The file is not a valid ViMi Pad export.';
 $string['error:noconsensus'] = 'This activity does not use group-consensus submission.';

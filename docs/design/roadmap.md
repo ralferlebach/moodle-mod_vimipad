@@ -56,7 +56,7 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 
 ## 0.5.x — Bewertung gegen Musterlösung
 
-> **Status: ✅ weitgehend, mit offenen Verträgen** — Struktur-/Semantikabgleich (`vimipadassess`, 6 Scorer + Matcher-Wahl), `gradingform`-Rubric, KI-Feedback + On-demand-KI-Scorer, Gradebook/Completion, Reopen, Konsens-Abgabe, Peer-Review-Basis (Allokation/Reviews/Aggregat). **Closure 0.5.33/0.5.34 erledigt:** gemeinsamer Workspace-Write-Lock (Concurrency-Gate) + fail-closed Eindeutigkeit; `duedate`/late-Markierung (soft; `cutoffdate` bleibt harte Grenze); `map_updated`-Event fürs Reporting; Mehrfach-Referenzen als *eine je Aktivität* festgelegt (E1-B); Peer-**Phasenmodell** bewusst auf realen Scope reduziert (E3-B, s. u.); Leases advisory (E2-A); Import-Atomarität dokumentiert (E6). **Offen vor 0.6:** Container-/Membership-Operationen, Importformat v2 + Migration, Template-/Constraint-Policy.
+> **Status: ✅ weitgehend, mit offenen Verträgen** — Struktur-/Semantikabgleich (`vimipadassess`, 6 Scorer + Matcher-Wahl), `gradingform`-Rubric, KI-Feedback + On-demand-KI-Scorer, Gradebook/Completion, Reopen, Konsens-Abgabe, Peer-Review-Basis (Allokation/Reviews/Aggregat). **Closure 0.5.33/0.5.34 erledigt:** gemeinsamer Workspace-Write-Lock (Concurrency-Gate) + fail-closed Eindeutigkeit; `duedate`/late-Markierung (soft; `cutoffdate` bleibt harte Grenze); `map_updated`-Event fürs Reporting; Mehrfach-Referenzen als *eine je Aktivität* festgelegt (E1-B); Peer-**Phasenmodell** bewusst auf realen Scope reduziert (E3-B, s. u.); Leases advisory (E2-A); Import-Atomarität dokumentiert (E6). **0.6-Grundlagen (0.6.0-alpha1) gelegt:** Container-/Membership-Operationen im Operation-Contract + voller Import-Round-Trip (kein Formatwechsel nötig); Template-/Constraint-Policy spezifiziert (`template_constraint_policy.md`, Umsetzung über 0.6.x).
 
 - Struktur- und Semantikabgleich gegen eine oder mehrere Musterlösungen
 - Import (JSON/XML) von Musterlösungen (auf Basis der Exporte aus 0.4.x)
@@ -78,9 +78,17 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 
 ## 0.6.x — Autoren-Werkzeuge & Import/Export-Integration
 
+> **Status: ◐ Grundlage gelegt (0.6.0-alpha1).** Der Backend-Vertrag steht:
+> Container-/Membership-Operationen (`operation_type`/`operation_service`) und
+> voller Import-Round-Trip von Containern/Memberships. Offen: die Oberflächen
+> (Container zeichnen, Template-Autorenwerkzeug) und die Umsetzung der
+> Template-/Constraint-Policy (`template_constraint_policy.md`).
+
 - Vorlagen/Templates durch Lehrende mit einschränkbaren Änderungen
-- Hintergründe zeichnen (Kästen/Abschnitte/Container auf dem Canvas)
-- Verknüpfung mit der Import/Export-Funktion (JSON/XML)
+- Hintergründe zeichnen (Kästen/Abschnitte/Container auf dem Canvas) — Backend
+  (Container-Operationen) ✅; Canvas-Oberfläche offen
+- Verknüpfung mit der Import/Export-Funktion (JSON/XML) — Container/Memberships
+  round-trippen jetzt ✅
 - Oberflächen und Menüs hierfür
 - Dedizierte Freigabe-Optionen dieser Möglichkeiten an Lernende
 

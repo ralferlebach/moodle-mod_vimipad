@@ -177,6 +177,7 @@ $string['error:aiunavailable'] = 'KI-Feedback ist nicht verfügbar. Prüfen Sie,
 $string['error:alreadysubmitted'] = 'Diese Map wurde bereits abgegeben.';
 $string['error:consensusnotopen'] = 'Es läuft bereits ein Einreichungsprozess.';
 $string['error:consensusnotvoting'] = 'Es läuft kein Einreichungsprozess.';
+$string['error:containernotfound'] = 'Container nicht gefunden';
 $string['error:emptyjournal'] = 'Ein Journaleintrag darf nicht leer sein.';
 $string['error:importformat'] = 'Die Datei ist kein gültiger ViMi-Pad-Export.';
 $string['error:noconsensus'] = 'Diese Aktivität nutzt keine Gruppenkonsens-Abgabe.';

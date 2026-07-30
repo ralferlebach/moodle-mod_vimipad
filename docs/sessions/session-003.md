@@ -56,6 +56,22 @@
 - Lang: `event:map_updated`, `gradetab:late`, `gradetab:submittedon` (en/de 400/400).
 - Test `tests/duedate_and_events_test.php` (is_late-Fälle + map_updated via Sink).
 
+**0.6.0-alpha1 — Autoren-Grundlage (Container-Vertrag + Import-Round-Trip)**
+- 5 neue Operationstypen `container_create/update/delete`, `membership_add/remove`
+  in `operation_type` (Validierung: `itemtype`-Enum, int-ähnliches `sortorder`)
+  + Handler in `operation_service::mutate` (create revived soft-deleted;
+  membership_add = Upsert; container_delete soft + Memberships weg). Gleicher
+  Write-Lock/Revisions-Pfad wie Node/Relation.
+- Import round-trippt jetzt Container + Memberships: Remap der Container-Stableids
+  und Member-Referenzen (Node/Relation/Container); Relation-Stableids landen jetzt
+  auch im idmap. XML-Parse um `containers`/`memberships` erweitert; `import_map`
+  liefert die Zählungen. Kein Formatwechsel nötig (Export trug Container längst).
+- Lang: `error:containernotfound` (en/de 401/401).
+- Template-/Constraint-Policy spezifiziert (`docs/design/template_constraint_policy.md`,
+  Umsetzung über 0.6.x): weiche Constraints zur Edit-Zeit via geteiltem Resolver,
+  hartes Gate zur Abgabe; Template-Sperren per Element-`metadatajson` in `apply_locked`.
+- Test `tests/container_operations_test.php` (Lebenszyklus + Import-Round-Trip).
+
 ---
 
 ### Entscheidungen getroffen
@@ -82,8 +98,10 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 
 ### Offene Punkte für die nächste Session (0.6.0-Vorbereitung)
 
-- 0.6-Vorab-Verträge spezifizieren: `container_*`/`membership_*`-Operationen,
-  Importformat v1/v2 + Migration, Template-/Constraint-Policy vor `operation_service`.
+- 0.6.0 Autorenwerkzeuge auf der Grundlage: `constraint_policy`-Resolver
+  (rein, testbar) + hartes Abgabe-Gate; Container auf dem Canvas zeichnen
+  (Frontend); Template-Sperren (`locked`/`editable` in `apply_locked`,
+  `error:elementlocked`); Template-Autorenoberfläche.
 - Danach 0.6.0 Autorenwerkzeuge (Feedback-/Werkzeuge-Reiter, Container, Templates).
 
 ---
@@ -100,7 +118,7 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK — 182 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK — 186 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
           betroffene Service-Tests einzeln grün (operation/snapshot/workspace/import/consensus/collab/reconstruction/layout)
 PHPCS:    OK — 0 auf allen geänderten/neuen Dateien (moodle-Standard, severity=1)
 Frontend: tsc 0 · Jest 22 Suites/147 · Bundle reproduzierbar (Vorbereitungsrunde)
@@ -111,7 +129,7 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072714 / 0.5.34, package.json + lock.
+- [x] Version konsistent: version.php 2026072715 / 0.6.0-alpha1, package.json + lock.
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -121,14 +139,14 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.5.34 — 0.5.x-Closure abgeschlossen: Write-Lock-Concurrency-Gate + fail-closed
-> (0.5.33); duedate/late-Markierung + map_updated-Event + Peer-Scope E3-B (0.5.34).
-> Real auf Moodle 4.5.12 verifiziert (182+97 grün).
+> 0.6.0-alpha1 — 0.5.x abgeschlossen + 0.6-Autoren-Grundlage: Container-/Membership-
+> Operationen im Contract + voller Import-Round-Trip; Template-/Constraint-Policy
+> spezifiziert. Real auf Moodle 4.5.12 verifiziert (186+97 grün).
 
 **Zuletzt abgeschlossen:**
-> 0.5.33 P0/P1-Concurrency; 0.5.34 duedate/late + map_updated-Event + E3-B;
-> Session-Doku-Prozess gefixt; session-001/002/003 vollständig.
+> 0.5.33 Concurrency; 0.5.34 duedate/late + map_updated; 0.6.0-alpha1 Container-
+> Operationen + Import-Round-Trip + Policy-Spec; Session-Doku-Prozess gefixt.
 
 **Als nächstes geplant:**
-> 0.6-Vorab-Verträge (Container-/Membership-Operationen, Importformat v2 +
-> Migration, Template-/Constraint-Policy) → dann 0.6.0 Autorenwerkzeuge.
+> 0.6.0 Autorenwerkzeuge auf der neuen Grundlage: `constraint_policy`-Resolver
+> + hartes Abgabe-Gate, Container auf dem Canvas zeichnen, Template-Editor.

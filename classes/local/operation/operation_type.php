@@ -48,6 +48,21 @@ class operation_type {
     /** @var string Retarget a relation's source and/or target node. */
     public const RELATION_RETARGET = 'relation_retarget';
 
+    /** @var string Create (or revive) a container. */
+    public const CONTAINER_CREATE = 'container_create';
+
+    /** @var string Update a container's label/type/geometry/metadata. */
+    public const CONTAINER_UPDATE = 'container_update';
+
+    /** @var string Soft-delete a container and drop its memberships. */
+    public const CONTAINER_DELETE = 'container_delete';
+
+    /** @var string Add an item (node|relation|container) to a container. */
+    public const MEMBERSHIP_ADD = 'membership_add';
+
+    /** @var string Remove an item from a container. */
+    public const MEMBERSHIP_REMOVE = 'membership_remove';
+
     /**
      * All known operation types.
      *
@@ -58,6 +73,8 @@ class operation_type {
             self::NODE_CREATE, self::NODE_UPDATE, self::NODE_DELETE,
             self::RELATION_CREATE, self::RELATION_UPDATE, self::RELATION_DELETE,
             self::RELATION_RETARGET,
+            self::CONTAINER_CREATE, self::CONTAINER_UPDATE, self::CONTAINER_DELETE,
+            self::MEMBERSHIP_ADD, self::MEMBERSHIP_REMOVE,
         ];
     }
 
@@ -139,6 +156,43 @@ class operation_type {
                 self::optional_string($payload, 'newtarget');
                 self::assert_allowed($payload, ['stableid', 'newsource', 'newtarget']);
                 break;
+            case self::CONTAINER_CREATE:
+                self::require_string($payload, 'type');
+                self::optional_string($payload, 'stableid');
+                self::optional_string($payload, 'label');
+                self::optional_string($payload, 'geometryjson');
+                self::optional_string($payload, 'metadatajson');
+                self::assert_allowed($payload, ['type', 'stableid', 'label', 'geometryjson', 'metadatajson']);
+                break;
+            case self::CONTAINER_UPDATE:
+                self::require_string($payload, 'stableid');
+                self::optional_string($payload, 'type');
+                self::optional_string($payload, 'label');
+                self::optional_string($payload, 'geometryjson');
+                self::optional_string($payload, 'metadatajson');
+                self::assert_allowed($payload, ['stableid', 'type', 'label', 'geometryjson', 'metadatajson']);
+                break;
+            case self::CONTAINER_DELETE:
+                self::require_string($payload, 'stableid');
+                self::assert_allowed($payload, ['stableid']);
+                break;
+            case self::MEMBERSHIP_ADD:
+                self::require_string($payload, 'containerstableid');
+                self::require_string($payload, 'itemstableid');
+                self::validate_itemtype($payload);
+                self::optional_string($payload, 'role');
+                self::validate_sortorder($payload);
+                self::assert_allowed(
+                    $payload,
+                    ['containerstableid', 'itemtype', 'itemstableid', 'role', 'sortorder']
+                );
+                break;
+            case self::MEMBERSHIP_REMOVE:
+                self::require_string($payload, 'containerstableid');
+                self::require_string($payload, 'itemstableid');
+                self::validate_itemtype($payload);
+                self::assert_allowed($payload, ['containerstableid', 'itemtype', 'itemstableid']);
+                break;
             default:
                 throw new \invalid_parameter_exception('Unknown operation type: ' . $type);
         }
@@ -203,6 +257,39 @@ class operation_type {
             if (json_last_error() !== JSON_ERROR_NONE) {
                 throw new \invalid_parameter_exception('Invalid JSON: metadatajson');
             }
+        }
+    }
+
+    /**
+     * Validate the membership itemtype against its enum domain (node, relation,
+     * container).
+     *
+     * @param array $payload The payload.
+     * @return void
+     * @throws \invalid_parameter_exception
+     */
+    private static function validate_itemtype(array $payload): void {
+        self::require_string($payload, 'itemtype');
+        if (!in_array($payload['itemtype'], ['node', 'relation', 'container'], true)) {
+            throw new \invalid_parameter_exception('Invalid membership itemtype: ' . $payload['itemtype']);
+        }
+    }
+
+    /**
+     * Validate the optional membership sortorder (int or numeric string), if
+     * present.
+     *
+     * @param array $payload The payload.
+     * @return void
+     * @throws \invalid_parameter_exception
+     */
+    private static function validate_sortorder(array $payload): void {
+        if (!array_key_exists('sortorder', $payload)) {
+            return;
+        }
+        $value = $payload['sortorder'];
+        if (!is_int($value) && !(is_string($value) && preg_match('/^-?\d+$/', $value))) {
+            throw new \invalid_parameter_exception('Invalid field type: sortorder');
         }
     }
 

@@ -4,7 +4,37 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.34** (2026072714).
+> release is **0.6.0-alpha1** (2026072715).
+
+## 0.6.0-alpha1 (2026072715) — 0.6 foundation: container/membership operations + import round-trip
+
+Opens the 0.6.x authoring line with the backend contract the authoring tools sit
+on. No new UI yet; this makes containers first-class in the operation log and
+closes the export/import asymmetry the 0.5.32 audit flagged.
+
+- **Container & membership operations.** New operation types `container_create`,
+  `container_update`, `container_delete`, `membership_add`, `membership_remove`
+  in `operation_type` (validated: itemtype enum node|relation|container,
+  int-like sortorder) and handled in `operation_service::mutate`
+  (create revives soft-deleted rows; membership_add is an upsert; container_delete
+  soft-deletes and drops its memberships). All go through the same shared write
+  lock and revision path as node/relation operations.
+- **Import now round-trips containers and memberships.** The export already
+  emitted them (stable-id based); `import_service` now consumes them, remapping
+  container stable ids and member references (nodes, relations and nested
+  containers) onto the freshly created elements. Relation stable ids are now also
+  tracked in the id map so memberships on relations remap correctly. XML parsing
+  gained `containers`/`memberships`; `import_map` returns their counts. No format
+  version bump was needed — the format already carried containers; only the
+  import consumer was missing.
+- New lang string `error:containernotfound` (en/de, 401/401 parity).
+- **Template/constraint policy specified** (`docs/design/template_constraint_policy.md`):
+  soft constraints at edit time via a shared `constraint_policy` resolver, hard
+  gate at submission; template structural locks enforced per-operation via element
+  `metadatajson` — implementation scheduled across 0.6.x.
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **186 `mod_vimipad`**
+  (incl. new `container_operations_test`: lifecycle + import round-trip) **+ 97
+  `vimipadassess`** green; phpcs clean on all changed/new files.
 
 ## 0.5.34 (2026072714) — 0.5.x closure part 2: due-date/late, map_updated event, peer scope
 

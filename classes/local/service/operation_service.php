@@ -290,6 +290,78 @@ class operation_service {
                 $DB->update_record('vimipad_relation', (object) $update);
                 return null;
 
+            case operation_type::CONTAINER_CREATE:
+                $stableid = $this->pick_stable_id($payload, 'container');
+                $record = [
+                    'workspaceid' => $workspaceid,
+                    'stableid' => $stableid,
+                    'type' => $payload['type'],
+                    'label' => $payload['label'] ?? null,
+                    'geometryjson' => $payload['geometryjson'] ?? null,
+                    'metadatajson' => $payload['metadatajson'] ?? null,
+                    'deleted' => 0,
+                ];
+                // Reuse any existing row with this stable id (revive a
+                // soft-deleted container), keeping the unique index intact.
+                $existing = $DB->get_record('vimipad_container', [
+                    'workspaceid' => $workspaceid, 'stableid' => $stableid,
+                ]);
+                if ($existing) {
+                    $record['id'] = $existing->id;
+                    $DB->update_record('vimipad_container', (object) $record);
+                } else {
+                    $DB->insert_record('vimipad_container', (object) $record);
+                }
+                return $stableid;
+
+            case operation_type::CONTAINER_UPDATE:
+                $container = $this->get_live_container($workspaceid, $payload['stableid']);
+                $update = ['id' => $container->id];
+                foreach (['type', 'label', 'geometryjson', 'metadatajson'] as $field) {
+                    if (array_key_exists($field, $payload)) {
+                        $update[$field] = $payload[$field];
+                    }
+                }
+                $DB->update_record('vimipad_container', (object) $update);
+                return null;
+
+            case operation_type::CONTAINER_DELETE:
+                $container = $this->get_live_container($workspaceid, $payload['stableid']);
+                $DB->set_field('vimipad_container', 'deleted', 1, ['id' => $container->id]);
+                // Membership rows are meaningless once the container is gone.
+                $DB->delete_records('vimipad_membership', ['containerid' => $container->id]);
+                return null;
+
+            case operation_type::MEMBERSHIP_ADD:
+                $container = $this->get_live_container($workspaceid, $payload['containerstableid']);
+                $criteria = [
+                    'containerid' => $container->id,
+                    'itemtype' => $payload['itemtype'],
+                    'itemstableid' => $payload['itemstableid'],
+                ];
+                // Upsert: at most one membership per (container, itemtype, item).
+                $existing = $DB->get_record('vimipad_membership', $criteria);
+                $rec = $criteria + [
+                    'role' => $payload['role'] ?? null,
+                    'sortorder' => isset($payload['sortorder']) ? (int) $payload['sortorder'] : 0,
+                ];
+                if ($existing) {
+                    $rec['id'] = $existing->id;
+                    $DB->update_record('vimipad_membership', (object) $rec);
+                } else {
+                    $DB->insert_record('vimipad_membership', (object) $rec);
+                }
+                return null;
+
+            case operation_type::MEMBERSHIP_REMOVE:
+                $container = $this->get_live_container($workspaceid, $payload['containerstableid']);
+                $DB->delete_records('vimipad_membership', [
+                    'containerid' => $container->id,
+                    'itemtype' => $payload['itemtype'],
+                    'itemstableid' => $payload['itemstableid'],
+                ]);
+                return null;
+
             default:
                 throw new \invalid_parameter_exception('Unhandled operation type: ' . $type);
         }
@@ -351,6 +423,26 @@ class operation_service {
             throw new \moodle_exception('error:relationnotfound', 'mod_vimipad');
         }
         return $relation;
+    }
+
+    /**
+     * Fetch a live (not soft-deleted) container by its stable id.
+     *
+     * @param int $workspaceid The workspace id.
+     * @param string $stableid The container stable id.
+     * @return \stdClass The container record.
+     * @throws \moodle_exception If not found.
+     */
+    private function get_live_container(int $workspaceid, string $stableid): \stdClass {
+        global $DB;
+        $container = $DB->get_record(
+            'vimipad_container',
+            ['workspaceid' => $workspaceid, 'stableid' => $stableid, 'deleted' => 0]
+        );
+        if (!$container) {
+            throw new \moodle_exception('error:containernotfound', 'mod_vimipad');
+        }
+        return $container;
     }
 
     /**
