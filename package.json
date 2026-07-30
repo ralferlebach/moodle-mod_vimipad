@@ -1,6 +1,6 @@
 {
   "name": "mod_vimipad-editor",
-  "version": "0.6.0-alpha1",
+  "version": "0.6.2",
   "description": "ViMi Pad editor frontend (React/TypeScript). Build tooling is development-only; the production server ships the prebuilt bundle and needs no Node/npm.",
   "private": true,
   "license": "GPL-3.0-or-later",

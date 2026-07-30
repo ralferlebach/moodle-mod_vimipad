@@ -147,6 +147,20 @@ class snapshot_service {
         [$lock, $fresh] = $this->begin_submission($instance, $workspace);
 
         try {
+            // Hard submission gate: the map being frozen must satisfy the
+            // activity's constraints. Evaluated under the write lock on a
+            // consistent read; a no-op when no constraints are configured.
+            $config = \mod_vimipad\local\policy\constraint_config::from_instance($instance);
+            if (!$config->is_empty()) {
+                $report = \mod_vimipad\local\policy\constraint_policy::evaluate(
+                    $this->build_normalized($fresh, $instance->defaultprofile),
+                    $config
+                );
+                if (!$report->is_satisfied()) {
+                    throw new \moodle_exception('error:constraintsnotmet', 'mod_vimipad', '', $report->summary());
+                }
+            }
+
             // Group consensus: record this member's intent and hold the
             // submission until every submitting member has signalled readiness.
             if (

@@ -4,9 +4,39 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.0-alpha1** (2026072715).
+> release is **0.6.2** (2026072716).
 
-## 0.6.0-alpha1 (2026072715) — 0.6 foundation: container/membership operations + import round-trip
+## 0.6.2 (2026072716) — constraint-policy engine + hard submission gate
+
+Adds the map-constraint engine that the authoring/assessment workflow needs and
+wires the hard gate into submission. The teacher-facing input fields for the
+qualitative constraints follow in 0.6.3; the engine and gate are complete and
+fully tested now.
+
+- **`\mod_vimipad\local\policy` package.** `constraint_config` (value object,
+  `from_instance()` reads required/forbidden concepts, allowed relation types and
+  min node/relation counts — no-op today, active the moment the fields land),
+  `constraint_policy::evaluate()` (pure, deterministic; takes a normalized map,
+  returns findings) and `constraint_report` (structured findings +
+  `is_satisfied()` + localized `messages()`/`summary()`), so the same evaluation
+  can back both the hard gate and future soft edit-time hints.
+- **Hard submission gate.** `snapshot_service::create_submission` now evaluates
+  the frozen map under the workspace write lock and refuses submission with
+  `error:constraintsnotmet` (listing the violations) if it is not satisfied.
+  Constraint kinds: missing required concepts, present forbidden concepts,
+  disallowed relation types, too few concepts, too few relations
+  (case-insensitive term matching).
+- New lang strings: `error:constraintsnotmet` and `constraint:*` messages
+  (en/de, 407/407 parity).
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **192 `mod_vimipad`**
+  (incl. `constraint_policy_test`: all constraint kinds + an end-to-end gate test
+  that blocks an invalid submission and lets a fixed one through) **+ 97
+  `vimipadassess`** green; phpcs clean.
+
+*Versioning note: the previous release (integer 2026072715) is 0.6.1 — the 0.6.x
+line uses plain patch numbers without an -alpha suffix.*
+
+## 0.6.1 (2026072715) — 0.6 foundation: container/membership operations + import round-trip
 
 Opens the 0.6.x authoring line with the backend contract the authoring tools sit
 on. No new UI yet; this makes containers first-class in the operation log and

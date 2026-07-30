@@ -56,7 +56,7 @@
 - Lang: `event:map_updated`, `gradetab:late`, `gradetab:submittedon` (en/de 400/400).
 - Test `tests/duedate_and_events_test.php` (is_late-Fälle + map_updated via Sink).
 
-**0.6.0-alpha1 — Autoren-Grundlage (Container-Vertrag + Import-Round-Trip)**
+**0.6.1 — Autoren-Grundlage (Container-Vertrag + Import-Round-Trip)**
 - 5 neue Operationstypen `container_create/update/delete`, `membership_add/remove`
   in `operation_type` (Validierung: `itemtype`-Enum, int-ähnliches `sortorder`)
   + Handler in `operation_service::mutate` (create revived soft-deleted;
@@ -71,6 +71,20 @@
   Umsetzung über 0.6.x): weiche Constraints zur Edit-Zeit via geteiltem Resolver,
   hartes Gate zur Abgabe; Template-Sperren per Element-`metadatajson` in `apply_locked`.
 - Test `tests/container_operations_test.php` (Lebenszyklus + Import-Round-Trip).
+
+**0.6.2 - Constraint-Policy-Engine + hartes Abgabe-Gate**
+- Neues Paket `\mod_vimipad\local\policy`: `constraint_config`
+  (`from_instance` liest Pflicht-/Verbotsbegriffe, erlaubte Typen, min Node/
+  Relation - heute No-op, aktiv sobald die Felder da sind), reiner
+  `constraint_policy::evaluate()` + `constraint_report` (`is_satisfied()`,
+  lokalisierte `messages()`/`summary()`).
+- Hartes Gate in `snapshot_service::create_submission` (unter dem Write-Lock):
+  Abgabe wird mit `error:constraintsnotmet` (Verstossliste) verweigert.
+- Lang: `error:constraintsnotmet` + `constraint:*` (en/de 407/407).
+- Test `tests/constraint_policy_test.php`: alle Constraint-Arten + End-to-End-
+  Gate (blockiert ungueltige Abgabe, laesst korrigierte durch).
+- Eingabefelder (Schema/Form/Backup) fuer die qualitativen Constraints -> 0.6.3
+  (dann bekommt das Gate produktiv Zaehne).
 
 ---
 
@@ -118,7 +132,7 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK — 186 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 192 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
           betroffene Service-Tests einzeln grün (operation/snapshot/workspace/import/consensus/collab/reconstruction/layout)
 PHPCS:    OK — 0 auf allen geänderten/neuen Dateien (moodle-Standard, severity=1)
 Frontend: tsc 0 · Jest 22 Suites/147 · Bundle reproduzierbar (Vorbereitungsrunde)
@@ -129,7 +143,7 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072715 / 0.6.0-alpha1, package.json + lock.
+- [x] Version konsistent: version.php 2026072716 / 0.6.2, package.json + lock (0.6.0-alpha1 rueckwirkend = 0.6.1).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -139,14 +153,15 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.6.0-alpha1 — 0.5.x abgeschlossen + 0.6-Autoren-Grundlage: Container-/Membership-
-> Operationen im Contract + voller Import-Round-Trip; Template-/Constraint-Policy
-> spezifiziert. Real auf Moodle 4.5.12 verifiziert (186+97 grün).
+> 0.6.2 — 0.5.x abgeschlossen; 0.6-Autoren-Grundlage steht: Container-/Membership-
+> Operationen + Import-Round-Trip (0.6.1); Constraint-Policy-Engine + hartes
+> Abgabe-Gate (0.6.2). Real auf Moodle 4.5.12 verifiziert (192+97 grün).
 
 **Zuletzt abgeschlossen:**
-> 0.5.33 Concurrency; 0.5.34 duedate/late + map_updated; 0.6.0-alpha1 Container-
-> Operationen + Import-Round-Trip + Policy-Spec; Session-Doku-Prozess gefixt.
+> 0.6.1 Container-Ops + Import-Round-Trip; 0.6.2 Constraint-Engine + Abgabe-Gate
+> (in create_submission, alle Constraint-Arten getestet). Konvention: 0.6.x ohne
+> alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
 
 **Als nächstes geplant:**
-> 0.6.0 Autorenwerkzeuge auf der neuen Grundlage: `constraint_policy`-Resolver
-> + hartes Abgabe-Gate, Container auf dem Canvas zeichnen, Template-Editor.
+> 0.6.3: Lehrenden-Eingabefelder fuer Constraints (Schema/Form/Backup) -> Gate
+> produktiv. Danach Container auf dem Canvas zeichnen und Template-Editor.
