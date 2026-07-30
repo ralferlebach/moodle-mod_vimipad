@@ -319,6 +319,7 @@ $string['scorepart:concepts'] = 'Begriffe';
 $string['scorepart:hierarchy'] = 'Hierarchie';
 $string['scorepart:propositions'] = 'Propositionen';
 $string['scorepart:root'] = 'Wurzel';
+$string['scorepart:submaps'] = 'Teilkarten';
 $string['scoreparts'] = 'Begriffe {$a->concepts}%, Propositionen {$a->propositions}%.';
 $string['scoresuggestion'] = 'Vorschlag: {$a->percent}% Übereinstimmung — etwa {$a->grade} von {$a->max} Punkten. Nur ein Vorschlag; die Note vergeben Sie selbst.';
 $string['scoreunavailable'] = 'Für diese Einreichung ist kein Bewertungsvorschlag verfügbar.';

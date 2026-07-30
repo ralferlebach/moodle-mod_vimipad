@@ -319,6 +319,7 @@ $string['scorepart:concepts'] = 'Concepts';
 $string['scorepart:hierarchy'] = 'Hierarchy';
 $string['scorepart:propositions'] = 'Propositions';
 $string['scorepart:root'] = 'Root';
+$string['scorepart:submaps'] = 'Sub-maps';
 $string['scoreparts'] = 'Concepts {$a->concepts}%, propositions {$a->propositions}%.';
 $string['scoresuggestion'] = 'Suggestion: {$a->percent}% match — about {$a->grade} of {$a->max} points. This is only a suggestion; you set the grade.';
 $string['scoreunavailable'] = 'No scoring suggestion is available for this submission.';

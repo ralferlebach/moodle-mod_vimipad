@@ -36,17 +36,22 @@ class submission {
     /** @var array[] Propositions: each ['source' => string, 'relation' => string, 'target' => string]. */
     public array $propositions;
 
+    /** @var array[] Sub-maps (containers): each ['label' => string, 'concepts' => string[]]. */
+    public array $submaps;
+
     /**
      * Constructor.
      *
      * @param string $profile The diagram profile.
      * @param array $concepts Concept labels keyed by stable id.
      * @param array $propositions Proposition triples.
+     * @param array $submaps Sub-maps: each ['label' => string, 'concepts' => string[]].
      */
-    public function __construct(string $profile, array $concepts, array $propositions) {
+    public function __construct(string $profile, array $concepts, array $propositions, array $submaps = []) {
         $this->profile = $profile;
         $this->concepts = $concepts;
         $this->propositions = $propositions;
+        $this->submaps = $submaps;
     }
 
     /**
@@ -75,7 +80,30 @@ class submission {
             ];
         }
 
-        return new self((string) ($data['profile'] ?? 'conceptmap'), $concepts, $propositions);
+        $submaps = [];
+        foreach (($data['containers'] ?? []) as $container) {
+            $submaps[$container['stableid']] = [
+                'label' => trim((string) ($container['label'] ?? '')),
+                'concepts' => [],
+            ];
+        }
+        foreach (($data['memberships'] ?? []) as $membership) {
+            if (($membership['itemtype'] ?? '') !== 'node') {
+                continue;
+            }
+            $containerid = $membership['containerstableid'] ?? '';
+            $label = $concepts[$membership['itemstableid'] ?? ''] ?? '';
+            if (isset($submaps[$containerid]) && $label !== '') {
+                $submaps[$containerid]['concepts'][] = $label;
+            }
+        }
+
+        return new self(
+            (string) ($data['profile'] ?? 'conceptmap'),
+            $concepts,
+            $propositions,
+            array_values($submaps)
+        );
     }
 
     /**

@@ -4,7 +4,30 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.29** (2026072709).
+> release is **0.5.30** (2026072710).
+
+## 0.5.30 (2026072710) — sub-map scorer + cross-version CI fixes
+
+- **New `vimipadassess_sms` scorer (sub-map comparison).** Reads each container
+  as a sub-map (a set of concepts) and matches every reference sub-map to the
+  submission's best-overlapping one (concept-set F1 through the injected
+  matcher), reporting which expected groupings were reproduced, missed or added.
+  When no sub-maps are defined it returns an informational note, not a
+  misleading zero. The `submission` model now carries sub-maps, rebuilt from a
+  snapshot's containers and node memberships.
+- **CI fix — subplugin plugininfo class.** The `vimipadassess` subplugin type
+  had no `\mod_vimipad\plugininfo\vimipadassess` class, so a full site install
+  emitted a debugging() notice and every PHPUnit/Behat matrix job failed at the
+  install step. Added the class (mirroring `vimipadform`).
+- **CI fix — Moodle 5.0 subplugins format.** `db/subplugins.json` now declares
+  both `subplugintypes` (relative paths, the Moodle 5.0 form, MDL-83705) and
+  `plugintypes` (full paths, for Moodle 4.5), matching core modules, so the 5.0
+  deprecation notice is gone while 4.5 keeps working.
+- **Verified on real Moodle 4.5.12 and 5.0.8 instances:** install is clean on
+  both; `mod_vimipad` (150) and `vimipadassess` (81) tests pass on both (exit 0;
+  on 5.0 the only issues reported are framework-level PHPUnit deprecations, which
+  do not fail the build). phpcs, phpdoc, phpcpd, savepoints, validate and
+  mustache are clean.
 
 ## 0.5.29 (2026072709) — configurable matching + hierarchy scorer
 
