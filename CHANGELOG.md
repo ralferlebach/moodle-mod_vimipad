@@ -4,7 +4,30 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.3** (2026072717).
+> release is **0.6.4** (2026072718).
+
+## 0.6.4 (2026072718) — template structural locks + lint fix
+
+Third 0.6 authoring-foundation piece: teacher-provided scaffolds can now be
+protected element by element, enforced server-side. No schema change.
+
+- **Element locks in the operation service.** An element whose metadata carries
+  `{"locked": true}` can no longer be deleted, and can only be updated in the
+  fields listed in its `editable` whitelist (e.g. `{"locked": true, "editable":
+  ["label"]}`) — otherwise `error:elementlocked` is raised. Enforced for
+  node/relation/container update and delete plus relation retarget, in
+  `operation_service` (which every edit path goes through). Unlocked elements
+  and element creation are unaffected, and import is unaffected (it only
+  creates). This is the enforcement half of the template policy from
+  `template_constraint_policy.md`.
+- New lang string `error:elementlocked` (en/de, 419/419 parity).
+- **Lint fix:** the `version.php` release-line inline comment now starts with a
+  capital (Squiz.Commenting.InlineComment). Whole-plugin phpcs (moodle standard,
+  `--ignore=tools/`) is clean.
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **197 `mod_vimipad`**
+  (incl. new `element_lock_test`: locked delete/update rejected, whitelist
+  honoured, unlocked elements free, locked relation protected) **+ 97
+  `vimipadassess`** green.
 
 ## 0.6.3 (2026072717) — teacher map-constraint fields (submission gate goes live)
 

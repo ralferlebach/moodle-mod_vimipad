@@ -97,6 +97,18 @@
 - `backup_restore_test` prueft jetzt den Round-Trip der 5 Felder;
   neuer Gate-Test aus real gespeicherten Einstellungen.
 
+**0.6.4 - Template-Struktursperren (Durchsetzung) + Lint-Fix**
+- Elemente mit metadata `{"locked": true}` sind gegen Loeschen geschuetzt und
+  nur in den `editable`-Feldern aenderbar (sonst `error:elementlocked`).
+  Durchgesetzt in `operation_service` fuer node/relation/container update+delete
+  und relation_retarget; Create und ungesperrte Elemente unberuehrt, Import
+  unberuehrt (nur Create).
+- Lang: `error:elementlocked` (en/de 419/419).
+- Lint-Fix: Inline-Kommentar in `version.php` beginnt gross; ganzes Plugin
+  phpcs-clean (moodle-Standard, `--ignore=tools/`).
+- Test `tests/element_lock_test.php` (Loeschen/Update gesperrt, Whitelist,
+  ungesperrt frei, gesperrte Relation).
+
 ---
 
 ### Entscheidungen getroffen
@@ -143,7 +155,7 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 193 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 197 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
           betroffene Service-Tests einzeln grün (operation/snapshot/workspace/import/consensus/collab/reconstruction/layout)
 PHPCS:    OK — 0 auf allen geänderten/neuen Dateien (moodle-Standard, severity=1)
 Frontend: tsc 0 · Jest 22 Suites/147 · Bundle reproduzierbar (Vorbereitungsrunde)
@@ -154,7 +166,7 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072717 / 0.6.3, package.json + lock; Savepoint == version.
+- [x] Version konsistent: version.php 2026072718 / 0.6.4, package.json + lock.
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -164,17 +176,17 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.6.3 — 0.5.x abgeschlossen; 0.6-Autoren-Grundlage steht: Container-Ops +
-> Import-Round-Trip (0.6.1); Constraint-Engine + Abgabe-Gate (0.6.2); Lehrenden-
-> Constraint-Felder in Form/Schema/Backup (0.6.3) -> Gate produktiv aktiv.
-> Real auf Moodle 4.5.12 verifiziert (193+97 grün).
+> 0.6.4 — 0.5.x abgeschlossen; 0.6-Autoren-Grundlage steht: Container-Ops +
+> Import-Round-Trip (0.6.1); Constraint-Engine + Gate (0.6.2) + Eingabefelder
+> (0.6.3); Template-Struktursperren durchgesetzt (0.6.4). Real auf Moodle 4.5.12
+> verifiziert (197+97 grün); ganzes Plugin phpcs-clean.
 
 **Zuletzt abgeschlossen:**
-> 0.6.1 Container-Ops + Import-Round-Trip; 0.6.2 Constraint-Engine + Gate; 0.6.3
-> Constraint-Eingabefelder (Gate produktiv). Konvention: 0.6.x ohne alpha-Suffix;
-> 0.6.0-alpha1-Paket = 0.6.1.
+> 0.6.1 Container-Ops + Import; 0.6.2 Constraint-Engine + Gate; 0.6.3 Constraint-
+> Felder (Gate produktiv); 0.6.4 Template-Struktursperren + Lint-Fix. Konvention:
+> 0.6.x ohne alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
 
 **Als nächstes geplant:**
-> Container auf dem Canvas zeichnen (Frontend) und der Template-Editor mit
-> `locked`/`editable`-Struktursperren; dazu weiche Edit-Zeit-Constraint-Hinweise
-> (gleicher Resolver).
+> Container auf dem Canvas zeichnen (Frontend) und der Template-Editor, der die
+> jetzt durchgesetzten `locked`/`editable`-Sperren setzt; dazu weiche Edit-Zeit-
+> Constraint-Hinweise (gleicher Resolver).

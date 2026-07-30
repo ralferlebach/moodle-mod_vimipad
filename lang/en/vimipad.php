@@ -187,6 +187,7 @@ $string['error:consensusnotopen'] = 'A submission process is already under way.'
 $string['error:consensusnotvoting'] = 'No submission process is under way.';
 $string['error:constraintsnotmet'] = 'This map cannot be submitted yet: {$a}';
 $string['error:containernotfound'] = 'Container not found';
+$string['error:elementlocked'] = 'This element is locked by the template and cannot be changed here.';
 $string['error:emptyjournal'] = 'A journal entry cannot be empty.';
 $string['error:importformat'] = 'The file is not a valid ViMi Pad export.';
 $string['error:noconsensus'] = 'This activity does not use group-consensus submission.';

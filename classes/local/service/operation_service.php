@@ -205,6 +205,11 @@ class operation_service {
 
             case operation_type::NODE_UPDATE:
                 $node = $this->get_live_node($workspaceid, $payload['stableid']);
+                $this->assert_element_editable(
+                    $node->metadatajson,
+                    'update',
+                    $this->changed_fields($payload, ['label', 'type', 'content', 'metadatajson'])
+                );
                 $update = ['id' => $node->id, 'modifiedby' => $userid, 'timemodified' => $now];
                 foreach (['label', 'type', 'content', 'metadatajson'] as $field) {
                     if (array_key_exists($field, $payload)) {
@@ -216,6 +221,7 @@ class operation_service {
 
             case operation_type::NODE_DELETE:
                 $node = $this->get_live_node($workspaceid, $payload['stableid']);
+                $this->assert_element_editable($node->metadatajson, 'delete');
                 $DB->update_record('vimipad_node', (object) [
                     'id' => $node->id, 'deleted' => 1, 'modifiedby' => $userid, 'timemodified' => $now,
                 ]);
@@ -257,6 +263,11 @@ class operation_service {
 
             case operation_type::RELATION_UPDATE:
                 $relation = $this->get_live_relation($workspaceid, $payload['stableid']);
+                $this->assert_element_editable(
+                    $relation->metadatajson,
+                    'update',
+                    $this->changed_fields($payload, ['type', 'label', 'metadatajson', 'direction'])
+                );
                 $update = ['id' => $relation->id, 'modifiedby' => $userid, 'timemodified' => $now];
                 foreach (['type', 'label', 'metadatajson'] as $field) {
                     if (array_key_exists($field, $payload)) {
@@ -271,6 +282,7 @@ class operation_service {
 
             case operation_type::RELATION_DELETE:
                 $relation = $this->get_live_relation($workspaceid, $payload['stableid']);
+                $this->assert_element_editable($relation->metadatajson, 'delete');
                 $DB->update_record('vimipad_relation', (object) [
                     'id' => $relation->id, 'deleted' => 1, 'modifiedby' => $userid, 'timemodified' => $now,
                 ]);
@@ -278,6 +290,11 @@ class operation_service {
 
             case operation_type::RELATION_RETARGET:
                 $relation = $this->get_live_relation($workspaceid, $payload['stableid']);
+                $this->assert_element_editable(
+                    $relation->metadatajson,
+                    'update',
+                    (!empty($payload['newsource']) || !empty($payload['newtarget'])) ? ['endpoints'] : []
+                );
                 $update = ['id' => $relation->id, 'modifiedby' => $userid, 'timemodified' => $now];
                 if (!empty($payload['newsource'])) {
                     $this->assert_node_exists($workspaceid, $payload['newsource']);
@@ -316,6 +333,11 @@ class operation_service {
 
             case operation_type::CONTAINER_UPDATE:
                 $container = $this->get_live_container($workspaceid, $payload['stableid']);
+                $this->assert_element_editable(
+                    $container->metadatajson,
+                    'update',
+                    $this->changed_fields($payload, ['type', 'label', 'geometryjson', 'metadatajson'])
+                );
                 $update = ['id' => $container->id];
                 foreach (['type', 'label', 'geometryjson', 'metadatajson'] as $field) {
                     if (array_key_exists($field, $payload)) {
@@ -327,6 +349,7 @@ class operation_service {
 
             case operation_type::CONTAINER_DELETE:
                 $container = $this->get_live_container($workspaceid, $payload['stableid']);
+                $this->assert_element_editable($container->metadatajson, 'delete');
                 $DB->set_field('vimipad_container', 'deleted', 1, ['id' => $container->id]);
                 // Membership rows are meaningless once the container is gone.
                 $DB->delete_records('vimipad_membership', ['containerid' => $container->id]);
@@ -443,6 +466,51 @@ class operation_service {
             throw new \moodle_exception('error:containernotfound', 'mod_vimipad');
         }
         return $container;
+    }
+
+    /**
+     * Enforce a template structural lock carried in an element's metadata.
+     *
+     * A locked element (metadata `{"locked": true}`) cannot be deleted, and can
+     * only be updated in the fields listed in its `editable` whitelist (e.g.
+     * `{"locked": true, "editable": ["label"]}`). Elements without the flag are
+     * unaffected. This protects teacher-provided scaffolds while leaving the
+     * rest of the map freely editable.
+     *
+     * @param string|null $metadatajson The live element's metadata JSON.
+     * @param string $mode 'delete' or 'update'.
+     * @param string[] $changedfields Fields the update would change (update mode).
+     * @return void
+     * @throws \moodle_exception error:elementlocked if the change is not permitted.
+     */
+    private function assert_element_editable(?string $metadatajson, string $mode, array $changedfields = []): void {
+        if ($metadatajson === null || $metadatajson === '') {
+            return;
+        }
+        $meta = json_decode($metadatajson, true);
+        if (!is_array($meta) || empty($meta['locked'])) {
+            return;
+        }
+        if ($mode === 'delete') {
+            throw new \moodle_exception('error:elementlocked', 'mod_vimipad');
+        }
+        $editable = is_array($meta['editable'] ?? null) ? $meta['editable'] : [];
+        foreach ($changedfields as $field) {
+            if (!in_array($field, $editable, true)) {
+                throw new \moodle_exception('error:elementlocked', 'mod_vimipad');
+            }
+        }
+    }
+
+    /**
+     * The subset of candidate fields the payload would actually change.
+     *
+     * @param array $payload The operation payload.
+     * @param string[] $candidates Mutable field names for the element.
+     * @return string[]
+     */
+    private function changed_fields(array $payload, array $candidates): array {
+        return array_values(array_intersect($candidates, array_keys($payload)));
     }
 
     /**
