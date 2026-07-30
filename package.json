@@ -1,6 +1,6 @@
 {
   "name": "mod_vimipad-editor",
-  "version": "0.5.32",
+  "version": "0.5.33",
   "description": "ViMi Pad editor frontend (React/TypeScript). Build tooling is development-only; the production server ships the prebuilt bundle and needs no Node/npm.",
   "private": true,
   "license": "GPL-3.0-or-later",
@@ -22,7 +22,7 @@
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "ts-jest": "^29.2.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.9.3"
   },
   "jest": {
     "preset": "ts-jest",

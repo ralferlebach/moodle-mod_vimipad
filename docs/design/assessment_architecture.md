@@ -24,7 +24,15 @@ AI-Subsystem, Musterlösungen via vorhandenem Import.
 
 ## Der Scorer-Vertrag (Grundlage, wird sofort gebaut)
 
-Eingabe: eingereichter Snapshot, 0..n Musterlösungen, Aktivitäts-/
+> **Status-Entscheid (0.5.33, E1-B):** Der Scorer-Contract nimmt bewusst
+> `array $references` (0..n), damit er zukunftsoffen bleibt. Das
+> Aktivitäts-Datenmodell und die Orchestrierung führen jedoch **genau eine**
+> Referenz (`referencesnapshotid`); alle Scorer nutzen `reset($references)`.
+> Mehrfach-Referenzen sind erst nach 1.0 vorgesehen (dann relationales
+> `vimipad_reference`). Bis dahin gilt: **eine Musterlösung je Aktivität.**
+
+Eingabe: eingereichter Snapshot, 0..n Musterlösungen (derzeit genau eine),
+Aktivitäts-/
 Scorer-Konfiguration, Kontext. Ausgabe: **Vorschlag, nie Festsetzung** —
 Punktzahl-Vorschlag plus nachvollziehbare Aufschlüsselung:
 

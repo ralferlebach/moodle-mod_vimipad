@@ -1,6 +1,12 @@
 # ViMi Pad — Roadmap
 
-Stand: nach 0.2.x. Diese Roadmap ordnet die geplanten Ausbaustufen bis zur
+Stand: **0.5.32** (Backend fachlich vollständig; real auf Moodle 4.5.12 und
+5.0.8 verifiziert). Vor 0.6.x ist eine kurze **0.5.33-Closure-Runde** geplant
+(offene 0.5-Verträge entscheiden, Concurrency-Garantie schließen, Importformat/
+Container-/Template-Verträge vorab festziehen). Status-Marker unten:
+✅ umgesetzt · ◐ teilweise · ○ geplant · → verschoben.
+
+Diese Roadmap ordnet die geplanten Ausbaustufen bis zur
 Version 1.0. Reihenfolge und Zuordnung sind bewusst gewählt; **Barrierefreiheit**
 und **Sicherheit** ziehen sich als Querschnitt durch alle Stufen (Schwerpunkt-
 bzw. Prüfpunkt in 0.3.x bzw. 0.7.x, aber bei jedem Feature mitgedacht).
@@ -8,6 +14,8 @@ bzw. Prüfpunkt in 0.3.x bzw. 0.7.x, aber bei jedem Feature mitgedacht).
 Grüne CI (phpcs/PHPUnit/Behat) ist ein Hygiene-Kriterium, kein Meilenstein.
 
 ## 0.2.x — MVP (laufend)
+
+> **Status: ✅ abgeschlossen** (fünf Darstellungstypen als `vimipadform`-Subplugins, Listen-Ansicht, Kollaboration/Locking, Snapshot/Abgabe/Bewertung).
 
 Fünf Darstellungstypen (conceptmap, mindmap, tree, semanticnetwork, bubblemap)
 mit typabhängigem Verbinderstil und Bifurkation; gemeinsames Baum-Routing;
@@ -17,6 +25,8 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 `vimipadform`-Subplugins (Registry im Backend, Konsum im Frontend).
 
 ## 0.3.x — Barrierefreiheit & Editor-Politur
+
+> **Status: ◐ teilweise** — Undo/Redo ✅, „Layout neu anordnen"/Auto-Layout ✅, Completion-Detailregeln ✅ (min. Knoten, bewertet), Hilfetexte ◐. Offen: systematisches WCAG-2.1-AA-Audit (Canvas-Tastatur/ARIA/Fokus) → 0.9.x-Audit; Mobile/Touch-Politur ◐.
 
 - Barrierefreiheit prüfen und umsetzen (Ziel WCAG 2.1 AA): Tastaturbedienung des
   Canvas, Screenreader/ARIA, Fokusführung, Kontraste — Stand und offene Punkte in
@@ -28,6 +38,8 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 - „Layout neu anordnen"-Button (gespeicherte Positionen fürs aktive Profil verwerfen)
 
 ## 0.4.x — Gruppenarbeit, Export & Logging
+
+> **Status: ✅ weitgehend** — Gruppen-/Kursmodus, PDF/PNG/SVG/JSON/XML-Export **und** Import, Journal + Bearbeitungslogs/Report, Annotationen an Map/Knoten/Relation, Begleitkanal-Link, Backup/Restore + Voll-Privacy (in 0.4.x umgesetzt, **nicht** erst 0.7.x). ◐ Offen: fachliches `updated`-Event fehlt noch.
 
 - Gruppenmodus-Verdrahtung mit Moodle (keine/getrennte/sichtbare Gruppen)
 - Bearbeitungsmodus: Einzel, Gruppe, ganzer Kurs
@@ -43,6 +55,8 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 - Begleitkanal-Verlinkung (Forum/Chat/BigBlueButton) als lose Kopplung
 
 ## 0.5.x — Bewertung gegen Musterlösung
+
+> **Status: ✅ weitgehend, mit offenen Verträgen** — Struktur-/Semantikabgleich (`vimipadassess`, 6 Scorer + Matcher-Wahl), `gradingform`-Rubric, KI-Feedback + On-demand-KI-Scorer, Gradebook/Completion, Reopen, Konsens-Abgabe, Peer-Review-Basis (Allokation/Reviews/Aggregat). **Offen vor 0.6 (0.5.33):** Mehrfach-Referenzen (Contract mehrzahlfähig, DB/Orchestrierung singular) entscheiden; `duedate`/late auswerten (nur `cutoffdate` erzwungen); Peer-**Phasenmodell** (5 Phasen) implementieren *oder* Roadmap auf realen Scope korrigieren; Import-/Container-Verträge festziehen.
 
 - Struktur- und Semantikabgleich gegen eine oder mehrere Musterlösungen
 - Import (JSON/XML) von Musterlösungen (auf Basis der Exporte aus 0.4.x)
@@ -72,9 +86,13 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 - Systematischer Security-Review: XSS beim Label-Rendering, `sesskey`/Capability-
   Checks in jeder External-Function, Eingabevalidierung. Sicherheit wird schon
   vorher laufend umgesetzt; hier wird der Umsetzungsstand geprüft und vervollständigt.
-- Privacy API (`classes/privacy/provider.php`): Metadaten, Export, Löschung —
-  jetzt, da alle Nutzerdaten feststehen
-- Backup & Restore (`backup/moodle2/…`) inkl. Kurs-Import/-Duplizierung
+- Privacy API (`classes/privacy/provider.php`): **bereits in 0.4.x umgesetzt** —
+  in 0.7.x nur noch vollständiges Re-Audit/Härtung, sobald das Datenmodell nach
+  Container/Templates final ist (Metadaten, Export, Löschung)
+- Backup & Restore (`backup/moodle2/…`) inkl. Kurs-Import/-Duplizierung:
+  **bereits umgesetzt** (Domänenmodell, Grades mit Snapshot-Remap, Journal,
+  Grading-Instanzen, Peer-Reviews) — 0.7.x prüft/vervollständigt nur die nach
+  Container/Templates neu hinzukommenden Felder
 - Allgemeines Code-Hardening (Fehlerbehandlung, Performance, Determinismus)
 - Stabile öffentliche API als Voraussetzung für abgeleitete Plugins (0.9.x):
   Namespace-Trennung `\mod_vimipad\api\*` / `\mod_vimipad\profile\*` (stabil,

@@ -205,11 +205,10 @@ class snapshot_service {
 
         // Serialize submissions per workspace so two concurrent submits cannot
         // both create a snapshot (double submission).
-        $lockfactory = \core\lock\lock_config::get_lock_factory('mod_vimipad_workspace');
-        $lock = $lockfactory->get_lock('submit_' . (int) $workspace->id, 10);
-        if (!$lock) {
-            throw new \moodle_exception('error:workspacelocked', 'mod_vimipad');
-        }
+        // Acquire the SHARED workspace write lock (not a submit-only key) so a
+        // submission serializes against concurrent operations and imports; the
+        // snapshot is then built from a consistent revision.
+        $lock = \mod_vimipad\local\lock\workspace_writelock::acquire((int) $workspace->id);
 
         // Re-read under the lock: a concurrent submit may have locked it.
         $fresh = $DB->get_record('vimipad_workspace', ['id' => (int) $workspace->id], '*', MUST_EXIST);

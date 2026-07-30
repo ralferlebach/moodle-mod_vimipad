@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.5.32 — configuration UI for assessment and peer review (settings, scorer selection, reviewer tab, teacher aggregate). Verified on real Moodle 4.5.12 AND 5.0.8 instances.**
+**Development status: 0.5.33 — 0.5.x closure: shared workspace write-lock across all mutations + snapshot creation (concurrency gate), fail-closed workspace uniqueness, contract/doc re-baseline. Verified on real Moodle 4.5.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.
@@ -129,12 +129,14 @@ infrastructure). Grading always references an immutable snapshot. AI feedback
 is generated exclusively through the Moodle AI subsystem and remains a draft
 until a teacher actively reviews and approves it.
 
-**Shared code for satellite plugins:** mod_vimipad deliberately exposes a
-public PHP API under the namespaces `\mod_vimipad\api\*` and
-`\mod_vimipad\profile\*` for use by dependent plugins (e.g. a question type or
-database field reusing the ViMi editor and profiles). These namespaces are
-treated as a stable contract. Everything under `\mod_vimipad\local\*` is
-internal implementation without any stability guarantee — do not depend on it.
+**Shared code for satellite plugins:** mod_vimipad is intended to expose a
+public PHP API under the namespace `\mod_vimipad\api\*` (and, later, a
+`\mod_vimipad\profile\*` namespace, not yet present) for use by dependent
+plugins (e.g. a question type or database field reusing the ViMi editor and
+profiles). **This API is not frozen yet:** stabilisation is a 0.7.x goal (see
+`docs/design/roadmap.md`); until then the surface may still change. Everything
+under `\mod_vimipad\local\*` is internal implementation without any stability
+guarantee — do not depend on it.
 Satellite plugins must declare `$plugin->dependencies = ['mod_vimipad' => ...]`
 in their version.php. There is deliberately no separate local_* core plugin.
 
@@ -177,9 +179,10 @@ We are always interested to read about your feature proposals or even get a pull
 ## Moodle release support
 
 This plugin is maintained for Moodle 4.5 LTS and all newer major releases
-(currently tested: 4.5, 5.0, 5.2). The React/ESM frontend integration targets
-Moodle 5.2+; Moodle 4.5–5.1 are served by a legacy AMD bundle built from the
-same source.
+(currently tested: 4.5, 5.0, 5.2). From Moodle 5.3 the React runtime ships in
+core (`react_autoinit`); on Moodle 4.5–5.2 the editor is served by a bundled
+React asset built from the same source and loaded via a thin AMD module. Moodle
+5.3 will be added to the CI matrix once that branch is cut upstream.
 
 There may be several weeks after a new major release of Moodle has been published until we can do a compatibility check and fix problems if necessary. If you encounter problems with a new major release of Moodle - or can confirm that this plugin still works with a new major release - please let us know on Github.
 

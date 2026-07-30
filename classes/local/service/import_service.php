@@ -129,8 +129,35 @@ class import_service {
     }
 
     /**
-     * Append the nodes and relations from a normalized data structure to a
-     * workspace, atomically, through the validated operation path.
+     * Import a normalized data structure into a workspace under the shared
+     * workspace write lock, so the whole import runs as one serialized unit
+     * against concurrent edits and submissions.
+     *
+     * Atomicity contract: the semantic import (nodes + relations) is atomic —
+     * it commits or rolls back as a whole. The layout is then applied on a
+     * best-effort basis after commit; a layout failure does not undo the
+     * imported elements (positions are non-critical).
+     *
+     * @param array $data The normalized data (with 'nodes' and 'relations').
+     * @param stdClass $workspace The target workspace record.
+     * @param int $userid The acting user id.
+     * @param string $mode 'append' (default) or 'replace'.
+     * @return array{nodes: int, relations: int} Counts of imported elements.
+     * @throws \moodle_exception On concurrency (lock contention).
+     */
+    private function apply_data(array $data, stdClass $workspace, int $userid, string $mode = 'append'): array {
+        $lock = \mod_vimipad\local\lock\workspace_writelock::acquire((int) $workspace->id);
+        try {
+            return $this->apply_data_locked($data, $workspace, $userid, $mode);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Import body, assuming the caller holds the workspace write lock. Uses
+     * operation_service::apply_locked() because this method already owns the
+     * lock (a re-entrant acquire could deadlock).
      *
      * @param array $data The normalized data (with 'nodes' and 'relations').
      * @param stdClass $workspace The target workspace record.
@@ -138,7 +165,7 @@ class import_service {
      * @param string $mode 'append' (default) or 'replace'.
      * @return array{nodes: int, relations: int} Counts of imported elements.
      */
-    private function apply_data(array $data, stdClass $workspace, int $userid, string $mode = 'append'): array {
+    private function apply_data_locked(array $data, stdClass $workspace, int $userid, string $mode = 'append'): array {
         global $DB;
 
         $nodes = is_array($data['nodes'] ?? null) ? $data['nodes'] : [];
@@ -163,7 +190,7 @@ class import_service {
                 ['wsid' => $wsid]
             );
             foreach ($existing as $stableid) {
-                $result = $operationservice->apply($wsid, $revision, 'node_delete', ['stableid' => $stableid], $userid);
+                $result = $operationservice->apply_locked($wsid, $revision, 'node_delete', ['stableid' => $stableid], $userid);
                 $revision = (int) $result['revision'];
             }
         }
@@ -183,7 +210,7 @@ class import_service {
                 $payload['metadatajson'] = $node['metadatajson'];
             }
 
-            $result = $operationservice->apply($wsid, $revision, 'node_create', $payload, $userid);
+            $result = $operationservice->apply_locked($wsid, $revision, 'node_create', $payload, $userid);
             $revision = (int) $result['revision'];
             if (isset($node['stableid']) && is_string($node['stableid'])) {
                 $idmap[$node['stableid']] = $result['stableid'];
@@ -218,7 +245,7 @@ class import_service {
                 $payload['metadatajson'] = $relation['metadatajson'];
             }
 
-            $result = $operationservice->apply($wsid, $revision, 'relation_create', $payload, $userid);
+            $result = $operationservice->apply_locked($wsid, $revision, 'relation_create', $payload, $userid);
             $revision = (int) $result['revision'];
             $relationcount++;
         }

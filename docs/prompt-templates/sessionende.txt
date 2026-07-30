@@ -5,9 +5,44 @@
 
 ---
 
+### ⚠️ PFLICHT ZUERST: persistierten Session-Report anlegen
+
+Der Session-Report ist ein **Repo-Artefakt**, kein reiner Chat-Text. Er MUSS als
+Datei existieren, im Auslieferungs-ZIP liegen und verifiziert werden — sonst gilt
+die Session als NICHT abgeschlossen. (Genau hier ging früher session-002.md
+verloren: das CHANGELOG wurde gepflegt, die Session-Datei nie geschrieben.)
+
+Regeln:
+1. **Eine Datei je Session:** `docs/sessions/session-<NR>.md` (nullpadded, z. B.
+   `session-003.md`). NIEMALS an die Datei einer früheren Session anhängen.
+2. Der Report wird mit den unten stehenden Abschnitten **vollständig ausgefüllt**
+   (keine leeren `[ ]`-Platzhalter in der Auslieferung).
+3. Die Datei wird **in das gelieferte ZIP aufgenommen** (Clean-Install-Paket
+   enthält sie; bei Patch-ZIP explizit mitliefern — cp überschreibt nur, löscht
+   nie, also Datei bewusst aufnehmen).
+4. **Existenz-/Inhalts-Gate vor „fertig":**
+   ```bash
+   test -s /home/claude/vimipad/docs/sessions/session-<NR>.md \
+     && grep -q "Testlauf-Ergebnis" /home/claude/vimipad/docs/sessions/session-<NR>.md \
+     && echo "SESSION-DOC OK" || echo "FEHLT – Session NICHT abschließen"
+   # und: im ZIP enthalten?
+   unzip -l <ausgeliefertes.zip> | grep "session-<NR>.md" || echo "NICHT IM ZIP"
+   ```
+5. Bei sehr langen/kompaktierten Sessions ohne klares Ende: den Report **laufend**
+   (spätestens bei jedem Versionsbump) fortschreiben, damit er nie an einem
+   einzelnen „Session-Ende"-Ereignis hängt.
+6. Falls die Verifikation eine echte Umgebung erforderte, die nicht lief: das
+   ehrlich im Testlauf-Ergebnis vermerken (nicht Erfolg vortäuschen).
+
+Erst wenn das Gate „SESSION-DOC OK" **und** „im ZIP" meldet, folgen die
+Carry-forward-Zeilen für die nächste `sessionstart.txt` (Abschnitt ganz unten).
+Diese Carry-forward-Zeilen ERSETZEN den persistierten Report NICHT.
+
+---
+
 ### Was wurde erledigt?
 
-- [ ] (Eintragen, konkret mit Dateinamen/Klassen)
+- (Eintragen, konkret mit Dateinamen/Klassen)
 
 ---
 
@@ -27,7 +62,7 @@
 
 ### Offene Punkte für die nächste Session
 
-- [ ] (Eintragen, mit Phase-2-Marker im Code)
+- (Eintragen, mit Phase-2-Marker im Code)
 
 ---
 
@@ -35,16 +70,19 @@
 
 - [ ] docs/design/roadmap.md geprüft; bei Scope-/Reihenfolge-/Versionsänderung
       aktualisiert (führendes Planungsdokument).
+- [ ] Weitere Doku (backlog.md, connector-styles.md, ui_reorder_plan.md,
+      README, test-setup) gegen den realen Stand abgeglichen.
 
 ---
 
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit: [OK / FAIL – X tests, Y assertions]
+PHPUnit: [OK / FAIL – X tests, Y assertions | real auf Moodle <ver> / nur statisch]
 PHPCS:   [OK / FAIL – N warnings]
 PHPDoc:  [OK / FAIL – N warnings]
 Behat:   [OK / FAIL / SKIP]
+Frontend:[tsc OK/FAIL · Jest X/Y · Bundle reproduzierbar?]
 ```
 
 ---
@@ -61,7 +99,19 @@ git diff --name-only HEAD
 
 ---
 
+### Auslieferung
+
+- [ ] Version in version.php + package.json + package-lock.json konsistent.
+- [ ] CHANGELOG-Eintrag ergänzt.
+- [ ] docs/sessions/session-<NR>.md im ZIP (Gate oben bestanden).
+- [ ] amd/build/ + js/build/ eingecheckt (git check-ignore leer).
+
+---
+
 ### Für die nächste Session einfügen in sessionstart.txt
+
+> Diese Zeilen sind eine KURZFASSUNG fürs nächste Startprompt und ersetzen NICHT
+> den persistierten docs/sessions/session-<NR>.md.
 
 **Aktueller Entwicklungsstand:**
 > [KURZBESCHREIBUNG DES STANDS]

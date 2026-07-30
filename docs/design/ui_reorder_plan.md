@@ -1,4 +1,14 @@
-# UI-Neuordnung — Arbeitsplanung (0.6.x)
+# UI-Neuordnung — Arbeitsplanung
+
+> **Status-Abgleich (Stand 0.5.32).** Große Teile dieser Planung wurden bereits
+> in der 0.5.x-Linie vorgezogen und sind **umgesetzt**: Reiter-Gerüst + Selektor
+> + Canvas/Liste (Schritt 1, 0.5.6–0.5.9), Journal-&-Abgabe-Reiter + Konsens-
+> Zustandsautomat (Schritt 2, 0.5.10–0.5.16), Bewertungs-Reiter mit `gradingform`
+> (Schritt 3 „Bewertung", 0.5.18–0.5.24). **Offen (→ 0.6.0):** die Reiter
+> **„Feedback"** und **„Werkzeuge"** (in `view.php` derzeit `tab:comingsoon`)
+> sowie der optionale Replay (Schritt 5). Dieser Plan wird in 0.6.0 mit der
+> zentralen Roadmap (Container/Templates/Constraints/Import-Export) zu **einem**
+> 0.6-Plan zusammengeführt.
 
 Reiter-zentrierte Aktivitätsoberfläche. Diese Planung ersetzt den früheren
 „React-SPA-Shell"-Ansatz durch eine **Islands-Architektur** und schneidet die

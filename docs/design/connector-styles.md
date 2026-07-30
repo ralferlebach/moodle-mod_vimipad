@@ -2,7 +2,7 @@
 
 Der **Linientyp (Verbinderstil) ist eine Eigenschaft der Darstellungsform**, nicht
 der einzelnen Relation. Diese Tabelle ist die Abnahme-/Umsetzungsspezifikation.
-Sie wird von den `vimipad_form`-Subplugins (geplant) getragen: jedes Subplugin
+Sie wird von den `vimipadform`-Subplugins getragen (umgesetzt): jedes Subplugin
 liefert die hier genannten Eigenschaften selbst.
 
 ## Begriffe
@@ -49,12 +49,11 @@ liefert die hier genannten Eigenschaften selbst.
   - übrige MVP-Typen: individuell (bereits über den Verbinderstil abgedeckt).
   - spätere Formen (Argument/Fishbone/Timeline gemeinsam, Systems individuell):
     offen, kommt mit den jeweiligen Subplugins.
-- **Auslagerung in `vimipad_form`-Subplugins:** Grundgerüst umgesetzt —
+- **Auslagerung in `vimipadform`-Subplugins:** umgesetzt —
   Subplugin-Typ `vimipadform` deklariert (`db/subplugins.json`), Definitions-
   Basisklasse + Registry im Kern (`\mod_vimipad\local\form\{base,fallback,registry}`),
   die fünf MVP-Darstellungstypen als Subplugins unter `form/` (jeweils
   Formen/Default/Verbinderstil/Bifurkation), und `get_workspace` liefert die
-  aktive Form-Konfiguration (`formconfig`) an den Editor. Offen: das Frontend
-  konsumiert `formconfig` noch nicht (nutzt weiterhin die eingebauten Regeln) —
-  das ist der nächste Schritt, danach entfällt die fest verdrahtete Profil-Logik
-  im Renderer.
+  aktive Form-Konfiguration (`formconfig`) an den Editor, die das Frontend
+  konsumiert (`js/src/canvas/form_config.ts`, `CanvasView`, `NodeFormatToolbar`,
+  Jest-getestet). Der Plugin-Typ heisst `vimipadform` (nicht `vimipad_form`).

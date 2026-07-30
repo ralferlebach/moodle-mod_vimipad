@@ -19,6 +19,12 @@ namespace mod_vimipad\local\service;
 /**
  * Manages short-lived per-element editing leases (collaborative locking + presence).
  *
+ * These leases are ADVISORY (collaboration/UX): they coordinate concurrent
+ * editors and drive presence, but operation_service does NOT reject a mutation
+ * from a user who lacks the lease — concurrency correctness is instead
+ * guaranteed by the shared workspace write lock plus optimistic revision
+ * checks. Do not build hard restrictions on top of these leases.
+ *
  * A lease is acquired when a user starts editing/dragging an element and is
  * renewed by a heartbeat while they hold it. If the client disconnects the
  * lease simply expires (server-enforced via timeexpires), so nothing stays

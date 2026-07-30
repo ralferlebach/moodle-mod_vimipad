@@ -44,6 +44,34 @@ class operation_service {
      * @throws \moodle_exception On lock, conflict, unknown type or invalid references.
      */
     public function apply(int $workspaceid, int $baserevision, string $type, array $payload, int $userid): array {
+        // Serialize every semantic mutation on the shared per-workspace write
+        // lock so operations cannot interleave with each other or with an
+        // import/submission (which would otherwise let a snapshot capture a
+        // torn read across the node/relation/container tables).
+        $lock = \mod_vimipad\local\lock\workspace_writelock::acquire($workspaceid);
+        try {
+            return $this->apply_locked($workspaceid, $baserevision, $type, $payload, $userid);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * Apply a single operation, assuming the caller already holds the workspace
+     * write lock (see {@see \mod_vimipad\local\lock\workspace_writelock}).
+     *
+     * Used by import_service, which holds the lock once across many operations;
+     * external single operations go through the locking {@see apply()} wrapper.
+     *
+     * @param int $workspaceid The workspace id.
+     * @param int $baserevision The revision the client bases the operation on (optimistic concurrency).
+     * @param string $type The operation type (see operation_type).
+     * @param array $payload The decoded, schema-validated payload.
+     * @param int $userid The acting user id.
+     * @return array{revision: int, stableid: ?string} New revision and any server-assigned stable id.
+     * @throws \moodle_exception On conflict, unknown type or invalid references.
+     */
+    public function apply_locked(int $workspaceid, int $baserevision, string $type, array $payload, int $userid): array {
         global $DB;
 
         if (!operation_type::is_known($type)) {
@@ -53,7 +81,8 @@ class operation_service {
 
         $transaction = $DB->start_delegated_transaction();
 
-        // Lock the workspace row for the duration of the transaction.
+        // Re-read the workspace under the write lock the caller holds, so the
+        // revision check and mutation act on a consistent, current row.
         $workspace = $DB->get_record('vimipad_workspace', ['id' => $workspaceid], '*', MUST_EXIST);
 
         if ((int) $workspace->locked === 1) {

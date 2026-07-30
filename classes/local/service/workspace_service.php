@@ -163,7 +163,15 @@ class workspace_service {
         $lock = $lockfactory->get_lock($lockkey, 10);
 
         if (!$lock) {
-            return $this->create($vimipadid, $userid, $groupid);
+            // Fail closed: do NOT create a second workspace while another
+            // request may be creating the same one (the DB does not enforce
+            // uniqueness on (vimipadid, userid|groupid)). Re-read; use an
+            // existing row if present, otherwise surface a concurrency error.
+            $existing = $DB->get_record('vimipad_workspace', $criteria);
+            if ($existing) {
+                return $existing;
+            }
+            throw new \moodle_exception('error:workspacelocked', 'mod_vimipad');
         }
 
         try {
@@ -190,11 +198,17 @@ class workspace_service {
     public function reopen(int $workspaceid): void {
         global $DB;
 
-        $DB->update_record('vimipad_workspace', (object) [
-            'id' => $workspaceid,
-            'locked' => 0,
-            'timemodified' => time(),
-        ]);
+        // Hold the workspace write lock so a reopen cannot race a submission.
+        $lock = \mod_vimipad\local\lock\workspace_writelock::acquire($workspaceid);
+        try {
+            $DB->update_record('vimipad_workspace', (object) [
+                'id' => $workspaceid,
+                'locked' => 0,
+                'timemodified' => time(),
+            ]);
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

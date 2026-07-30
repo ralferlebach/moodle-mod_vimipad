@@ -5,6 +5,10 @@ Diagrammtypen ViMi Pad langfristig unterstützen soll und wie die Interaktion
 mit Nodes und Connections auszusehen hat. Der Status „geplant" bedeutet: noch
 nicht umgesetzt, hier festgehalten zur späteren Umsetzung.
 
+> **Kein Statusindikator.** Der zuletzt eingetragene Umsetzungsstand endet bei
+> 0.2.12; der Canvas hat sich seither erheblich weiterentwickelt. Für den realen
+> Stand gilt das `CHANGELOG.md`. Dieses Dokument bleibt die *Ziel*-Spezifikation.
+
 ## Geplante Map-Typen (später umzusetzen)
 
 Über die bereits vorgesehenen Profile (Concept Map, Mind Map …) hinaus sollen

@@ -1,5 +1,21 @@
 # Session 001 — Konzeptanalyse, Machbarkeit, installierbare Plugin-Hülle
 
+> **Umfang dieses Dokuments (rückwirkend geklärt).** Dieses Log deckt den Bogen
+> **Projektgenese → Release 0.2.15** (version 2026072627) ab. Es wurde damals
+> per Hand fortgeschrieben (`cat >> session-001.md` je Release), weshalb die
+> unteren „Nachtrag N (Session 002 …)"-Marken die *Chat-Fortsetzung* meinen,
+> nicht eine zweite persistierte Session — der gesamte Inhalt bis 0.2.15 gehört
+> zu **diesem** Dokument. Der anschließende Bogen **0.4.22 → 0.5.32** steht in
+> [`session-002.md`](session-002.md), die Abschlussarbeiten ab 0.5.33 in
+> [`session-003-arbeitsplan.md`](session-003-arbeitsplan.md) und
+> [`session-003.md`](session-003.md).
+>
+> *Prozess-Lehre (Ursache der zwischenzeitlich fehlenden `session-002.md`):* die
+> Session-Doku hing an einem manuellen `cat >>`-Habit statt an `sessionende.txt`.
+> Als der Habit entfiel, erzwang nichts die persistierte Datei. `sessionende.txt`
+> wurde daraufhin gefixt (verpflichtender, im ZIP mitgelieferter, verifizierter
+> `docs/sessions/session-<NR>.md`-Schritt; eine Datei je Session).
+
 ## Ziel
 `mod_vimipad` (ViMi Pad — Visual Mind Pad) als installierbare Hülle mit
 vollständiger Projektinfrastruktur anlegen, auf Basis des Infrastruktur-Stubs

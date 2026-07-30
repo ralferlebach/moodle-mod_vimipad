@@ -4,7 +4,48 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.32** (2026072712).
+> release is **0.5.33** (2026072713).
+
+## 0.5.33 (2026072713) — 0.5.x closure: workspace concurrency + fail-closed uniqueness
+
+Closure round before the 0.6.x authoring tools: no new features, but the open
+0.5 concurrency guarantee is closed and several contracts/docs are re-baselined
+against the real state.
+
+- **Shared per-workspace write lock (concurrency gate).** A single
+  `\mod_vimipad\local\lock\workspace_writelock` (key `write_<workspaceid>`)
+  now serializes *every* semantic mutation and snapshot creation:
+  `operation_service::apply`, `import_service`, `workspace_service::reopen` and
+  `snapshot_service::begin_submission`/`finalize` all coordinate on the same
+  lock. Previously `operation_service::apply` took no real lock (only checked the
+  `locked` flag) and submission used a separate `submit_` key, so a snapshot
+  could capture a torn read across the node/relation/container tables relative to
+  its recorded revision. `apply` was split into a locking wrapper and a lock-free
+  `apply_locked` so import (which fans out into many operations) holds the lock
+  once without re-entrant acquisition.
+- **Workspace creation is now fail-closed.** `workspace_service::create_unique`
+  no longer creates a second workspace when the lock cannot be acquired; it
+  re-reads and reuses an existing row or raises a concurrency error (the DB does
+  not enforce uniqueness on `(vimipadid, userid|groupid)`).
+- **Lease contract clarified (advisory).** `lock_service`'s per-element leases
+  are documented as advisory collaboration/presence locks; `operation_service`
+  does not enforce them. Concurrency correctness rests on the write lock plus
+  optimistic revision checks, not on leases.
+- **Import atomicity contract stated explicitly:** the semantic import
+  (nodes + relations) is atomic; the layout is applied best-effort after commit.
+- **Doc re-baseline.** `session-002.md` added (0.4.22→0.5.32 arc); `roadmap.md`
+  (real stand + status markers, Privacy/Backup moved to re-audit), `backlog.md`,
+  `connector-styles.md` (`vimipadform`, `formconfig` consumed),
+  `ui_reorder_plan.md`, `moodle-test-environment-setup.md` (176+97 baseline),
+  `visual-maps-requirements.md`, README (React 5.3 framing, public-API claim
+  softened) and `assessment_architecture.md` (single reference per activity,
+  E1-B) brought in line with the code. `sessionende.txt` fixed so the persisted
+  `docs/sessions/session-<NR>.md` is a mandatory, ZIP-shipped, verified step
+  (root cause of the previously missing session-002 doc).
+- **Verified on a real Moodle 4.5.12 + PostgreSQL PHPUnit environment:** full
+  suite **178 `mod_vimipad`** (incl. the new `workspace_writelock_test`) **+ 97
+  `vimipadassess`** tests pass (exit 0); every affected service test green in
+  isolation; phpcs clean on all changed/new files.
 
 ## 0.5.32 (2026072712) — configuration UI for assessment and peer review
 
