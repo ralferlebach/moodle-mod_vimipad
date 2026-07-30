@@ -116,6 +116,10 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
                 '/activity/vimipad/workspaces/workspace/snapshots/snapshot/aifeedbacks/aifeedback'
             );
             $paths[] = new restore_path_element(
+                'vimipad_peerreview',
+                '/activity/vimipad/workspaces/workspace/snapshots/snapshot/peerreviews/peerreview'
+            );
+            $paths[] = new restore_path_element(
                 'vimipad_gradeinstance',
                 '/activity/vimipad/workspaces/workspace/snapshots/snapshot/gradeinstances/gradeinstance'
             );
@@ -352,6 +356,22 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
         $data->graderid = $this->get_mappingid('user', $data->graderid) ?: 0;
 
         $DB->insert_record('vimipad_aifeedback', $data);
+    }
+
+    /**
+     * Restore a peer review record.
+     *
+     * @param array $data Parsed data.
+     * @return void
+     */
+    protected function process_vimipad_peerreview($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->snapshotid = $this->get_new_parentid('vimipad_snapshot');
+        $data->reviewerid = $this->get_mappingid('user', $data->reviewerid) ?: 0;
+
+        $DB->insert_record('vimipad_peerreview', $data);
     }
 
     /**

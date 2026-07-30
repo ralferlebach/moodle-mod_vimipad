@@ -16,6 +16,7 @@
 
 namespace mod_vimipad\local\output;
 
+use cm_info;
 use context_module;
 use html_writer;
 use html_table;
@@ -50,11 +51,11 @@ class grading_panel {
     /**
      * The Grading-tab URL showing a single submission's detail.
      *
-     * @param stdClass $cm The course module.
+     * @param cm_info|stdClass $cm The course module.
      * @param int $snapshotid The snapshot id.
      * @return moodle_url
      */
-    public static function detail_url(stdClass $cm, int $snapshotid): moodle_url {
+    public static function detail_url(cm_info|stdClass $cm, int $snapshotid): moodle_url {
         return new moodle_url('/mod/vimipad/view.php', [
             'id' => $cm->id, 'tab' => 'grade', 'snapshotid' => $snapshotid,
         ]);
@@ -63,7 +64,7 @@ class grading_panel {
     /**
      * Process a grading POST action (if any) and redirect. No-op otherwise.
      *
-     * @param stdClass $cm The course module.
+     * @param cm_info|stdClass $cm The course module.
      * @param stdClass $course The course.
      * @param context_module $context The module context.
      * @param stdClass $instance The activity instance.
@@ -72,7 +73,7 @@ class grading_panel {
      * @return void
      */
     public static function handle_action(
-        stdClass $cm,
+        cm_info|stdClass $cm,
         stdClass $course,
         context_module $context,
         stdClass $instance,
@@ -214,7 +215,7 @@ class grading_panel {
     /**
      * Render the grading detail for a snapshot.
      *
-     * @param stdClass $cm The course module.
+     * @param cm_info|stdClass $cm The course module.
      * @param context_module $context The module context.
      * @param stdClass $instance The activity instance.
      * @param stdClass $snapshot The snapshot being graded.
@@ -222,7 +223,7 @@ class grading_panel {
      * @return void
      */
     public static function render(
-        stdClass $cm,
+        cm_info|stdClass $cm,
         context_module $context,
         stdClass $instance,
         stdClass $snapshot,
@@ -332,7 +333,7 @@ class grading_panel {
     /**
      * Render the automatic-assessment aid: reference marking and the scorer's suggestion.
      *
-     * @param stdClass $cm The course module.
+     * @param cm_info|stdClass $cm The course module.
      * @param context_module $context The module context.
      * @param stdClass $instance The activity instance.
      * @param stdClass $snapshot The snapshot being graded.
@@ -340,7 +341,7 @@ class grading_panel {
      * @return void
      */
     private static function render_assessment(
-        stdClass $cm,
+        cm_info|stdClass $cm,
         context_module $context,
         stdClass $instance,
         stdClass $snapshot,
@@ -520,14 +521,14 @@ class grading_panel {
      * request and stashes it for rendering. Returns null when no advanced method
      * is active, so the caller falls back to the numeric grade.
      *
-     * @param stdClass $cm The course module.
+     * @param cm_info|stdClass $cm The course module.
      * @param context_module $context The module context.
      * @param stdClass $instance The activity instance.
      * @param stdClass $snapshot The snapshot being graded.
      * @return array|null [grade_form $form, \gradingform_instance $gradinginstance, int $itemid] or null.
      */
     private static function resolve_advanced(
-        stdClass $cm,
+        cm_info|stdClass $cm,
         context_module $context,
         stdClass $instance,
         stdClass $snapshot

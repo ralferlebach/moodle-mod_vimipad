@@ -107,6 +107,12 @@ class provider implements
             'grader' => 'privacy:metadata:vimipad_grade:grader',
         ], 'privacy:metadata:vimipad_grade');
 
+        $collection->add_database_table('vimipad_peerreview', [
+            'reviewerid' => 'privacy:metadata:vimipad_peerreview:reviewerid',
+            'score' => 'privacy:metadata:vimipad_peerreview:score',
+            'reviewcomment' => 'privacy:metadata:vimipad_peerreview:reviewcomment',
+        ], 'privacy:metadata:vimipad_peerreview');
+
         $collection->add_database_table('vimipad_gradeinstance', [
             'raterid' => 'privacy:metadata:vimipad_gradeinstance:raterid',
         ], 'privacy:metadata:vimipad_gradeinstance');
@@ -443,6 +449,16 @@ class provider implements
 
             // Remove the user's own grade record.
             $DB->delete_records('vimipad_grade', ['vimipadid' => $cm->instance, 'userid' => $userid]);
+
+            // Remove the peer reviews this user wrote.
+            $DB->delete_records_select(
+                'vimipad_peerreview',
+                'reviewerid = :reviewer AND snapshotid IN (
+                    SELECT s.id FROM {vimipad_snapshot} s
+                      JOIN {vimipad_workspace} w ON w.id = s.workspaceid
+                     WHERE w.vimipadid = :vid)',
+                ['reviewer' => $userid, 'vid' => $cm->instance]
+            );
 
             // Remove the user's advanced-grading instance links (as a grader).
             $DB->delete_records_select(

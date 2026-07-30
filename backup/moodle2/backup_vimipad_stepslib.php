@@ -42,7 +42,8 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             'name', 'intro', 'introformat', 'defaultprofile',
             'collaborationmode', 'gradingmode', 'aienabled', 'channelurl',
             'grade', 'completionsubmit', 'completionminnodes', 'completiongraded',
-            'duedate', 'cutoffdate', 'requireallteamsubmit', 'referencesnapshotid', 'matchmode',
+            'duedate', 'cutoffdate', 'requireallteamsubmit', 'referencesnapshotid',
+            'matchmode', 'peerreviewmode', 'peerreviewcount',
             'timecreated', 'timemodified',
         ]);
 
@@ -110,6 +111,12 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             'timecreated', 'timemodified',
         ]);
 
+        $peerreviews = new backup_nested_element('peerreviews');
+        $peerreview = new backup_nested_element('peerreview', ['id'], [
+            'reviewerid', 'status', 'score', 'reviewcomment', 'commentformat',
+            'timeallocated', 'timemodified',
+        ]);
+
         $gradeinstances = new backup_nested_element('gradeinstances');
         $gradeinstance = new backup_nested_element('gradeinstance', ['id'], [
             'raterid', 'instanceid', 'timemodified',
@@ -145,6 +152,8 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
         $annotations->add_child($annotation);
         $snapshot->add_child($aifeedbacks);
         $aifeedbacks->add_child($aifeedback);
+        $snapshot->add_child($peerreviews);
+        $peerreviews->add_child($peerreview);
         $snapshot->add_child($gradeinstances);
         $gradeinstances->add_child($gradeinstance);
         $workspace->add_child($journalentries);
@@ -167,6 +176,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             $annotation->set_source_table('vimipad_annotation', ['snapshotid' => backup::VAR_PARENTID]);
             $aifeedback->set_source_table('vimipad_aifeedback', ['snapshotid' => backup::VAR_PARENTID]);
             $gradeinstance->set_source_table('vimipad_gradeinstance', ['snapshotid' => backup::VAR_PARENTID]);
+            $peerreview->set_source_table('vimipad_peerreview', ['snapshotid' => backup::VAR_PARENTID]);
             $journalentry->set_source_table('vimipad_journalentry', ['workspaceid' => backup::VAR_PARENTID]);
         }
 
@@ -185,6 +195,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
         $annotation->annotate_ids('user', 'userid');
         $aifeedback->annotate_ids('user', 'graderid');
         $gradeinstance->annotate_ids('user', 'raterid');
+        $peerreview->annotate_ids('user', 'reviewerid');
         $journalentry->annotate_ids('user', 'userid');
 
         // File annotations.

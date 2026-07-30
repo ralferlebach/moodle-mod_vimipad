@@ -27,14 +27,20 @@ class consensus_notifier {
     /**
      * Notify the group's members of a consensus event.
      *
-     * @param \stdClass $cm The course module.
+     * @param \cm_info|\stdClass $cm The course module.
      * @param \stdClass $instance The activity instance.
      * @param string $event One of 'started', 'cancelled', 'submitted'.
      * @param int $actorid The user who triggered the event (not notified).
      * @param int[] $memberids The group member user ids to notify.
      * @return void
      */
-    public static function notify(\stdClass $cm, \stdClass $instance, string $event, int $actorid, array $memberids): void {
+    public static function notify(
+        \cm_info|\stdClass $cm,
+        \stdClass $instance,
+        string $event,
+        int $actorid,
+        array $memberids
+    ): void {
         $actor = \core_user::get_user($actorid);
         $placeholders = (object) [
             'activity' => format_string($instance->name),

@@ -4,7 +4,45 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.30** (2026072710).
+> release is **0.5.31** (2026072711).
+
+## 0.5.31 (2026072711) — peer review backend + description (ROUGE) scorer
+
+- **Behat fix: grading tab crashed in a browser.** `view.php` resolves the course
+  module with `get_course_and_cm_from_cmid()`, which returns a `cm_info`, but
+  `grading_panel` (and `consensus_notifier`) declared `stdClass $cm` — a fatal
+  TypeError on every visit to the grading tab, and the cause of all four failing
+  Behat scenarios on every Moodle version. Both now accept `cm_info|stdClass`. A
+  new `grading_panel_test` drives `detail_url`, `render` and `handle_action` with
+  a real `cm_info`, so this class of mismatch is caught by PHPUnit rather than
+  only in a browser run.
+- **New `vimipadassess_text` scorer (description comparison).** Concept labels say
+  what a student named; descriptions say what they understood. For each described
+  reference concept the scorer locates the matching submission concept (through
+  the configured matcher, so fuzzy and word-overlap modes apply) and compares the
+  two description texts with ROUGE. Thin descriptions are reported with their
+  overlap percentage; absent ones as missing.
+- **ROUGE core service** (`local\assess\rouge`): ROUGE-N (clipped n-gram overlap)
+  and ROUGE-L (longest common subsequence) as F-measures, plus a combined
+  similarity. HTML is stripped and case ignored; long texts are bounded so the
+  LCS stays cheap.
+- **Peer review backend.** New `peerreviewmode` / `peerreviewcount` activity
+  settings and a `vimipad_peerreview` table, driven by `peer_review_service`:
+  round-robin allocation over submitting students (nobody reviews their own map,
+  idempotent so it can run whenever new submissions arrive), review recording
+  (refused without an allocation), and aggregation reporting count, mean, median
+  and outstanding reviews. Peer scores stay advisory — the service never writes
+  to the gradebook.
+  - **Fuzzy-capable:** `guidance()` runs the same synchronous scorers a teacher
+    sees, through the activity's matcher, so reviewers get fuzzy-tolerant hints
+    about what is present or missing instead of judging unaided.
+  - Covered by privacy (metadata, per-user and context deletion) and
+    backup/restore (reviewer remapped), both verified.
+- This step deliberately completes the *functionality*; the activity-form and
+  reviewer UI elements for peer review follow in the next step.
+- **Verified on real Moodle 4.5.12 and 5.0.8 instances:** 165 `mod_vimipad` + 97
+  `vimipadassess` tests pass on both (exit 0), every test file also passing in
+  isolation; phpcs, phpdoc, phpcpd, savepoints, validate and mustache clean.
 
 ## 0.5.30 (2026072710) — sub-map scorer + cross-version CI fixes
 

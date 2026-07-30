@@ -39,6 +39,9 @@ class submission {
     /** @var array[] Sub-maps (containers): each ['label' => string, 'concepts' => string[]]. */
     public array $submaps;
 
+    /** @var string[] Node description texts, keyed by stable id. */
+    public array $descriptions;
+
     /**
      * Constructor.
      *
@@ -46,12 +49,50 @@ class submission {
      * @param array $concepts Concept labels keyed by stable id.
      * @param array $propositions Proposition triples.
      * @param array $submaps Sub-maps: each ['label' => string, 'concepts' => string[]].
+     * @param array $descriptions Node description texts keyed by stable id.
      */
-    public function __construct(string $profile, array $concepts, array $propositions, array $submaps = []) {
+    public function __construct(
+        string $profile,
+        array $concepts,
+        array $propositions,
+        array $submaps = [],
+        array $descriptions = []
+    ) {
         $this->profile = $profile;
         $this->concepts = $concepts;
         $this->propositions = $propositions;
         $this->submaps = $submaps;
+        $this->descriptions = $descriptions;
+    }
+
+    /**
+     * The description text of the concept carrying a given label, or ''.
+     *
+     * @param string $label The concept label.
+     * @return string
+     */
+    public function description_for_label(string $label): string {
+        foreach ($this->concepts as $stableid => $concept) {
+            if ($concept === $label && !empty($this->descriptions[$stableid])) {
+                return (string) $this->descriptions[$stableid];
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Concept labels that carry a non-empty description.
+     *
+     * @return string[]
+     */
+    public function described_labels(): array {
+        $labels = [];
+        foreach ($this->concepts as $stableid => $concept) {
+            if ($concept !== '' && !empty($this->descriptions[$stableid])) {
+                $labels[] = $concept;
+            }
+        }
+        return array_values(array_unique($labels));
     }
 
     /**
@@ -62,8 +103,13 @@ class submission {
      */
     public static function from_snapshot_data(array $data): self {
         $concepts = [];
+        $descriptions = [];
         foreach (($data['nodes'] ?? []) as $node) {
             $concepts[$node['stableid']] = trim((string) ($node['label'] ?? ''));
+            $content = trim((string) ($node['content'] ?? ''));
+            if ($content !== '') {
+                $descriptions[$node['stableid']] = $content;
+            }
         }
 
         $propositions = [];
@@ -102,7 +148,8 @@ class submission {
             (string) ($data['profile'] ?? 'conceptmap'),
             $concepts,
             $propositions,
-            array_values($submaps)
+            array_values($submaps),
+            $descriptions
         );
     }
 

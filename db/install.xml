@@ -25,6 +25,8 @@
         <FIELD NAME="requireallteamsubmit" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if every group member must submit before the group map is submitted"/>
         <FIELD NAME="referencesnapshotid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Snapshot marked as the reference (model) solution for automatic scoring, null if none"/>
         <FIELD NAME="matchmode" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Label matching strategy for content scorers: 0 exact, 1 fuzzy, 2 word-overlap"/>
+        <FIELD NAME="peerreviewmode" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if students review each other's submitted maps"/>
+        <FIELD NAME="peerreviewcount" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="2" SEQUENCE="false" COMMENT="How many peer reviews each submission should receive"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
@@ -344,6 +346,27 @@
       </KEYS>
       <INDEXES>
         <INDEX NAME="snapshotid-raterid" UNIQUE="true" FIELDS="snapshotid, raterid"/>
+      </INDEXES>
+    </TABLE>
+    <TABLE NAME="vimipad_peerreview" COMMENT="Peer review allocations and the reviews students submit">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="snapshotid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Reviewed submission"/>
+        <FIELD NAME="reviewerid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Reviewing user"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0 allocated, 1 submitted"/>
+        <FIELD NAME="score" TYPE="number" LENGTH="10" DECIMALS="5" NOTNULL="false" SEQUENCE="false" COMMENT="Peer score 0..1, null until reviewed"/>
+        <FIELD NAME="reviewcomment" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="The reviewer's written feedback"/>
+        <FIELD NAME="commentformat" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timeallocated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="snapshotid" TYPE="foreign" FIELDS="snapshotid" REFTABLE="vimipad_snapshot" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="snapshotid-reviewerid" UNIQUE="true" FIELDS="snapshotid, reviewerid"/>
+        <INDEX NAME="reviewerid" UNIQUE="false" FIELDS="reviewerid"/>
       </INDEXES>
     </TABLE>
   </TABLES>

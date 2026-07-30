@@ -154,6 +154,13 @@ final class backup_restore_test extends \advanced_testcase {
             'entrytext' => 'My reflection', 'entryformat' => FORMAT_PLAIN, 'visibility' => 1,
             'timecreated' => $now, 'timemodified' => $now,
         ]);
+        // A peer review that must survive with its reviewer remapped.
+        $reviewer = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $DB->insert_record('vimipad_peerreview', (object) [
+            'snapshotid' => $snapshotid, 'reviewerid' => $reviewer->id, 'status' => 1,
+            'score' => 0.8, 'reviewcomment' => 'Peer feedback survives.', 'commentformat' => FORMAT_PLAIN,
+            'timeallocated' => $now, 'timemodified' => $now,
+        ]);
 
         $newcourseid = $this->backup_and_restore($course, true);
 
@@ -180,6 +187,14 @@ final class backup_restore_test extends \advanced_testcase {
 
         // The reference snapshot pointer is remapped to the restored snapshot.
         $this->assertEquals($newsnapshot->id, $newinstance->referencesnapshotid);
+
+        // The peer review is restored against the new snapshot with a real reviewer.
+        $newreviews = $DB->get_records('vimipad_peerreview', ['snapshotid' => $newsnapshot->id]);
+        $this->assertCount(1, $newreviews);
+        $newreview = reset($newreviews);
+        $this->assertSame('Peer feedback survives.', $newreview->reviewcomment);
+        $this->assertEqualsWithDelta(0.8, (float) $newreview->score, 0.0001);
+        $this->assertGreaterThan(0, (int) $newreview->reviewerid);
 
         $this->assertSame(1, $DB->count_records('vimipad_annotation', ['snapshotid' => $newsnapshot->id]));
 

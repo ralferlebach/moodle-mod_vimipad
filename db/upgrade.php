@@ -235,5 +235,38 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072709, 'vimipad');
     }
 
+    if ($oldversion < 2026072711) {
+        // Peer review: activity settings and the review allocations table.
+        $table = new xmldb_table('vimipad');
+        $mode = new xmldb_field('peerreviewmode', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'matchmode');
+        if (!$dbman->field_exists($table, $mode)) {
+            $dbman->add_field($table, $mode);
+        }
+        $count = new xmldb_field('peerreviewcount', XMLDB_TYPE_INTEGER, '3', null, XMLDB_NOTNULL, null, '2', 'peerreviewmode');
+        if (!$dbman->field_exists($table, $count)) {
+            $dbman->add_field($table, $count);
+        }
+
+        $peerreview = new xmldb_table('vimipad_peerreview');
+        if (!$dbman->table_exists($peerreview)) {
+            $peerreview->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $peerreview->add_field('snapshotid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $peerreview->add_field('reviewerid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $peerreview->add_field('status', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0');
+            $peerreview->add_field('score', XMLDB_TYPE_NUMBER, '10, 5', null, null, null, null);
+            $peerreview->add_field('reviewcomment', XMLDB_TYPE_TEXT, null, null, null, null, null);
+            $peerreview->add_field('commentformat', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0');
+            $peerreview->add_field('timeallocated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $peerreview->add_field('timemodified', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $peerreview->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $peerreview->add_key('snapshotid', XMLDB_KEY_FOREIGN, ['snapshotid'], 'vimipad_snapshot', ['id']);
+            $peerreview->add_index('snapshotid-reviewerid', XMLDB_INDEX_UNIQUE, ['snapshotid', 'reviewerid']);
+            $peerreview->add_index('reviewerid', XMLDB_INDEX_NOTUNIQUE, ['reviewerid']);
+            $dbman->create_table($peerreview);
+        }
+
+        upgrade_mod_savepoint(true, 2026072711, 'vimipad');
+    }
+
     return true;
 }

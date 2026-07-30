@@ -48,6 +48,7 @@ class cleanup {
             $DB->delete_records_select('vimipad_annotation', "snapshotid $sinsql", $sparams);
             $DB->delete_records_select('vimipad_aifeedback', "snapshotid $sinsql", $sparams);
             $DB->delete_records_select('vimipad_gradeinstance', "snapshotid $sinsql", $sparams);
+            $DB->delete_records_select('vimipad_peerreview', "snapshotid $sinsql", $sparams);
         }
 
         $containerids = $DB->get_fieldset_select('vimipad_container', 'id', "workspaceid $insql", $params);
