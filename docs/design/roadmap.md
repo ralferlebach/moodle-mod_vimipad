@@ -56,7 +56,7 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 
 ## 0.5.x — Bewertung gegen Musterlösung
 
-> **Status: ✅ weitgehend, mit offenen Verträgen** — Struktur-/Semantikabgleich (`vimipadassess`, 6 Scorer + Matcher-Wahl), `gradingform`-Rubric, KI-Feedback + On-demand-KI-Scorer, Gradebook/Completion, Reopen, Konsens-Abgabe, Peer-Review-Basis (Allokation/Reviews/Aggregat). **Offen vor 0.6 (0.5.33):** Mehrfach-Referenzen (Contract mehrzahlfähig, DB/Orchestrierung singular) entscheiden; `duedate`/late auswerten (nur `cutoffdate` erzwungen); Peer-**Phasenmodell** (5 Phasen) implementieren *oder* Roadmap auf realen Scope korrigieren; Import-/Container-Verträge festziehen.
+> **Status: ✅ weitgehend, mit offenen Verträgen** — Struktur-/Semantikabgleich (`vimipadassess`, 6 Scorer + Matcher-Wahl), `gradingform`-Rubric, KI-Feedback + On-demand-KI-Scorer, Gradebook/Completion, Reopen, Konsens-Abgabe, Peer-Review-Basis (Allokation/Reviews/Aggregat). **Closure 0.5.33/0.5.34 erledigt:** gemeinsamer Workspace-Write-Lock (Concurrency-Gate) + fail-closed Eindeutigkeit; `duedate`/late-Markierung (soft; `cutoffdate` bleibt harte Grenze); `map_updated`-Event fürs Reporting; Mehrfach-Referenzen als *eine je Aktivität* festgelegt (E1-B); Peer-**Phasenmodell** bewusst auf realen Scope reduziert (E3-B, s. u.); Leases advisory (E2-A); Import-Atomarität dokumentiert (E6). **Offen vor 0.6:** Container-/Membership-Operationen, Importformat v2 + Migration, Template-/Constraint-Policy.
 
 - Struktur- und Semantikabgleich gegen eine oder mehrere Musterlösungen
 - Import (JSON/XML) von Musterlösungen (auf Basis der Exporte aus 0.4.x)
@@ -68,9 +68,12 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 - Gruppenkonsens zur Abgabe: jedes Gruppenmitglied muss auf „Einreichen" klicken
   (analog Gruppenabgaben in `mod_assign`)
 - Abgabe-/Nachfristlogik (Fristen, verspätete Abgaben)
-- Peer-Review-Basis: Phasenmodell (Einrichtung → Bearbeitung → Begutachtung →
-  Bewertung → geschlossen) auf Snapshots und der Annotationsebene, kein eigenes
-  Modul (Vollausbau `vimipadreview_peerplus` als Premium nach 1.0)
+- Peer-Review-Basis (✅ realisiert als Allokation → Reviews → Aggregat auf
+  Snapshots/Annotationen, kein eigenes Modul). **Entscheid 0.5.34 (E3-B):** das
+  vollständige 5-Phasen-*Aktivitäts*-Workflowmodell (Einrichtung → Bearbeitung →
+  Begutachtung → Bewertung → geschlossen) wird NICHT im Kern gebaut, sondern dem
+  Premium-Ausbau `vimipadreview_peerplus` (nach 1.0) zugeordnet; der Kern bleibt
+  bei der schlanken Basis.
 - Relevante Events für Observer bereitstellen
 
 ## 0.6.x — Autoren-Werkzeuge & Import/Export-Integration

@@ -107,6 +107,16 @@ class apply_operation extends external_api {
             (int) $USER->id
         );
 
+        // Log editing activity for course reports (one event per operation).
+        \mod_vimipad\event\map_updated::create([
+            'context' => $context,
+            'objectid' => (int) $workspace->id,
+            'other' => [
+                'operationtype' => (string) $params['operationtype'],
+                'revision' => (int) $result['revision'],
+            ],
+        ])->trigger();
+
         return [
             'revision' => $result['revision'],
             'stableid' => (string) ($result['stableid'] ?? ''),

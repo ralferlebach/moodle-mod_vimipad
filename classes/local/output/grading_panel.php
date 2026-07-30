@@ -242,6 +242,19 @@ class grading_panel {
             ['class' => 'btn btn-sm btn-outline-secondary']
         ), 'mb-3');
 
+        // Submission timing: when it was submitted and, if after the (soft) due
+        // date, a late badge. The hard cut-off is enforced at submission time;
+        // the due date only marks lateness.
+        $submittedtime = (int) $snapshot->timecreated;
+        $meta = get_string('gradetab:submittedon', 'mod_vimipad', userdate($submittedtime));
+        if (\mod_vimipad\local\service\snapshot_service::is_late($instance, $submittedtime)) {
+            $meta .= ' ' . html_writer::span(
+                get_string('gradetab:late', 'mod_vimipad'),
+                'badge badge-warning bg-warning text-dark'
+            );
+        }
+        echo html_writer::div($meta, 'mb-3 text-muted small');
+
         // Offer to reopen the workspace for revision while it is locked.
         if ((int) $workspace->locked === 1) {
             echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false), 'class' => 'mb-3']);

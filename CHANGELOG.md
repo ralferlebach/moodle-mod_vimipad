@@ -4,7 +4,33 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.33** (2026072713).
+> release is **0.5.34** (2026072714).
+
+## 0.5.34 (2026072714) — 0.5.x closure part 2: due-date/late, map_updated event, peer scope
+
+Second and final closure slice before 0.6.x, wiring up the two behaviours that
+were stored but never evaluated and settling the peer-review scope.
+
+- **Due-date lateness is now evaluated.** `snapshot_service::is_late($instance,
+  $submittedtime)` marks a submission late when it was created after the (soft)
+  `duedate`; a due date of 0 is never late. The due date only *marks* lateness —
+  the hard block remains `cutoffdate` (already enforced at submission). The
+  grading detail view shows the submission time and a "Late" badge when
+  applicable.
+- **New `\mod_vimipad\event\map_updated` event.** Fired once per applied
+  operation in `apply_operation` (crud `u`, participating level), so course logs
+  and reports see editing activity alongside the existing viewed/submitted/graded
+  events.
+- **Peer-review scope settled (E3-B).** The core keeps the lean base
+  (allocation → reviews → aggregate on snapshots/annotations). The full 5-phase
+  *activity* workflow is explicitly deferred to the post-1.0 premium
+  `vimipadreview_peerplus`; the roadmap now states this rather than leaving it
+  open.
+- New lang strings: `event:map_updated`, `gradetab:late`, `gradetab:submittedon`
+  (en/de, 400/400 parity).
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **182 `mod_vimipad`**
+  (incl. new `duedate_and_events_test`) **+ 97 `vimipadassess`** green; phpcs
+  clean on all changed/new files.
 
 ## 0.5.33 (2026072713) — 0.5.x closure: workspace concurrency + fail-closed uniqueness
 

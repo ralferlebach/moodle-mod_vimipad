@@ -305,4 +305,21 @@ class snapshot_service {
         global $DB;
         $DB->set_field('vimipad_snapshot', 'status', $status, ['id' => $snapshotid]);
     }
+
+    /**
+     * Whether a submission time counts as late against the activity's (soft)
+     * due date.
+     *
+     * The due date only marks lateness; it does not block submission — that is
+     * the hard cut-off ({@see create_submission}, enforced at submission time).
+     * A due date of 0 means "no due date", so nothing is ever late.
+     *
+     * @param stdClass $instance The activity instance (with a duedate field).
+     * @param int $submittedtime The submission time (typically snapshot->timecreated).
+     * @return bool True if the submission is late.
+     */
+    public static function is_late(stdClass $instance, int $submittedtime): bool {
+        $duedate = (int) ($instance->duedate ?? 0);
+        return $duedate > 0 && $submittedtime > $duedate;
+    }
 }

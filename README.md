@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.5.33 — 0.5.x closure: shared workspace write-lock across all mutations + snapshot creation (concurrency gate), fail-closed workspace uniqueness, contract/doc re-baseline. Verified on real Moodle 4.5.**
+**Development status: 0.5.34 — 0.5.x closure part 2: soft due-date lateness marking, map_updated logging event, peer-review scope fixed to the lean base (E3-B). 182 mod_vimipad + 97 vimipadassess green on real Moodle 4.5.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

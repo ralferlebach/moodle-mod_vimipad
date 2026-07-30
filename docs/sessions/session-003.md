@@ -45,6 +45,17 @@
 - Doku-Re-Baseline aus dieser + der Vorbereitungsrunde: roadmap/backlog/
   connector-styles/ui_reorder_plan/test-setup/visual-maps/README.
 
+**0.5.34 — Closure Teil 2 (duedate/late, map_updated-Event, Peer-Scope)**
+- `snapshot_service::is_late($instance, $submittedtime)`: soft `duedate`-
+  Auswertung (0 = nie verspätet); harte Grenze bleibt `cutoffdate`. Badge
+  „Verspätet" + Abgabezeit in der Bewertungsansicht (`grading_panel::render`).
+- Neues Event `\mod_vimipad\event\map_updated` (crud `u`), je Operation in
+  `apply_operation` gefeuert → Kurs-Logs/Reporting.
+- Peer-Scope (E3-B) festgeschrieben: Kern bleibt schlanke Basis; 5-Phasen-
+  Aktivitätsworkflow → Premium `vimipadreview_peerplus` nach 1.0 (Roadmap-Text).
+- Lang: `event:map_updated`, `gradetab:late`, `gradetab:submittedon` (en/de 400/400).
+- Test `tests/duedate_and_events_test.php` (is_late-Fälle + map_updated via Sink).
+
 ---
 
 ### Entscheidungen getroffen
@@ -56,25 +67,21 @@
 | E1 Referenzen | genau eine je Aktivität bis nach 1.0 (Contract bleibt 0..n) | schlank, kein DB-Umbau vor 0.6 |
 | E2 Leases | advisory (nicht enforced) | Korrektheit über Write-Lock + Revision, nicht über Leases |
 | E3 Peer-Phasen | Roadmap auf realen Scope (Allokation+Reviews) korrigiert | kein Feature-Creep vor 0.6 |
-| E4 `updated`-Event | akzeptiert, aber auf 0.5.34 verschoben | braucht Kontext-Threading in apply; sauber separat |
+| E4 `updated`-Event | akzeptiert; in 0.5.34 als `map_updated` in `apply_operation` umgesetzt (+Test) | Kontext liegt im External-Layer, kein Threading in den Service nötig |
 | E5 Provenienz | Snapshot ohne `createdby` (Log trägt Provenienz); Lastenheft später präzisieren | Normalisierung/Datenschutz |
 | E6 Import-Atomarität | Semantik atomar, Layout best-effort | billiger, Vertrag jetzt eindeutig |
 
 ### Entwurfsentscheidungen geändert / zurückgestellt
 
 Keine der neun Schlüssel-Entscheidungen aus `sessionstart.txt` geändert.
-Zurückgestellt auf 0.5.34+: `duedate`/late-Auswertung, `map_updated`-Event (E4),
-sowie die 0.6-Vorab-Spezifikationen (Container-/Membership-Operationen,
-Importformat v2, Template-/Constraint-Policy).
+In 0.5.34 nachgezogen: `duedate`/late-Auswertung und `map_updated`-Event (E4).
+Zurückgestellt auf 0.6-Vorbereitung: Container-/Membership-Operationen,
+Importformat v2 + Migration, Template-/Constraint-Policy.
 
 ---
 
-### Offene Punkte für die nächste Session (0.5.34 → 0.6.0)
+### Offene Punkte für die nächste Session (0.6.0-Vorbereitung)
 
-- `duedate`/„late" auswerten (aus `snapshot.timecreated` vs. `duedate`), in
-  Lehrenden-Übersicht/Bewertung zeigen.
-- `map_updated`-Event ergänzen (E4-A) inkl. Observer/Reporting + Test.
-- Roadmap-Peer-Abschnitt final auf realen Scope schreiben (E3-B umgesetzt-Text).
 - 0.6-Vorab-Verträge spezifizieren: `container_*`/`membership_*`-Operationen,
   Importformat v1/v2 + Migration, Template-/Constraint-Policy vor `operation_service`.
 - Danach 0.6.0 Autorenwerkzeuge (Feedback-/Werkzeuge-Reiter, Container, Templates).
@@ -93,7 +100,7 @@ Importformat v2, Template-/Constraint-Policy).
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK — 178 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK — 182 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
           betroffene Service-Tests einzeln grün (operation/snapshot/workspace/import/consensus/collab/reconstruction/layout)
 PHPCS:    OK — 0 auf allen geänderten/neuen Dateien (moodle-Standard, severity=1)
 Frontend: tsc 0 · Jest 22 Suites/147 · Bundle reproduzierbar (Vorbereitungsrunde)
@@ -104,7 +111,7 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072713 / 0.5.33, package.json + lock.
+- [x] Version konsistent: version.php 2026072714 / 0.5.34, package.json + lock.
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -114,14 +121,14 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.5.33 — 0.5.x-Closure Teil 1: gemeinsamer Workspace-Write-Lock (Concurrency-
-> Gate) über alle Mutationen + Snapshot; fail-closed Workspace-Eindeutigkeit;
-> Doku/Contracts re-baselined. Real auf Moodle 4.5.12 verifiziert (178+97 grün).
+> 0.5.34 — 0.5.x-Closure abgeschlossen: Write-Lock-Concurrency-Gate + fail-closed
+> (0.5.33); duedate/late-Markierung + map_updated-Event + Peer-Scope E3-B (0.5.34).
+> Real auf Moodle 4.5.12 verifiziert (182+97 grün).
 
 **Zuletzt abgeschlossen:**
-> P0-Concurrency-Gate + P1 fail-closed + E1/E2/E6-Doku-Angleich; Session-Doku-
-> Prozess in sessionende.txt gefixt; session-001/002/003 vollständig.
+> 0.5.33 P0/P1-Concurrency; 0.5.34 duedate/late + map_updated-Event + E3-B;
+> Session-Doku-Prozess gefixt; session-001/002/003 vollständig.
 
 **Als nächstes geplant:**
-> 0.5.34: `duedate`/late + `map_updated`-Event (E4). Dann 0.6-Vorab-Verträge
-> (Container-Ops, Importformat v2, Template-Policy) → 0.6.0 Autorenwerkzeuge.
+> 0.6-Vorab-Verträge (Container-/Membership-Operationen, Importformat v2 +
+> Migration, Template-/Constraint-Policy) → dann 0.6.0 Autorenwerkzeuge.
