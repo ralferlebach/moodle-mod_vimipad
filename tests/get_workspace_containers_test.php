@@ -105,4 +105,28 @@ final class get_workspace_containers_test extends externallib_advanced_testcase 
         $result = get_workspace::execute($instance->cmid);
         $this->assertSame([], $result['containers']);
     }
+
+    /**
+     * The canmanage flag reflects the manageprofiles capability.
+     *
+     * @return void
+     */
+    public function test_canmanage_reflects_capability(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
+
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->setUser($student);
+        $asstudent = get_workspace::execute($instance->cmid);
+        $asstudent = \core_external\external_api::clean_returnvalue(get_workspace::execute_returns(), $asstudent);
+        $this->assertFalse((bool) $asstudent['canmanage']);
+
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->setUser($teacher);
+        $asteacher = get_workspace::execute($instance->cmid);
+        $asteacher = \core_external\external_api::clean_returnvalue(get_workspace::execute_returns(), $asteacher);
+        $this->assertTrue((bool) $asteacher['canmanage']);
+    }
 }

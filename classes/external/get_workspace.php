@@ -71,6 +71,7 @@ class get_workspace extends external_api {
         $context = \context_module::instance($cm->id);
         self::validate_context($context);
         require_capability('mod/vimipad:view', $context);
+        $canmanage = has_capability('mod/vimipad:manageprofiles', $context);
 
         $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
         $service = new workspace_service();
@@ -81,7 +82,7 @@ class get_workspace extends external_api {
             require_capability('mod/vimipad:grade', $context);
             $workspace = $service->find_for_user($instance, $target);
             if ($workspace === null) {
-                return self::empty_state($instance);
+                return self::empty_state($instance, $canmanage);
             }
         } else {
             $workspace = $service->get_or_create_for_user(
@@ -107,6 +108,7 @@ class get_workspace extends external_api {
             'nodes' => array_map([self::class, 'map_node'], $state['nodes']),
             'relations' => array_map([self::class, 'map_relation'], $state['relations']),
             'containers' => array_map([self::class, 'map_container'], $state['containers']),
+            'canmanage' => $canmanage,
             'collab' => helper::collab_config(),
         ];
     }
@@ -115,9 +117,10 @@ class get_workspace extends external_api {
      * Empty state for a foreign user who has no workspace yet.
      *
      * @param \stdClass $instance The activity instance.
+     * @param bool $canmanage Whether the viewer may author/manage templates.
      * @return array
      */
-    private static function empty_state(\stdClass $instance): array {
+    private static function empty_state(\stdClass $instance, bool $canmanage = false): array {
         return [
             'workspaceid' => 0,
             'revision' => 0,
@@ -128,6 +131,7 @@ class get_workspace extends external_api {
             'nodes' => [],
             'relations' => [],
             'containers' => [],
+            'canmanage' => $canmanage,
             'collab' => helper::collab_config(),
         ];
     }
@@ -229,6 +233,11 @@ class get_workspace extends external_api {
                 'geometryjson' => new external_value(PARAM_RAW, 'Geometry JSON (x,y,w,h), empty if none'),
                 'metadatajson' => new external_value(PARAM_RAW, 'Style/lock metadata JSON, empty if none'),
             ]), 'Containers drawn on the canvas', VALUE_OPTIONAL),
+            'canmanage' => new external_value(
+                PARAM_BOOL,
+                'Whether the viewer may author/manage templates (set element locks)',
+                VALUE_OPTIONAL
+            ),
             'collab' => new external_single_structure([
                 'pollinterval' => new external_value(PARAM_INT, 'Default poll interval (ms)'),
                 'polladaptive' => new external_value(PARAM_INT, '1 if adaptive polling is enabled'),

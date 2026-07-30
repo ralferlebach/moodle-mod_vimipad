@@ -98,7 +98,7 @@ class apply_operation extends external_api {
             throw new \invalid_parameter_exception('payloadjson must decode to a JSON object');
         }
 
-        $service = new operation_service();
+        $service = new operation_service(has_capability('mod/vimipad:manageprofiles', $context));
         $result = $service->apply(
             (int) $workspace->id,
             $params['baserevision'],

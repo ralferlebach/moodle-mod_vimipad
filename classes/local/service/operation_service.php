@@ -32,6 +32,20 @@ use mod_vimipad\local\operation\operation_type;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class operation_service {
+    /** @var bool Whether template element locks are bypassed (author/manage context). */
+    private bool $bypasslocks;
+
+    /**
+     * Construct the service, optionally bypassing template element locks.
+     *
+     * @param bool $bypasslocks If true, template element locks are not enforced,
+     *                          for users who may author/manage the template
+     *                          (mod/vimipad:manageprofiles). Learners get false.
+     */
+    public function __construct(bool $bypasslocks = false) {
+        $this->bypasslocks = $bypasslocks;
+    }
+
     /**
      * Apply a single operation to a workspace.
      *
@@ -484,6 +498,9 @@ class operation_service {
      * @throws \moodle_exception error:elementlocked if the change is not permitted.
      */
     private function assert_element_editable(?string $metadatajson, string $mode, array $changedfields = []): void {
+        if ($this->bypasslocks) {
+            return;
+        }
         if ($metadatajson === null || $metadatajson === '') {
             return;
         }

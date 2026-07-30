@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.9** (2026072723)
+**Bogen:** 0.5.32 (2026072712) → **0.6.10** (2026072724)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -170,6 +170,22 @@
   202 mod_vimipad + 97 vimipadassess; phpcs/phpcpd clean.
 - Naechste: Template-Lock-Editor (3/3).
 
+**0.6.10 - Template-Lock-Editor (Frontend-Autoren 3/3, Abschluss)**
+- Backend: `operation_service` bekommt `bypasslocks`-Konstruktor-Flag; gesetzt ->
+  Lock-Durchsetzung uebersprungen. `apply_operation` uebergibt
+  `has_capability('mod/vimipad:manageprofiles')` -> Autoren/Manager koennen Sperren
+  setzen/aendern/entfernen und gesperrte Geruste bearbeiten, Lernende bleiben
+  gebunden. `get_workspace` liefert `canmanage` (VALUE_OPTIONAL). Tests: Manager-
+  Bypass (element_lock_test), canmanage (get_workspace_containers_test).
+- Frontend: reiner `element_lock.ts` (locked/editable lesen/schreiben, andere
+  Keys erhalten); `LockPanel` (Node/Relation-Liste mit Sperr-Toggle + "Umbenennen
+  erlauben", nur bei canmanage); Lock-Badge an gesperrten Nodes.
+- Lang: editor:node/templatelocks/templatelockshint/lockallowlabel (en/de 428/428).
+- Verifiziert: tsc clean; Jest 30 Suites/179 (neu: element_lock, lock_panel);
+  Bundle reproduzierbar; 204 mod_vimipad + 97 vimipadassess; phpcs/phpcpd clean.
+- Damit sind die drei Frontend/Canvas-Autoren-Punkte (0.6.8 Hinweise,
+  0.6.9 Container, 0.6.10 Sperren) abgeschlossen.
+
 ---
 
 ### Entscheidungen getroffen
@@ -216,11 +232,11 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 202 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 204 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
 Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
-Frontend: tsc 0 · Jest 28 Suites/169 · esbuild-Bundle byte-reproduzierbar
+Frontend: tsc 0 · Jest 30 Suites/179 · esbuild-Bundle byte-reproduzierbar
 Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ```
 
@@ -228,7 +244,7 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072723 / 0.6.9, package.json + lock (inkl. Frontend).
+- [x] Version konsistent: version.php 2026072724 / 0.6.10, package.json + lock (inkl. Frontend).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -238,14 +254,14 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.6.9 — Autoren-Backend (0.6.1–0.6.6); Release-CI-Fix (0.6.7); Frontend-Autoren
-> 1/3 Constraint-Hinweise (0.6.8), 2/3 Container zeichnen (0.6.9). PHP real auf
-> Moodle 4.5.12 (202+97 grün); Frontend tsc/Jest 28/169, Bundle reproduzierbar.
+> 0.6.10 — Autoren-Backend (0.6.1–0.6.6); Release-CI-Fix (0.6.7); Frontend-Autoren
+> KOMPLETT: Constraint-Hinweise (0.6.8), Container (0.6.9), Template-Sperren (0.6.10).
+> PHP real auf Moodle 4.5.12 (204+97 grün); Frontend tsc/Jest 30/179, reproduzierbar.
 
 **Zuletzt abgeschlossen:**
-> 0.6.1–0.6.6 Autoren-Backend; 0.6.7 Release-CI-Fix; 0.6.8 Constraint-Hinweise;
-> 0.6.9 Container zeichnen (Frontend 2/3). Konvention: 0.6.x ohne alpha-Suffix.
+> 0.6.1–0.6.6 Autoren-Backend; 0.6.7 Release-CI-Fix; 0.6.8–0.6.10 Frontend-Autoren
+> (Hinweise/Container/Sperren) komplett. Konvention: 0.6.x ohne alpha-Suffix.
 
 **Als nächstes geplant:**
-> Frontend 3/3: Template-Editor (setzt die seit 0.6.4 durchgesetzten
-> `locked`/`editable`-Metadaten am ausgewaehlten Element).
+> 0.6.x-Frontend abgeschlossen. Offen in 0.6.x laut Roadmap: Verknuepfung der
+> Templates mit Import/Export (JSON/XML) und dedizierte Freigabe-Optionen.

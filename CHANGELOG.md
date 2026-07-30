@@ -4,7 +4,36 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.9** (2026072723).
+> release is **0.6.10** (2026072724).
+
+## 0.6.10 (2026072724) — template lock editor (frontend authoring 3/3)
+
+Third and final 0.6 frontend/canvas authoring piece, completing the three-point
+frontend work. Authors can now lock individual elements so learners cannot
+restructure or delete them; the enforcement has existed server-side since 0.6.4,
+this makes it settable and adds the author bypass it needs.
+
+- **Backend:** `operation_service` gains a `bypasslocks` constructor flag; when
+  set, element-lock enforcement is skipped. `apply_operation` passes
+  `has_capability('mod/vimipad:manageprofiles')`, so authors/managers can set,
+  change and remove locks (and edit locked scaffolds) while learners stay bound.
+  `get_workspace` returns `canmanage` (VALUE_OPTIONAL) so the editor shows the
+  lock UI only to authors. Tests: manager bypass (`element_lock_test`), canmanage
+  reflects capability (`get_workspace_containers_test`).
+- **Frontend:** pure `element_lock.ts` (read/write the `locked` + `editable`
+  metadata, preserving other keys); `LockPanel` lists nodes and relations with a
+  per-element lock toggle and an "allow renaming" sub-toggle (keeps `label`
+  editable), dispatched as update operations. Shown only when `canmanage`. Locked
+  nodes render a small lock badge on the canvas for everyone.
+- Lang: `editor:node`, `editor:templatelocks`, `editor:templatelockshint`,
+  `editor:lockallowlabel` (en/de, 428/428 parity) + init.js keys + mount fallbacks.
+- **Verification:** `tsc` clean; **Jest 30 suites / 179 tests** (new:
+  `element_lock`, `lock_panel`); esbuild bundle rebuilt and **byte-reproducible**;
+  **204 `mod_vimipad`** + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd
+  clean. Visual rendering and `@javascript` Behat run in CI.
+
+With 0.6.8–0.6.10 the three frontend/canvas authoring features are complete:
+soft constraint hints, canvas containers, and template locks.
 
 ## 0.6.9 (2026072723) — canvas: draw containers (frontend authoring 2/3)
 

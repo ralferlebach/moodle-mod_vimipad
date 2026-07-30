@@ -85,8 +85,8 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 > Backup (0.6.3) → **Gate produktiv aktiv**. Offen: die Canvas-Oberflächen
 > (Container zeichnen, Template-Autorenwerkzeug), weiche Edit-Zeit-Hinweise (Backend-Endpoint `get_constraint_status` ✅ 0.6.5, Editor-Anzeige offen); die Template-Struktursperren sind serverseitig **durchgesetzt** (0.6.4, `error:elementlocked`); offen bleibt die Autorenoberflaeche, die die Sperren setzt.
 
-- Vorlagen/Templates durch Lehrende mit einschränkbaren Änderungen
-- Hintergründe zeichnen (Kästen/Abschnitte/Container auf dem Canvas) — Backend
+- Vorlagen/Templates durch Lehrende mit einschränkbaren Änderungen ✅ (0.6.10: Element-Sperren, Manager-Bypass)
+- Hintergründe zeichnen (Kästen/Abschnitte/Container auf dem Canvas) ✅ (0.6.9) — Backend
   (Container-Operationen) ✅; Canvas-Oberfläche offen
 - Verknüpfung mit der Import/Export-Funktion (JSON/XML) — Container/Memberships
   round-trippen jetzt ✅

@@ -142,6 +142,25 @@ final class element_lock_test extends \advanced_testcase {
     }
 
     /**
+     * A manager (bypasslocks) may edit and delete a locked element.
+     *
+     * @return void
+     */
+    public function test_manager_bypasses_locks(): void {
+        global $DB;
+        $id = $this->make_node('node_lockedcccc', json_encode(['locked' => true]));
+        $service = new operation_service(true);
+
+        // Update the locked node's label: allowed under bypass.
+        $service->apply($this->workspaceid, $this->rev(), 'node_update', ['stableid' => $id, 'label' => 'Edited'], 1);
+        $this->assertSame('Edited', $DB->get_field('vimipad_node', 'label', ['stableid' => $id]));
+
+        // Delete it: also allowed under bypass.
+        $service->apply($this->workspaceid, $this->rev(), 'node_delete', ['stableid' => $id], 1);
+        $this->assertEquals(1, $DB->get_field('vimipad_node', 'deleted', ['stableid' => $id]));
+    }
+
+    /**
      * A locked relation cannot be deleted or retargeted.
      *
      * @return void

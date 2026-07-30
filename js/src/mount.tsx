@@ -88,6 +88,11 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:containerdelete': 'Delete container',
     'editor:drawcontainer': 'Draw container',
     'editor:drawcontainerdone': 'Done drawing',
+    'editor:node': 'Node',
+    'editor:templatelocks': 'Template locks',
+    'editor:templatelockshint': 'Lock elements so learners cannot restructure or delete them.',
+    'editor:lockallowlabel': 'Allow renaming',
+
 
     'editor:locked': 'This map is locked and can no longer be edited.',
     'editor:nodelabel': 'Concept label',

@@ -44,6 +44,7 @@ import {labelBox, shapeElement} from '../canvas/shapes';
 import {useDismiss} from '../hooks/use_dismiss';
 import {parseNodeStyle} from '../canvas/node_style';
 import {boxFromDrag, ContainerBox, isDrawable, parseGeometry, serializeGeometry} from '../canvas/container_geometry';
+import {isLocked} from '../canvas/element_lock';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {TextEditMenu} from './TextEditMenu';
 import {FA, Icon} from '../canvas/icons';
@@ -1038,6 +1039,16 @@ export function CanvasView(props: Props): React.ReactElement {
                             strokeWidth: 1.5,
                             strokeDasharray: '6 4',
                         })}
+                        {isLocked(node.metadatajson) && (
+                            <text
+                                x={-w / 2 + 8}
+                                y={-h / 2 + 15}
+                                className="vimipad-node-lock"
+                                style={{fontSize: 12, fill: 'rgba(84, 110, 122, 0.85)'}}
+                                pointerEvents="none"
+                                aria-hidden="true"
+                            >&#128274;</text>
+                        )}
                         {editing ? (
                             <foreignObject key={`edit-${node.stableid}`} x={-w / 2} y={-h / 2} width={w} height={h}>
                                 <div

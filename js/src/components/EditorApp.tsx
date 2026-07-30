@@ -41,6 +41,7 @@ import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
 import {useCollaboration} from '../collab/use_collaboration';
 import {useConstraintHints} from '../hooks/use_constraint_hints';
 import {ConstraintBanner} from './ConstraintBanner';
+import {LockPanel, LockKind} from './LockPanel';
 import {operationToAction} from '../collab/apply_remote';
 
 /**
@@ -528,6 +529,24 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [runOperation, pushHistory]);
 
+    const setElementLock = useCallback(async (kind: LockKind, stableid: string, metadatajson: string) => {
+        const type = kind === 'node' ? 'node_update' : 'relation_update';
+        const prev = kind === 'node'
+            ? stateRef.current.nodes.find(n => n.stableid === stableid)?.metadatajson
+            : stateRef.current.relations.find(r => r.stableid === stableid)?.metadatajson;
+        const res = await runOperation(type, {stableid, metadatajson}, () => {
+            dispatch(kind === 'node'
+                ? {kind: 'updateNode', stableid, metadatajson}
+                : {kind: 'updateRelation', stableid, metadatajson});
+        });
+        if (res) {
+            pushHistory({
+                undo: [{type, payload: {stableid, metadatajson: prev ?? ''}}],
+                redo: [{type, payload: {stableid, metadatajson}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
     const renameNode = useCallback(async (stableid: string, label: string) => {
         const trimmed = label.trim();
         if (!trimmed) {
@@ -765,6 +784,16 @@ export function EditorApp(props: Props): React.ReactElement {
         </fieldset>
     );
 
+    const lockPanel = state.canmanage ? (
+        <LockPanel
+            nodes={state.nodes}
+            relations={state.relations}
+            disabled={disabled}
+            t={t}
+            onSetLock={setElementLock}
+        />
+    ) : null;
+
     return (
         <div className="vimipad-editor" ref={rootRef}>
             <div className="vimipad-sr-only" role="status" aria-live="polite">{status}</div>
@@ -820,6 +849,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         {addNodeControls}
                         {addRelationControls}
                         {containerControls}
+                        {lockPanel}
                     </div>
                 </>
             ) : (

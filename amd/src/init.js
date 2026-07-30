@@ -40,6 +40,7 @@ import Notification from 'core/notification';
 const STRING_KEYS = [
     'constraint:hintsheading',
     'editor:containers', 'editor:containerdelete', 'editor:drawcontainer', 'editor:drawcontainerdone',
+    'editor:node', 'editor:templatelocks', 'editor:templatelockshint', 'editor:lockallowlabel',
     'editor:add', 'editor:addnode', 'editor:addrelation', 'editor:actions',
     'editor:beingedited', 'editor:cancel', 'editor:canvasaria', 'editor:canvashint',
     'editor:canvasview', 'editor:canvasplaceholder',

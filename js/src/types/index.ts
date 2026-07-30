@@ -77,6 +77,8 @@ export interface WorkspaceState {
     relations: VimiRelation[];
     /** Containers drawn on the canvas (optional; absent = none). */
     containers?: VimiContainer[];
+    /** Whether the viewer may author/manage the template (set element locks). */
+    canmanage?: boolean;
     collab?: CollabConfig;
 }
 
