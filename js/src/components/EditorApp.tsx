@@ -581,6 +581,22 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [runOperation, pushHistory]);
 
+    const updateContainerStyle = useCallback(async (stableid: string, metadatajson: string) => {
+        const prev = (stateRef.current.containers ?? []).find(c => c.stableid === stableid)?.metadatajson ?? '';
+        if (metadatajson === prev) {
+            return;
+        }
+        const res = await runOperation('container_update', {stableid, metadatajson}, () => {
+            dispatch({kind: 'updateContainer', stableid, metadatajson});
+        });
+        if (res) {
+            pushHistory({
+                undo: [{type: 'container_update', payload: {stableid, metadatajson: prev}}],
+                redo: [{type: 'container_update', payload: {stableid, metadatajson}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
     const setElementLock = useCallback(async (kind: LockKind, stableid: string, metadatajson: string) => {
         const type = kind === 'node' ? 'node_update' : (kind === 'relation' ? 'relation_update' : 'container_update');
         const findPrev = (): string | undefined => {
@@ -845,7 +861,7 @@ export function EditorApp(props: Props): React.ReactElement {
                 <input
                     id="vimipad-node-label"
                     type="text"
-                    className="form-control mr-2"
+                    className="form-control"
                     value={nodeLabel}
                     placeholder={t('editor:nodelabel')}
                     onChange={e => setNodeLabel(e.target.value)}
@@ -864,7 +880,7 @@ export function EditorApp(props: Props): React.ReactElement {
                 <label className="sr-only" htmlFor="vimipad-rel-source">{t('editor:subject')}</label>
                 <select
                     id="vimipad-rel-source"
-                    className="form-control mr-2"
+                    className="form-control"
                     value={relSource}
                     onChange={e => setRelSource(e.target.value)}
                 >
@@ -873,7 +889,7 @@ export function EditorApp(props: Props): React.ReactElement {
                 </select>
                 <input
                     type="text"
-                    className="form-control mr-2"
+                    className="form-control"
                     value={relLabel}
                     placeholder={t('editor:relation')}
                     onChange={e => setRelLabel(e.target.value)}
@@ -881,7 +897,7 @@ export function EditorApp(props: Props): React.ReactElement {
                 <label className="sr-only" htmlFor="vimipad-rel-target">{t('editor:object')}</label>
                 <select
                     id="vimipad-rel-target"
-                    className="form-control mr-2"
+                    className="form-control"
                     value={relTarget}
                     onChange={e => setRelTarget(e.target.value)}
                 >
@@ -948,6 +964,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         onFinishDrawContainer={() => setDrawingContainer(false)}
                         onUpdateContainer={updateContainerGeometry}
                         onRenameContainer={renameContainer}
+                        onUpdateContainerStyle={updateContainerStyle}
                         canManage={state.canmanage === true}
                         canLock={state.canmanage === true || state.lockmodeforlearners === true}
                         onToggleDrawContainer={() => setDrawingContainer(v => !v)}

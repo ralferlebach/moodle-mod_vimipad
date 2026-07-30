@@ -322,7 +322,6 @@
 .vimipad-control-line > .form-control {
     flex: 1 1 auto;
     min-width: 8rem;
-    margin-right: 0 !important;
 }
 
 .vimipad-control-line > .btn {

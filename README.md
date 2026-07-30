@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.6.23 — re-arrange now preserves container membership: nodes spatially inside a container stay inside afterwards, because each container is refitted around its members' new positions (one combined undo). 210 mod_vimipad + 97 vimipadassess green; tsc + Jest (36 suites/230) green.**
+**Development status: 0.6.24 — containers are now formattable and labellable like nodes (shape, fill, text, same format toolbar, four-corner resize). This closes the A1–A6 / T1–T6 issue set. 211 mod_vimipad + 97 vimipadassess green; tsc + Jest (37 suites/237) green.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

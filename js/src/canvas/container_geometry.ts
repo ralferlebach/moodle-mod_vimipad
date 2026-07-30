@@ -148,6 +148,55 @@ export function resizeBox(box: ContainerBox, dx: number, dy: number): ContainerB
     };
 }
 
+/** A resize handle corner. */
+export type BoxCorner = 'nw' | 'ne' | 'sw' | 'se';
+
+/**
+ * Resize a box by dragging one of its four corners, keeping the opposite corner
+ * fixed and honouring the minimum size. This gives containers the same
+ * four-corner resize affordance as nodes.
+ *
+ * @param box The starting box.
+ * @param corner The corner being dragged.
+ * @param dx The pointer delta x.
+ * @param dy The pointer delta y.
+ * @returns The resized box.
+ */
+export function resizeBoxCorner(box: ContainerBox, corner: BoxCorner, dx: number, dy: number): ContainerBox {
+    const right = box.x + box.w;
+    const bottom = box.y + box.h;
+    let {x, y, w, h} = box;
+
+    if (corner === 'se') {
+        w = box.w + dx;
+        h = box.h + dy;
+    } else if (corner === 'ne') {
+        w = box.w + dx;
+        h = box.h - dy;
+        y = box.y + dy;
+    } else if (corner === 'sw') {
+        w = box.w - dx;
+        x = box.x + dx;
+        h = box.h + dy;
+    } else { // nw
+        w = box.w - dx;
+        x = box.x + dx;
+        h = box.h - dy;
+        y = box.y + dy;
+    }
+
+    // Clamp to the minimum, anchoring the opposite edge.
+    if (w < MIN_CONTAINER_SIZE) {
+        w = MIN_CONTAINER_SIZE;
+        x = (corner === 'nw' || corner === 'sw') ? right - MIN_CONTAINER_SIZE : box.x;
+    }
+    if (h < MIN_CONTAINER_SIZE) {
+        h = MIN_CONTAINER_SIZE;
+        y = (corner === 'nw' || corner === 'ne') ? bottom - MIN_CONTAINER_SIZE : box.y;
+    }
+    return {x, y, w, h};
+}
+
 /**
  * Whether a point lies within a container box (inclusive of the border).
  *

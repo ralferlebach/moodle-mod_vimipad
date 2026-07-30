@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.23** (2026072737)
+**Bogen:** 0.5.32 (2026072712) → **0.6.24** (2026072738)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -361,6 +361,33 @@
 - Merke: Schemaaenderung wird von PHPUnit-init nur bei Versionssprung neu
   gebaut - version.php zuerst hochziehen.
 
+**0.6.23 - T5: Neu-Ausrichten erhaelt Container-Zugehoerigkeit + Stylelint-Fix**
+- T5: Re-Arrange ignorierte Container -> Knoten konnten rausfallen. Jetzt:
+  Mitglieder je Container raeumlich schnappen (Zentrum), neu layouten, dann jeden
+  nicht-leeren Container auf die Bounding-Box seiner Mitglieder (+Pad 24) refitten.
+  Mitglieder bleiben drin, Container folgt; leere Container bleiben. Layout +
+  alle container_update in EINEM Undo/Redo-Eintrag (runOps mischt __layout und
+  container_update).
+- Reine Helfer centerInBox + boundingBox (clamped auf MIN_CONTAINER_SIZE),
+  6 Tests.
+- CI-Stylelint: styles.css nutzte margin-right:0 !important (declaration-no-
+  important). mr-2 aus Markup entfernt (gap spaced), !important-Regel geloescht.
+  Lokal mit Moodles stylelint-Config geprueft (exit 0). gherkinlint war gruen.
+- Verifiziert: 210+97; phpcs+stylelint clean; Jest 36/232; Bundle reproduzierbar.
+
+**0.6.24 - T4: Container formatier- und beschriftbar wie Nodes**
+- Container tragen dasselbe Stil-Model wie Nodes (Form roundrect/rect/ellipse,
+  Fuellfarbe, Textstil) in metadatajson. Selektierter Container zeigt denselben
+  Format-Dock (NodeFormatToolbar: Form/Fuellung/Text/Loeschen); Label per
+  Doppelklick auf die Titelzeile. Ohne Stil bleibt der gestrichelte Default.
+- Vier-Ecken-Resize (vorher nur unten-rechts): neue reine Funktion
+  resizeBoxCorner (nw/ne/sw/se, Mindestgroesse, Gegenkante fix), 5 Tests.
+- Backend container_update akzeptierte label/geometryjson/metadatajson bereits;
+  jetzt Frontend verdrahtet + Pfad bestaetigt.
+- Neuer container_style_test (Stil-Roundtrip, Umbenennen loescht Stil nicht).
+  211 (+1)+97; phpcs/phpcpd/stylelint clean; 435/435; Jest 37/237.
+- Damit ist der komplette Issue-Satz A1-A6 / T1-T6 abgearbeitet.
+
 **0.6.23 - T5: Neu-Ausrichten erhaelt Container-Zugehoerigkeit**
 - Bisher layoutete Re-Arrange nur nach Graphstruktur und ignorierte Container ->
   Mitglieder verstreuten sich, Box blieb stehen.
@@ -434,7 +461,7 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 210 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 211 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
 Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
@@ -446,7 +473,7 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072737 / 0.6.23, package.json + lock (inkl. Frontend).
+- [x] Version konsistent: version.php 2026072738 / 0.6.24, package.json + lock (inkl. Frontend).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.

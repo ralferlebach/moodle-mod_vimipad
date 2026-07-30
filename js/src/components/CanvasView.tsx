@@ -43,7 +43,7 @@ import {
 import {labelBox, shapeElement} from '../canvas/shapes';
 import {useDismiss} from '../hooks/use_dismiss';
 import {parseNodeStyle} from '../canvas/node_style';
-import {boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBox, serializeGeometry} from '../canvas/container_geometry';
+import {BoxCorner, boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBoxCorner, serializeGeometry} from '../canvas/container_geometry';
 import {isLocked, writeLock} from '../canvas/element_lock';
 import {screenToViewBox} from '../canvas/viewport';
 import {editableToText} from '../canvas/editable_text';
@@ -116,6 +116,8 @@ interface Props {
     onFinishDrawContainer?: () => void;
     /** Commit a container's new geometry (move/resize). */
     onUpdateContainer?: (stableid: string, geometryjson: string) => void;
+    /** Persist a new style (metadatajson) for a container: shape, fill, text. */
+    onUpdateContainerStyle?: (stableid: string, metadatajson: string) => void;
     /** Rename a container. */
     onRenameContainer?: (stableid: string, label: string) => void;
     /** Whether the viewer may author/manage the template (container drawing). */
@@ -401,21 +403,24 @@ export function CanvasView(props: Props): React.ReactElement {
     // Container move/resize via title-bar and corner-handle drags (pointer
     // capture keeps this out of the node/connect pointer state machine).
     const [containerDrag, setContainerDrag] = useState<
-        {mode: 'move' | 'resize'; stableid: string; start: Point; startBox: ContainerBox} | null
+        {mode: 'move' | 'resize'; stableid: string; start: Point; startBox: ContainerBox; corner?: BoxCorner} | null
     >(null);
     const [containerPreview, setContainerPreview] = useState<ContainerBox | null>(null);
     const [renamingContainer, setRenamingContainer] = useState<string | null>(null);
     const [containerName, setContainerName] = useState('');
 
     const beginContainerDrag = useCallback((
-        event: React.PointerEvent, mode: 'move' | 'resize', stableid: string, box: ContainerBox
+        event: React.PointerEvent, mode: 'move' | 'resize', stableid: string, box: ContainerBox,
+        corner?: BoxCorner
     ) => {
         if (disabled) {
             return;
         }
         event.stopPropagation();
         (event.target as Element).setPointerCapture?.(event.pointerId);
-        setContainerDrag({mode, stableid, start: toSvgPoint(event.clientX, event.clientY), startBox: box});
+        setContainerDrag({
+            mode, stableid, start: toSvgPoint(event.clientX, event.clientY), startBox: box, corner,
+        });
         setContainerPreview(box);
     }, [disabled, toSvgPoint]);
 
@@ -429,7 +434,7 @@ export function CanvasView(props: Props): React.ReactElement {
         const dy = p.y - containerDrag.start.y;
         setContainerPreview(containerDrag.mode === 'move'
             ? moveBox(containerDrag.startBox, dx, dy)
-            : resizeBox(containerDrag.startBox, dx, dy));
+            : resizeBoxCorner(containerDrag.startBox, containerDrag.corner ?? 'se', dx, dy));
     }, [containerDrag, toSvgPoint]);
 
     const onContainerDragUp = useCallback((event: React.PointerEvent) => {
@@ -1027,21 +1032,41 @@ export function CanvasView(props: Props): React.ReactElement {
                 const renaming = renamingContainer === container.stableid;
                 // A locked container is only editable by an author/manager.
                 const editable = !disabled && (state.canmanage === true || !isLocked(container.metadatajson));
+                // T4: containers carry the same style model as nodes (shape, fill,
+                // text) in their metadatajson. With no style set they keep the
+                // default dashed look; otherwise they render like a shaped node.
+                const cstyle = parseNodeStyle(container.metadatajson);
+                const cselected = isSelected(interaction, 'container', container.stableid);
+                const hasShape = cstyle.shape !== undefined && cstyle.shape !== null;
+                const bodyFill = cstyle.fill ?? 'rgba(120, 144, 156, 0.08)';
+                const bodyStroke = cselected ? selColor : 'rgba(84, 110, 122, 0.55)';
+                const labelColor = cstyle.text?.color ?? 'rgba(55, 71, 79, 0.95)';
                 return (
                     <g key={`container-${container.stableid}`} className="vimipad-canvas-container">
                         {/* Body: non-interactive so nodes underneath stay clickable. */}
-                        <rect
-                            x={box.x}
-                            y={box.y}
-                            width={box.w}
-                            height={box.h}
-                            rx={8}
-                            fill="rgba(120, 144, 156, 0.08)"
-                            stroke="rgba(84, 110, 122, 0.55)"
-                            strokeDasharray="6 4"
-                            pointerEvents="none"
-                        />
-                        {/* Title bar: move handle and rename target. */}
+                        {hasShape ? (
+                            <g transform={`translate(${box.x + box.w / 2}, ${box.y + box.h / 2})`} pointerEvents="none">
+                                {shapeElement(cstyle.shape ?? 'roundrect', box.w, box.h, {
+                                    fill: bodyFill,
+                                    stroke: bodyStroke,
+                                    strokeWidth: cselected ? 2 : 1,
+                                })}
+                            </g>
+                        ) : (
+                            <rect
+                                x={box.x}
+                                y={box.y}
+                                width={box.w}
+                                height={box.h}
+                                rx={8}
+                                fill={bodyFill}
+                                stroke={bodyStroke}
+                                strokeDasharray="6 4"
+                                strokeWidth={cselected ? 2 : 1}
+                                pointerEvents="none"
+                            />
+                        )}
+                        {/* Title bar: move handle, select and rename target. */}
                         <rect
                             className="vimipad-container-title"
                             x={box.x}
@@ -1052,7 +1077,12 @@ export function CanvasView(props: Props): React.ReactElement {
                             fill="rgba(84, 110, 122, 0.14)"
                             style={{cursor: editable ? 'move' : 'default', touchAction: 'none'}}
                             onPointerDown={editable
-                                ? (e => beginContainerDrag(e, 'move', container.stableid, stored))
+                                ? (e => {
+                                    dispatchInteraction({
+                                        kind: 'select', target: {kind: 'container', id: container.stableid},
+                                    });
+                                    beginContainerDrag(e, 'move', container.stableid, stored);
+                                })
                                 : undefined}
                             onPointerMove={onContainerDragMove}
                             onPointerUp={onContainerDragUp}
@@ -1089,7 +1119,12 @@ export function CanvasView(props: Props): React.ReactElement {
                                 x={box.x + 10}
                                 y={box.y + 17}
                                 className="vimipad-container-label"
-                                style={{fontSize: 13, fill: 'rgba(55, 71, 79, 0.95)'}}
+                                style={{
+                                    fontSize: 13,
+                                    fill: labelColor,
+                                    fontWeight: cstyle.text?.bold ? 700 : undefined,
+                                    fontStyle: cstyle.text?.italic ? 'italic' : undefined,
+                                }}
                                 pointerEvents="none"
                             >
                                 {container.label || t('editor:containers')}
@@ -1122,20 +1157,51 @@ export function CanvasView(props: Props): React.ReactElement {
                                 >&#215;</text>
                             </g>
                         )}
-                        {editable && !renaming && props.onUpdateContainer && (
+                        {editable && !renaming && props.onUpdateContainer && ([
+                            {c: 'nw' as BoxCorner, x: box.x, y: box.y, cursor: 'nwse-resize'},
+                            {c: 'ne' as BoxCorner, x: box.x + box.w, y: box.y, cursor: 'nesw-resize'},
+                            {c: 'sw' as BoxCorner, x: box.x, y: box.y + box.h, cursor: 'nesw-resize'},
+                            {c: 'se' as BoxCorner, x: box.x + box.w, y: box.y + box.h, cursor: 'nwse-resize'},
+                        ].map(h => (
                             <rect
+                                key={`cresize-${container.stableid}-${h.c}`}
                                 className="vimipad-container-resize"
-                                x={box.x + box.w - 12}
-                                y={box.y + box.h - 12}
+                                x={h.x - 6}
+                                y={h.y - 6}
                                 width={12}
                                 height={12}
                                 rx={2}
                                 fill="rgba(84, 110, 122, 0.5)"
-                                style={{cursor: 'nwse-resize', touchAction: 'none'}}
-                                onPointerDown={e => beginContainerDrag(e, 'resize', container.stableid, stored)}
+                                style={{cursor: h.cursor, touchAction: 'none'}}
+                                onPointerDown={e => beginContainerDrag(e, 'resize', container.stableid, stored, h.c)}
                                 onPointerMove={onContainerDragMove}
                                 onPointerUp={onContainerDragUp}
                             />
+                        )))}
+                        {/* T4: format toolbar for a selected container — same shape,
+                          * fill, text and delete controls as a node. */}
+                        {cselected && editable && !renaming && props.onUpdateContainerStyle && (
+                            <foreignObject
+                                x={box.x}
+                                y={box.y - 52}
+                                width={320}
+                                height={48}
+                                style={{overflow: 'visible', pointerEvents: 'none'}}
+                            >
+                                <div style={{pointerEvents: 'auto', display: 'inline-block'}}>
+                                    <NodeFormatToolbar
+                                        kind="node"
+                                        target={{metadatajson: container.metadatajson}}
+                                        profile={profile}
+                                        formconfig={formconfig}
+                                        disabled={disabled}
+                                        onChangeStyle={m => props.onUpdateContainerStyle?.(container.stableid, m)}
+                                        onDelete={() => props.onDeleteContainer?.(container.stableid)}
+                                        onEditText={() => startRenameContainer(container.stableid, container.label)}
+                                        t={t}
+                                    />
+                                </div>
+                            </foreignObject>
                         )}
                     </g>
                 );

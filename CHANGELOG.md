@@ -4,7 +4,7 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.23** (2026072737).
+> release is **0.6.24** (2026072738).
 
 ## 0.6.23 (2026072737) — T5: re-arrange keeps container membership
 
@@ -23,6 +23,49 @@
   (with a minimum-size clamp); 6 tests. Pure frontend — 210 `mod_vimipad` + 97
   `vimipadassess` unchanged; phpcs clean; **Jest 36 suites / 230 tests**; bundle
   reproducible. The felt result needs a browser.
+
+## 0.6.24 (2026072738) — T4: containers format and label like nodes
+
+- Containers now carry the **same style model as nodes** — shape (rounded rect,
+  rect, ellipse), fill colour and text styling (colour, bold, italic) — stored in
+  their `metadatajson`. A selected container shows the same format toolbar a node
+  does (shape, fill, text, delete), and its label is edited inline by
+  double-clicking the title. With no style set a container keeps its default
+  dashed look; once styled it renders as a shaped, filled box.
+- **Four-corner resize.** Containers previously resized from a single
+  bottom-right handle; they now have handles on all four corners like nodes, each
+  keeping the opposite corner fixed. New pure helper `resizeBoxCorner`
+  (nw/ne/sw/se, minimum-size clamped, opposite edge anchored).
+- The backend already accepts `label`, `geometryjson` and `metadatajson` on
+  `container_update`; this change wires the frontend to it and confirms the path.
+- **Verification:** new `container_style_test` (create with shape+fill+text, then
+  re-style via `container_update`, and confirm renaming does not clear the style)
+  and 5 `resizeBoxCorner` tests. **211 `mod_vimipad`** (+1) + **97
+  `vimipadassess`** green; phpcs + phpcpd + stylelint clean; lang 435/435; **Jest
+  37 suites / 237 tests**; bundle reproducible. The visual result needs a browser.
+- With this, the whole A1–A6 / T1–T6 issue set is addressed.
+
+## 0.6.23 (2026072737) — T5: re-arrange keeps container membership; CI stylelint fix
+
+- **T5.** "Re-arrange" recomputes node positions from the graph and previously
+  ignored containers, so a node that sat inside a container could end up outside
+  it. Re-arrange now snapshots which nodes are inside each container (spatially,
+  by centre), computes the new layout, then refits each non-empty container to
+  the bounding box of its members' new positions (plus padding). Members stay
+  inside and the container follows them; empty containers are left in place. The
+  node move and every container refit go into a single undo/redo entry, so one
+  undo restores both the layout and the container boxes.
+- New pure helpers `centerInBox` and `boundingBox` in `canvas/container_geometry.ts`
+  (the latter clamps to the minimum container size); 6 unit tests cover
+  membership detection, the padded fit, minimum-size clamping and the empty case.
+- **CI stylelint fix.** `styles.css` used `margin-right: 0 !important` to override
+  Bootstrap's `mr-2` on the add-menu fields, which trips `declaration-no-important`.
+  The `mr-2` classes are dropped from the markup (the flex `gap` already spaces
+  them) and the `!important` rule is removed. Verified with Moodle's stylelint
+  config locally.
+- **Verification:** 210 `mod_vimipad` + 97 `vimipadassess` green (T5 is
+  frontend-only); phpcs + stylelint clean; **Jest 36 suites / 232 tests**;
+  bundle reproducible. The visual result of the refit needs a browser.
 
 ## 0.6.22 (2026072736) — T3: offer lock mode to learners (activity setting)
 
