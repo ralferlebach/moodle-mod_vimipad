@@ -4,7 +4,26 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.2** (2026072716).
+> release is **0.6.3** (2026072717).
+
+## 0.6.3 (2026072717) — teacher map-constraint fields (submission gate goes live)
+
+Gives the 0.6.2 constraint engine its input: teachers can now define the map
+requirements, and the hard submission gate enforces them from real settings.
+
+- **Five new instance settings** on `mod_form` (own "Map requirements" section):
+  required concepts, forbidden concepts, allowed relation types (free-text,
+  one per line or comma-separated) and minimum concepts / minimum relations.
+  Added to `db/install.xml`, `db/upgrade.php` (savepoint 2026072717, guarded
+  `add_field`s) and the backup element list; restore is automatic. Since
+  `constraint_config::from_instance()` already read these fields, the 0.6.2
+  submission gate activates with no further wiring.
+- New lang strings for the section, labels and help (en/de, 418/418 parity).
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **193 `mod_vimipad`**
+  **+ 97 `vimipadassess`** green; `backup_restore_test` extended to assert the
+  five new fields survive a backup/restore roundtrip; a new gate test confirms
+  the block fires from settings saved through the form; phpcs clean; install.xml
+  well-formed and the upgrade savepoint matches version.php.
 
 ## 0.6.2 (2026072716) — constraint-policy engine + hard submission gate
 

@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.6.2 — constraint-policy engine (config + resolver + report) and hard submission gate wired into create_submission; fully unit-tested for all constraint kinds. Teacher-facing constraint fields land next (0.6.3). 192 mod_vimipad + 97 vimipadassess green on real Moodle 4.5.**
+**Development status: 0.6.3 — teacher-facing map-constraint fields (required/forbidden concepts, allowed relation types, minimum concepts/relations) added to the form, schema, upgrade path and backup; the 0.6.2 submission gate is now active from real settings. 193 mod_vimipad + 97 vimipadassess green on real Moodle 4.5.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

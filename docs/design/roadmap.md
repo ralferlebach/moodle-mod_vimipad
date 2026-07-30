@@ -78,11 +78,13 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 
 ## 0.6.x — Autoren-Werkzeuge & Import/Export-Integration
 
-> **Status: ◐ Grundlage gelegt (0.6.0-alpha1).** Der Backend-Vertrag steht:
-> Container-/Membership-Operationen (`operation_type`/`operation_service`) und
-> voller Import-Round-Trip von Containern/Memberships. Offen: die Oberflächen
-> (Container zeichnen, Template-Autorenwerkzeug) und die Umsetzung der
-> Template-/Constraint-Policy (`template_constraint_policy.md`).
+> **Status: ◐ Grundlage gelegt (0.6.1–0.6.3).** Backend-Vertrag: Container-/
+> Membership-Operationen + voller Import-Round-Trip (0.6.1). Constraint-Policy:
+> Engine + hartes Abgabe-Gate (0.6.2) und die Lehrenden-Eingabefelder
+> (Pflicht-/Verbotsbegriffe, erlaubte Typen, Mindestumfang) in Form/Schema/
+> Backup (0.6.3) → **Gate produktiv aktiv**. Offen: die Canvas-Oberflächen
+> (Container zeichnen, Template-Autorenwerkzeug), weiche Edit-Zeit-Hinweise und
+> die Template-Struktursperren aus `template_constraint_policy.md`.
 
 - Vorlagen/Templates durch Lehrende mit einschränkbaren Änderungen
 - Hintergründe zeichnen (Kästen/Abschnitte/Container auf dem Canvas) — Backend

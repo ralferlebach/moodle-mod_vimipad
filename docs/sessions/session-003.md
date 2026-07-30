@@ -86,6 +86,17 @@
 - Eingabefelder (Schema/Form/Backup) fuer die qualitativen Constraints -> 0.6.3
   (dann bekommt das Gate produktiv Zaehne).
 
+**0.6.3 - Constraint-Eingabefelder (Gate wird produktiv scharf)**
+- 5 Instanzfelder: requiredconcepts, forbiddenconcepts, allowedrelationtypes
+  (Textareas), minnodes, minrelations (Zahl) - in `mod_form` (eigene Sektion
+  "Vorgaben an die Map"), `db/install.xml`, `db/upgrade.php` (Savepoint
+  2026072717, guarded `add_field`) und Backup-Feldliste; Restore automatisch.
+- `constraint_config::from_instance` las diese Felder bereits -> das 0.6.2-Gate
+  ist ohne weitere Verdrahtung produktiv aktiv.
+- Lang: Sektion + 5 Labels + 5 _help (en/de 418/418).
+- `backup_restore_test` prueft jetzt den Round-Trip der 5 Felder;
+  neuer Gate-Test aus real gespeicherten Einstellungen.
+
 ---
 
 ### Entscheidungen getroffen
@@ -132,7 +143,7 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 192 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 193 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
           betroffene Service-Tests einzeln grün (operation/snapshot/workspace/import/consensus/collab/reconstruction/layout)
 PHPCS:    OK — 0 auf allen geänderten/neuen Dateien (moodle-Standard, severity=1)
 Frontend: tsc 0 · Jest 22 Suites/147 · Bundle reproduzierbar (Vorbereitungsrunde)
@@ -143,7 +154,7 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072716 / 0.6.2, package.json + lock (0.6.0-alpha1 rueckwirkend = 0.6.1).
+- [x] Version konsistent: version.php 2026072717 / 0.6.3, package.json + lock; Savepoint == version.
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -153,15 +164,17 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.6.2 — 0.5.x abgeschlossen; 0.6-Autoren-Grundlage steht: Container-/Membership-
-> Operationen + Import-Round-Trip (0.6.1); Constraint-Policy-Engine + hartes
-> Abgabe-Gate (0.6.2). Real auf Moodle 4.5.12 verifiziert (192+97 grün).
+> 0.6.3 — 0.5.x abgeschlossen; 0.6-Autoren-Grundlage steht: Container-Ops +
+> Import-Round-Trip (0.6.1); Constraint-Engine + Abgabe-Gate (0.6.2); Lehrenden-
+> Constraint-Felder in Form/Schema/Backup (0.6.3) -> Gate produktiv aktiv.
+> Real auf Moodle 4.5.12 verifiziert (193+97 grün).
 
 **Zuletzt abgeschlossen:**
-> 0.6.1 Container-Ops + Import-Round-Trip; 0.6.2 Constraint-Engine + Abgabe-Gate
-> (in create_submission, alle Constraint-Arten getestet). Konvention: 0.6.x ohne
-> alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
+> 0.6.1 Container-Ops + Import-Round-Trip; 0.6.2 Constraint-Engine + Gate; 0.6.3
+> Constraint-Eingabefelder (Gate produktiv). Konvention: 0.6.x ohne alpha-Suffix;
+> 0.6.0-alpha1-Paket = 0.6.1.
 
 **Als nächstes geplant:**
-> 0.6.3: Lehrenden-Eingabefelder fuer Constraints (Schema/Form/Backup) -> Gate
-> produktiv. Danach Container auf dem Canvas zeichnen und Template-Editor.
+> Container auf dem Canvas zeichnen (Frontend) und der Template-Editor mit
+> `locked`/`editable`-Struktursperren; dazu weiche Edit-Zeit-Constraint-Hinweise
+> (gleicher Resolver).

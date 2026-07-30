@@ -174,4 +174,40 @@ final class constraint_policy_test extends \advanced_testcase {
         $this->assertNotNull($result['snapshot']);
         $this->assertEquals(1, $DB->get_field('vimipad_workspace', 'locked', ['id' => $wsid]));
     }
+
+    /**
+     * The gate reads constraints saved on the real instance (form -> DB ->
+     * config), not just injected properties.
+     *
+     * @return void
+     */
+    public function test_gate_uses_saved_instance_settings(): void {
+        $this->resetAfterTest();
+        global $DB;
+
+        $course = $this->getDataGenerator()->create_course();
+        $created = $this->getDataGenerator()->create_module('vimipad', [
+            'course' => $course->id,
+            'minnodes' => 3,
+        ]);
+        // Re-read the instance from the database so we exercise the saved value.
+        $instance = $DB->get_record('vimipad', ['id' => $created->id], '*', MUST_EXIST);
+        $this->assertSame(3, (int) $instance->minnodes);
+        $context = \context_module::instance($created->cmid);
+
+        $now = time();
+        $wsid = (int) $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
+            'currentrevision' => 1, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('vimipad_node', (object) [
+            'workspaceid' => $wsid, 'stableid' => 'node_aaaaaaaaaaaa', 'type' => 'concept', 'label' => 'Only one',
+            'contentformat' => FORMAT_HTML, 'createdby' => 1, 'modifiedby' => 1,
+            'timecreated' => $now, 'timemodified' => $now, 'deleted' => 0,
+        ]);
+        $workspace = $DB->get_record('vimipad_workspace', ['id' => $wsid], '*', MUST_EXIST);
+
+        $this->expectException(\moodle_exception::class);
+        (new snapshot_service())->create_submission($instance, $workspace, $context, 1);
+    }
 }
