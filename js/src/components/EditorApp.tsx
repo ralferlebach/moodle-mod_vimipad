@@ -29,6 +29,8 @@
 import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
+import {nodeHeight, nodeWidth} from '../canvas/node_geometry';
+import {boundingBox, centerInBox, ContainerBox, parseGeometry, serializeGeometry} from '../canvas/container_geometry';
 import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg, extractMapData} from '../canvas/svg_export';
 import {EditorState, reduce} from '../store/reducer';
 import {History, HistoryEntry, OpSpec} from '../store/history';
@@ -710,18 +712,80 @@ export function EditorApp(props: Props): React.ReactElement {
     const reArrangeLayout = useCallback(async () => {
         const prevPos = stored;
         const auto = computeLayout(state.nodes, {}, state.relations, state.profile);
+
+        // T5: keep container membership across re-arrange. Snapshot which nodes
+        // sit inside each container now, then, after the new layout, refit each
+        // container around its members' new positions so a node that was inside
+        // stays inside (and the container follows its members).
+        const containers = state.containers ?? [];
+        const CONTAINER_REFIT_PAD = 24;
+        const boxOf = (id: string, at: LayoutMap): ContainerBox => {
+            const pos = at[id] ?? {x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2};
+            const node = state.nodes.find(n => n.stableid === id);
+            const w0 = node ? nodeWidth(node.label) : 70;
+            const size = sizes[id] ?? {w: w0, h: node ? nodeHeight(node.label, w0) : 40};
+            return {x: pos.x - size.w / 2, y: pos.y - size.h / 2, w: size.w, h: size.h};
+        };
+        const refits: Array<{stableid: string; oldgeom: string; newgeom: string}> = [];
+        for (const c of containers) {
+            const box = parseGeometry(c.geometryjson);
+            if (!box) {
+                continue;
+            }
+            const members = state.nodes
+                .filter(n => stored[n.stableid] && centerInBox(stored[n.stableid], box))
+                .map(n => n.stableid);
+            if (members.length === 0) {
+                continue; // Empty container: leave it where it is.
+            }
+            const fit = boundingBox(members.map(id => boxOf(id, auto)), CONTAINER_REFIT_PAD);
+            if (!fit) {
+                continue;
+            }
+            const newgeom = serializeGeometry(fit);
+            const oldgeom = c.geometryjson ?? serializeGeometry(box);
+            if (newgeom !== oldgeom) {
+                refits.push({stableid: c.stableid, oldgeom, newgeom});
+            }
+        }
+
         setStored(auto);
+        refits.forEach(u => dispatch({kind: 'updateContainer', stableid: u.stableid, geometryjson: u.newgeom}));
         try {
             await api.saveLayout(state.workspaceid, encodeLayout(auto, sizes));
+            let revision = revisionRef.current;
+            for (const u of refits) {
+                const res = await api.applyOperation(
+                    stateRef.current.workspaceid, revision, 'container_update',
+                    {stableid: u.stableid, geometryjson: u.newgeom}
+                );
+                revision = res.revision;
+            }
+            if (refits.length > 0) {
+                revisionRef.current = revision;
+                dispatch({kind: 'setRevision', revision});
+            }
             pushHistory({
-                undo: [{type: '__layout', payload: {positions: prevPos, sizes}}],
-                redo: [{type: '__layout', payload: {positions: auto, sizes}}],
+                undo: [
+                    {type: '__layout', payload: {positions: prevPos, sizes}},
+                    ...refits.map(u => ({
+                        type: 'container_update', payload: {stableid: u.stableid, geometryjson: u.oldgeom},
+                    })),
+                ],
+                redo: [
+                    {type: '__layout', payload: {positions: auto, sizes}},
+                    ...refits.map(u => ({
+                        type: 'container_update', payload: {stableid: u.stableid, geometryjson: u.newgeom},
+                    })),
+                ],
             });
             announce(t('editor:rearrange'));
         } catch (e) {
             setError((e as Error).message);
+            await load();
         }
-    }, [api, state.workspaceid, state.nodes, state.relations, state.profile, stored, sizes, pushHistory, announce, t]);
+    }, [api, state.workspaceid, state.nodes, state.relations, state.profile, state.containers,
+        stored, sizes, pushHistory, announce, t, load]);
 
     const onNodeResized = useCallback(async (stableid: string, size: Size) => {
         const prevSizes = sizes;

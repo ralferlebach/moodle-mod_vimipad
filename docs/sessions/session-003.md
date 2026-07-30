@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.22** (2026072736)
+**Bogen:** 0.5.32 (2026072712) → **0.6.23** (2026072737)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -361,6 +361,17 @@
 - Merke: Schemaaenderung wird von PHPUnit-init nur bei Versionssprung neu
   gebaut - version.php zuerst hochziehen.
 
+**0.6.23 - T5: Neu-Ausrichten erhaelt Container-Zugehoerigkeit**
+- Bisher layoutete Re-Arrange nur nach Graphstruktur und ignorierte Container ->
+  Mitglieder verstreuten sich, Box blieb stehen.
+- Jetzt: vor dem Layout raeumlich schnappen, welche Nodes in welchem Container
+  sind (Mittelpunkt in Box = zugehoerig; keine separate Zuweisung noetig). Nach
+  dem Layout jeden nicht-leeren Container auf die Bounding-Box seiner Mitglieder
+  (+ Pad 24) refitten -> Mitglieder bleiben drin, Container folgt. Leere bleiben.
+- Refit im selben Undo/Redo-Eintrag wie das Layout (ein Undo stellt beides her).
+- Reine Helfer centerInBox + boundingBox (mit Min-Size-Clamp); 6 Tests.
+  Rein Frontend: 210+97 unveraendert; phpcs clean; Jest 36/230; reproduzierbar.
+
 **0.6.12 - SVG/PNG-Export inkl. Container + SVG-Round-Trip-Import**
 - computeContentBounds bezieht Container-Boxen in die Export-viewBox ein (Container
   ausserhalb der Nodes wird nicht mehr beschnitten); Container-Chrome (Delete/
@@ -427,7 +438,7 @@ PHPUnit:  OK - 210 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + Post
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
 Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
-Frontend: tsc 0 · Jest 35 Suites/224 · esbuild- UND AMD-Bundle byte-reproduzierbar
+Frontend: tsc 0 · Jest 36 Suites/230 · esbuild- UND AMD-Bundle byte-reproduzierbar
 Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ```
 
@@ -435,7 +446,7 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072736 / 0.6.22, package.json + lock (inkl. Frontend).
+- [x] Version konsistent: version.php 2026072737 / 0.6.23, package.json + lock (inkl. Frontend).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.

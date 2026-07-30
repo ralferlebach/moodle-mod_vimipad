@@ -4,7 +4,25 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.22** (2026072736).
+> release is **0.6.23** (2026072737).
+
+## 0.6.23 (2026072737) — T5: re-arrange keeps container membership
+
+- Re-arrange laid out nodes by graph structure and ignored containers, so a
+  container's member nodes scattered and the box stayed put — the visual grouping
+  broke.
+- Now, before re-layout, the nodes spatially inside each container are recorded
+  (a node belongs to a container when its centre is within the box, matching what
+  the user sees — there is no separate assignment step). After the new layout each
+  non-empty container is refitted to the bounding box of its members' new
+  positions (plus padding), so members stay inside and the container follows them.
+  Empty containers are left where they are.
+- The refit rides in the same undo/redo entry as the layout change: one
+  re-arrange, one undo restores both node positions and container geometry.
+- New pure helpers `centerInBox` and `boundingBox` in `canvas/container_geometry`
+  (with a minimum-size clamp); 6 tests. Pure frontend — 210 `mod_vimipad` + 97
+  `vimipadassess` unchanged; phpcs clean; **Jest 36 suites / 230 tests**; bundle
+  reproducible. The felt result needs a browser.
 
 ## 0.6.22 (2026072736) — T3: offer lock mode to learners (activity setting)
 

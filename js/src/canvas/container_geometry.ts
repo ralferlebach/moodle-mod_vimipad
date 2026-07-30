@@ -147,3 +147,48 @@ export function resizeBox(box: ContainerBox, dx: number, dy: number): ContainerB
         h: Math.max(MIN_CONTAINER_SIZE, box.h + dy),
     };
 }
+
+/**
+ * Whether a point lies within a container box (inclusive of the border).
+ *
+ * @param center The point (a node's centre).
+ * @param box The container box.
+ * @returns True if the point is inside the box.
+ */
+export function centerInBox(center: Point, box: ContainerBox): boolean {
+    return center.x >= box.x && center.x <= box.x + box.w
+        && center.y >= box.y && center.y <= box.y + box.h;
+}
+
+/**
+ * The bounding box of a set of boxes, expanded by a uniform padding and clamped
+ * to the minimum container size. Returns null for an empty set.
+ *
+ * Used by re-arrange to refit a container around its (now relocated) member
+ * nodes, so a node that was inside the container stays inside after re-layout.
+ *
+ * @param boxes The member boxes.
+ * @param pad The padding to add on every side.
+ * @returns The padded bounding box, or null if there are no boxes.
+ */
+export function boundingBox(boxes: ContainerBox[], pad: number): ContainerBox | null {
+    if (boxes.length === 0) {
+        return null;
+    }
+    let minx = Infinity;
+    let miny = Infinity;
+    let maxx = -Infinity;
+    let maxy = -Infinity;
+    for (const b of boxes) {
+        minx = Math.min(minx, b.x);
+        miny = Math.min(miny, b.y);
+        maxx = Math.max(maxx, b.x + b.w);
+        maxy = Math.max(maxy, b.y + b.h);
+    }
+    return normalizeBox({
+        x: minx - pad,
+        y: miny - pad,
+        w: Math.max(MIN_CONTAINER_SIZE, (maxx - minx) + 2 * pad),
+        h: Math.max(MIN_CONTAINER_SIZE, (maxy - miny) + 2 * pad),
+    });
+}

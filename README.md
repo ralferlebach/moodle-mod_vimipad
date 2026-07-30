@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.6.22 — new activity setting lets teachers offer lock mode to learners too (default off; off = only teachers manage locks, on = cooperative locking). Schema + backup + get_workspace + frontend gating. 210 mod_vimipad + 97 vimipadassess green; tsc + Jest (35 suites/224) green.**
+**Development status: 0.6.23 — re-arrange now preserves container membership: nodes spatially inside a container stay inside afterwards, because each container is refitted around its members' new positions (one combined undo). 210 mod_vimipad + 97 vimipadassess green; tsc + Jest (36 suites/230) green.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.
