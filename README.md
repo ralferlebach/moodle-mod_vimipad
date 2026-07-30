@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.6.15 — UI cleanup: author tools moved from below the canvas into the canvas toolbar (container button between re-arrange and export; lock-mode toggle grouped with full view), element locking now happens in the element dock, the colour sub-menu is gone (reset is a third action inside the picker), confirm buttons read as outline-success. Also fixes the stale AMD build that made raw string keys appear. 207 mod_vimipad + 97 vimipadassess green; tsc + Jest (31 suites/189) green, both bundles reproducible.**
+**Development status: 0.6.16 — pointer-to-canvas mapping fixed: it now honours preserveAspectRatio instead of assuming the viewBox fills the element, so cursor position and drag speed match the canvas again. Builds on the 0.6.15 UI cleanup. 207 mod_vimipad + 97 vimipadassess green; tsc + Jest (32 suites/195) green.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

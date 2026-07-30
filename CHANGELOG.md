@@ -4,7 +4,32 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.15** (2026072729).
+> release is **0.6.16** (2026072730).
+
+## 0.6.16 (2026072730) — A1: pointer mapping now honours the aspect ratio
+
+- **Root cause.** The canvas `<svg>` carries a viewBox but no
+  `preserveAspectRatio`, so the browser applies the default `xMidYMid meet`:
+  uniform scale plus centring. The screen-to-canvas conversion instead divided by
+  the element's width and height separately, i.e. it assumed the viewBox was
+  stretched to fill the element. That produced a wrong offset *and* a wrong
+  scale, differing per axis — the pointer drifted from the cursor and drags ran
+  at the wrong speed. In a reported session (element 1138x213, viewBox 826x551)
+  the horizontal scale was off by a factor of ~3.6; even on a normal-height
+  window `max-height: 60vh` keeps the element shorter than the viewBox implies,
+  so the error is present in everyday use too.
+- **Fix.** `toSvgPoint` now uses the browser's own `getScreenCTM().inverse()`,
+  which also accounts for CSS transforms on ancestors (full view). A new pure
+  module `canvas/viewport.ts` replicates the `meet` mapping as a fallback for
+  environments without a CTM (jsdom, tests).
+- **Tests** pin the mapping to the real reported geometry: uniform scale, centre
+  maps to centre, a 100 px drag equals 100/scale viewBox units, and an explicit
+  assertion that the previous stretch assumption was off by more than 3.5x.
+- Affects selecting, moving, resizing and drawing connectors alike, since they
+  all go through the same conversion.
+- **Verification:** 207 `mod_vimipad` + 97 `vimipadassess` green; phpcs clean;
+  `tsc` clean; **Jest 32 suites / 195 tests**; bundles reproducible. The felt
+  behaviour needs confirming in a browser.
 
 ## 0.6.15 (2026072729) — UI cleanup: toolbar author tools, lock mode, colour menu
 

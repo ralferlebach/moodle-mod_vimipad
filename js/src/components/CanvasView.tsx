@@ -45,6 +45,7 @@ import {useDismiss} from '../hooks/use_dismiss';
 import {parseNodeStyle} from '../canvas/node_style';
 import {boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBox, serializeGeometry} from '../canvas/container_geometry';
 import {isLocked, writeLock} from '../canvas/element_lock';
+import {screenToViewBox} from '../canvas/viewport';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {TextEditMenu} from './TextEditMenu';
 import {FA, Icon} from '../canvas/icons';
@@ -306,12 +307,20 @@ export function CanvasView(props: Props): React.ReactElement {
         if (!svg) {
             return {x: 0, y: 0};
         }
+        // Prefer the browser's own matrix: it accounts for the viewBox, for
+        // preserveAspectRatio letterboxing and for any CSS transform on an
+        // ancestor (e.g. the full-view wrapper).
+        const ctm = typeof svg.getScreenCTM === 'function' ? svg.getScreenCTM() : null;
+        if (ctm) {
+            const pt = svg.createSVGPoint();
+            pt.x = clientX;
+            pt.y = clientY;
+            const local = pt.matrixTransform(ctm.inverse());
+            return {x: local.x, y: local.y};
+        }
+        // Fallback (no CTM available, e.g. in jsdom): replicate "xMidYMid meet".
         const rect = svg.getBoundingClientRect();
-        const v = viewRef.current;
-        return {
-            x: v.x + (clientX - rect.left) / rect.width * v.w,
-            y: v.y + (clientY - rect.top) / rect.height * v.h,
-        };
+        return screenToViewBox({x: clientX, y: clientY}, rect, viewRef.current);
     }, []);
 
     // Container drawing (isolated from the node/connect pointer state machine:

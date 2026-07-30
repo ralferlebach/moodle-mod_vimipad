@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.15** (2026072729)
+**Bogen:** 0.5.32 (2026072712) → **0.6.16** (2026072730)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -265,6 +265,23 @@
 - Offen aus dem Issue-Satz: A1, A3, A6, T3-Restteil (Mod-Setting fuer Lernende),
   T4 (Container formatier-/beschriftbar), T5 (Neu-Ausrichten respektiert Container).
 
+**0.6.16 - A1: Zeiger-Abbildung respektiert das Seitenverhaeltnis**
+- Ursache (aus Ralfs Konsolenwerten belegt): svg hat viewBox, aber kein
+  preserveAspectRatio -> Default xMidYMid meet (uniforme Skalierung + Zentrierung).
+  toSvgPoint teilte aber getrennt durch rect.width/rect.height, nahm also Fuellung
+  an. Folge: falscher Offset UND falsche Skala, je Achse verschieden.
+  Gemessen: Element 1138x213, viewBox 826x551 -> x-Skala um Faktor ~3.6 daneben.
+  max-height:60vh haelt das Element auch normal kuerzer als die viewBox -> Fehler
+  auch im Alltag.
+- Fix: toSvgPoint nutzt getScreenCTM().inverse() (deckt auch CSS-Transforms ab);
+  neues reines Modul canvas/viewport.ts bildet meet nach (Fallback/jsdom).
+- Tests auf die realen Werte gepinnt (Skala, Zentrum, Drag-Geschwindigkeit,
+  Nachweis des >3.5x-Fehlers der alten Rechnung).
+- Verifiziert: 207+97; phpcs clean; tsc clean; Jest 32/195.
+- Beobachtung fuer spaeter: view-Aspekt ist fest an CANVAS-Seitenverhaeltnis
+  gekoppelt -> Letterbox-Raender. Anpassung an das Element-Seitenverhaeltnis
+  waere eine reine UX-Verbesserung, aber ohne Browser-Sicht riskant.
+
 **0.6.12 - SVG/PNG-Export inkl. Container + SVG-Round-Trip-Import**
 - computeContentBounds bezieht Container-Boxen in die Export-viewBox ein (Container
   ausserhalb der Nodes wird nicht mehr beschnitten); Container-Chrome (Delete/
@@ -331,7 +348,7 @@ PHPUnit:  OK - 207 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + Post
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
 Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
-Frontend: tsc 0 · Jest 31 Suites/189 · esbuild- UND AMD-Bundle byte-reproduzierbar
+Frontend: tsc 0 · Jest 32 Suites/195 · esbuild- UND AMD-Bundle byte-reproduzierbar
 Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ```
 
@@ -339,7 +356,7 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072729 / 0.6.15, package.json + lock (inkl. Frontend).
+- [x] Version konsistent: version.php 2026072730 / 0.6.16, package.json + lock (inkl. Frontend).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
