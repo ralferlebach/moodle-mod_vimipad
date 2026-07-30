@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.17** (2026072731)
+**Bogen:** 0.5.32 (2026072712) → **0.6.21** (2026072735)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -299,6 +299,53 @@
 - makefile von Ralf uebernommen (check ruft jetzt build -> haette T1 gefangen).
 - Verifiziert: Jest 33/207; 207+97; phpcs/phpcpd clean; Bundles reproduzierbar.
 
+**0.6.18 - A6: Enter erzeugt Zeile statt Spalte**
+- Zwei Fehler zusammen: (1) das contentEditable trug labelBox(...) mit
+  display:flex (row); Browser fuegen bei Enter je Zeile einen Block ein -> jeder
+  Block wurde Flex-Item -> Zeilen nebeneinander = Spalten. Jetzt traegt ein
+  Wrapper das Flex-Zentrieren, das editierbare Element bleibt Block.
+  (2) onInput las textContent -> Blockgrenzen verschluckt ("A⏎B" -> "AB"),
+  Umbrueche wurden nie gespeichert. Neues canvas/editable_text.ts laeuft den
+  Baum ab und macht Blockgrenzen/<br> zu echten \n.
+- nodeWidth/nodeHeight splitten laengst an \n - sie sahen nur nie eines; die
+  Box waechst jetzt beim Tippen mit.
+- 8 neue Tests (br, div-je-Zeile, verschachtelte Inline-Formate, p, leer, plus
+  Nachweis dass textContent die Umbrueche verliert). Jest 34/215; 207+97.
+- Bekannt rau: nodeHeight schaetzt ~7px/Zeichen fix -> mit A+ vergroesserter
+  Schrift kann Text weiter ueberlaufen. Bewusst nicht geraten.
+
+**0.6.19 - Verbinder-Labels folgen dem eigenen Parallel-Verbinder**
+- Ursache: Label-Ebene berechnete den Anker als Mitte der Node-ZENTREN
+  (positionOf) - eigener Pfad, der die Kanten-Anker und den Sibling-Versatz aus
+  0.6.17 nie sah. Alle Labels eines Mehrfach-Paars landeten auf der Mittellinie.
+- Fix: Label-Ebene leitet dieselben Kanten-Anker und denselben siblingOffsets-
+  Slot ab wie die Linien-Ebene und setzt das Label per labelPoint auf den
+  Kurvengipfel. Jedes Label auf seinem Verbinder; Einzelrelation bleibt mittig.
+- 3 neue Tests. Jest 34/218; 207+97; phpcs clean.
+- Env-Fallstrick dokumentiert: init.php self-updatet Composer -> 503 bricht ab;
+  --no-composer-self-update nutzen.
+
+**0.6.20 - Hinzufuegen-Menues zweizeilig**
+- Add concept / Add relation nutzten Bootstrap form-inline (alles in einer Zeile).
+  Jetzt gestapelt: Legende Zeile 1, Bedienelemente in eigener flex-Zeile
+  (vimipad-control-line, umbricht bei Enge). mr-2 durch gap ersetzt.
+- Nur Markup/CSS. Jest 34/218; 207+97; phpcs clean.
+
+**0.6.21 - Fix "klebender" Node beim zweiten Klick**
+- Symptom: Node anklicken, warten, erneut klicken -> Node folgt dem Zeiger ohne
+  gedrueckte Taste; genau einmal, danach normal.
+- Ursache: onNodePointerDown awaitete den Kollaborations-Lock (beginEdit,
+  Netzwerk) VOR setPointerCapture/setDragId. Beim ersten Mal nach Pause ist der
+  Lock nicht warm -> await gibt einen Tick frei; wird der Pointer in der Luecke
+  losgelassen, laeuft onPointerUp bei dragId===null und raeumt nichts auf. Node
+  bleibt scharf -> naechstes blosses pointermove verschiebt sie. Naechstes
+  pointerup nullt dragId -> tritt danach nicht mehr auf.
+- Fix: Drag UND Resize-Handle (gleiche Race) armen jetzt synchron; Lock im
+  Hintergrund, bricht den Drag nur ab wenn verweigert und noch keine Bewegung.
+  onPointerCancel/onLostPointerCapture raeumen immer auf.
+- Reines Modul canvas/drag_arm.ts + 6 Tests (inkl. reproduzierter Race).
+  Jest 35/224; 207+97; phpcs clean.
+
 **0.6.12 - SVG/PNG-Export inkl. Container + SVG-Round-Trip-Import**
 - computeContentBounds bezieht Container-Boxen in die Export-viewBox ein (Container
   ausserhalb der Nodes wird nicht mehr beschnitten); Container-Chrome (Delete/
@@ -365,7 +412,7 @@ PHPUnit:  OK - 207 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + Post
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
 Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
-Frontend: tsc 0 · Jest 33 Suites/207 · esbuild- UND AMD-Bundle byte-reproduzierbar
+Frontend: tsc 0 · Jest 35 Suites/224 · esbuild- UND AMD-Bundle byte-reproduzierbar
 Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ```
 
@@ -373,7 +420,7 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072731 / 0.6.17, package.json + lock (inkl. Frontend).
+- [x] Version konsistent: version.php 2026072735 / 0.6.21, package.json + lock (inkl. Frontend).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.

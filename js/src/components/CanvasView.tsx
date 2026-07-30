@@ -46,7 +46,8 @@ import {parseNodeStyle} from '../canvas/node_style';
 import {boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBox, serializeGeometry} from '../canvas/container_geometry';
 import {isLocked, writeLock} from '../canvas/element_lock';
 import {screenToViewBox} from '../canvas/viewport';
-import {freeConnectorPath, offsetAnchors, siblingOffsets} from '../canvas/connection_geometry';
+import {editableToText} from '../canvas/editable_text';
+import {freeConnectorPath, labelPoint, offsetAnchors, siblingOffsets} from '../canvas/connection_geometry';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {TextEditMenu} from './TextEditMenu';
 import {FA, Icon} from '../canvas/icons';
@@ -246,6 +247,14 @@ export function CanvasView(props: Props): React.ReactElement {
     const [moved, setMoved] = useState(false);
     const [resizeId, setResizeId] = useState<string | null>(null);
     const [resizeSize, setResizeSize] = useState<Size | null>(null);
+    // Refs mirror the drag state so the async lock callback and the
+    // lost-capture/cancel handlers read live values rather than a stale closure.
+    const dragIdRef = useRef<string | null>(null);
+    const movedRef = useRef(false);
+    const resizeIdRef = useRef<string | null>(null);
+    useEffect(() => { dragIdRef.current = dragId; }, [dragId]);
+    useEffect(() => { movedRef.current = moved; }, [moved]);
+    useEffect(() => { resizeIdRef.current = resizeId; }, [resizeId]);
     const [interaction, dispatchInteraction] = useReducer(interactionReduce, initialInteraction);
     const [editValue, setEditValue] = useState('');
     const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -475,18 +484,28 @@ export function CanvasView(props: Props): React.ReactElement {
         if (disabled || lockedByOther(stableid)) {
             return;
         }
-        // Lock on drag-start: only proceed if we secure the lease.
-        if (beginEdit) {
-            const granted = await beginEdit('node', stableid);
-            if (!granted) {
-                return;
-            }
-        }
+        // Start the drag synchronously: capture the pointer and arm the drag in
+        // the same event turn, BEFORE any await. Doing the collaboration lock
+        // first (an async round-trip) meant setDragId ran a tick later — if the
+        // pointer was already released in that gap, onPointerUp ran while dragId
+        // was still null and never cleared it, so the node stayed armed and then
+        // "moved" on a later bare pointermove. The lock is acquired optimistically
+        // in the background; if it is refused, we cancel the in-flight drag.
         event.preventDefault();
         (event.target as Element).setPointerCapture(event.pointerId);
         setDragId(stableid);
         setDragPos(clampToCanvas(positionOf(stableid)));
         setMoved(false);
+        if (beginEdit) {
+            const dragToken = stableid;
+            void beginEdit('node', stableid).then(granted => {
+                if (!granted) {
+                    // Lock refused: drop the drag if it is still the same one and
+                    // has not become an actual move.
+                    setDragId(cur => (cur === dragToken && !movedRef.current ? null : cur));
+                }
+            });
+        }
     }, [disabled, lockedByOther, beginEdit, positionOf]);
 
     const onHandlePointerDown = useCallback(async (
@@ -496,16 +515,20 @@ export function CanvasView(props: Props): React.ReactElement {
         if (disabled || lockedByOther(stableid) || !onNodeResized) {
             return;
         }
-        if (beginEdit) {
-            const granted = await beginEdit('node', stableid);
-            if (!granted) {
-                return;
-            }
-        }
+        // Arm the resize synchronously (same reasoning as onNodePointerDown): the
+        // lock is acquired in the background, never before capture/arming.
         event.preventDefault();
         (event.target as Element).setPointerCapture(event.pointerId);
         setResizeId(stableid);
         setResizeSize(sizeOf(stableid, label));
+        if (beginEdit) {
+            const token = stableid;
+            void beginEdit('node', stableid).then(granted => {
+                if (!granted) {
+                    setResizeId(cur => (cur === token ? null : cur));
+                }
+            });
+        }
     }, [disabled, lockedByOther, onNodeResized, beginEdit, sizeOf]);
 
     const onPointerMove = useCallback((event: React.PointerEvent) => {
@@ -606,6 +629,28 @@ export function CanvasView(props: Props): React.ReactElement {
         setMoved(false);
     }, [connectFrom, connectTo, nodeAt, onCreateRelation,
         resizeId, resizeSize, onNodeResized, dragId, dragPos, moved, onNodeMoved, endEdit]);
+
+    // Safety net: if the pointer capture is lost or the gesture is cancelled
+    // (pointercancel, e.g. a context menu or an interrupted touch), a drag that
+    // was armed but never received its pointerup would otherwise stay latched and
+    // the node would follow the bare cursor. Clear it and release any lock.
+    const abortDrag = useCallback(() => {
+        if (dragIdRef.current !== null) {
+            if (endEdit) {
+                void endEdit('node', dragIdRef.current);
+            }
+            setDragId(null);
+            setDragPos(null);
+            setMoved(false);
+        }
+        if (resizeIdRef.current !== null) {
+            if (endEdit) {
+                void endEdit('node', resizeIdRef.current);
+            }
+            setResizeId(null);
+            setResizeSize(null);
+        }
+    }, [endEdit]);
 
     // Begin dragging a new connection out of a node's connector dock.
     const startConnect = useCallback((event: React.PointerEvent, stableid: string) => {
@@ -936,6 +981,8 @@ export function CanvasView(props: Props): React.ReactElement {
             aria-describedby="vimipad-canvas-desc"
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
+            onPointerCancel={abortDrag}
+            onLostPointerCapture={abortDrag}
             onKeyDown={onKeyDown}
         >
             <title id="vimipad-canvas-title">{t('editor:canvasaria')}</title>
@@ -1175,10 +1222,30 @@ export function CanvasView(props: Props): React.ReactElement {
 
             {/* Layer 2 (middle): connector labels, inline editors and the direction dock. */}
             {state.relations.map(rel => {
-                const from = positionOf(rel.sourceid);
-                const to = positionOf(rel.targetid);
-                const midX = (from.x + to.x) / 2;
-                const midY = (from.y + to.y) / 2;
+                // Anchor the label on the same routed connection as the line layer,
+                // including the parallel-sibling offset, so multi-relation labels
+                // follow their own connector instead of piling on the centre line.
+                const srcNode = state.nodes.find(n => n.stableid === rel.sourceid);
+                const tgtNode = state.nodes.find(n => n.stableid === rel.targetid);
+                const fromC = positionOf(rel.sourceid);
+                const toC = positionOf(rel.targetid);
+                const fromSize = srcNode ? sizeOf(srcNode.stableid, srcNode.label) : {w: 70, h: 40};
+                const toSize = tgtNode ? sizeOf(tgtNode.stableid, tgtNode.label) : {w: 70, h: 40};
+                const isTree = sharedBifurcation;
+                const slot = siblingSlots.get(rel.stableid) ?? {index: 0, count: 1};
+                const slotOffset = siblingOffsets(slot.count, SIBLING_SPACING)[slot.index] ?? 0;
+                const baseFrom = isTree
+                    ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
+                    : edgePoint(fromC, fromSize, toC);
+                const baseTo = isTree
+                    ? {x: toC.x, y: toC.y - toSize.h / 2}
+                    : edgePoint(toC, toSize, fromC);
+                const anchors = isTree ? {from: baseFrom, to: baseTo} : offsetAnchors(baseFrom, baseTo, slotOffset);
+                // The label sits at the curve peak: the midpoint lifted perpendicular
+                // by the sibling offset, matching freeConnectorPath's own bulge.
+                const peak = labelPoint(anchors.from, anchors.to, slotOffset);
+                const midX = peak.x;
+                const midY = peak.y;
                 const editing = isEditing(interaction, 'relation', rel.stableid);
                 return (
                     <g key={`lbl-${rel.stableid}`} className="vimipad-canvas-relation">
@@ -1271,27 +1338,41 @@ export function CanvasView(props: Props): React.ReactElement {
                         )}
                         {editing ? (
                             <foreignObject key={`edit-${node.stableid}`} x={-w / 2} y={-h / 2} width={w} height={h}>
-                                <div
-                                    ref={setEditRef}
-                                    className="vimipad-canvas-edit"
-                                    contentEditable
-                                    suppressContentEditableWarning
-                                    onInput={e => {
-                                        const text = e.currentTarget.textContent ?? '';
-                                        editValueRef.current = text;
-                                        setEditValue(text);
-                                    }}
-                                    onKeyDown={onEditKeyDown}
-                                    onFocus={() => vdbg('node-editor focus', node.stableid)}
-                                    onBlur={() => vdbg('node-editor blur', node.stableid)}
-                                    onPointerDown={e => e.stopPropagation()}
-                                    style={{
-                                        ...labelBox(style.text),
-                                        background: style.text?.background ?? 'transparent',
-                                        outline: 'none',
-                                        cursor: 'text',
-                                    }}
-                                />
+                                {/*
+                                  * The centring wrapper carries the flex layout; the editable
+                                  * element itself must stay a block. As a flex container it
+                                  * would turn each line block the browser inserts on Enter
+                                  * into a flex item, laying the lines out side by side as
+                                  * columns instead of stacking them.
+                                  */}
+                                <div style={labelBox(style.text)}>
+                                    <div
+                                        ref={setEditRef}
+                                        className="vimipad-canvas-edit"
+                                        contentEditable
+                                        suppressContentEditableWarning
+                                        onInput={e => {
+                                            const text = editableToText(e.currentTarget);
+                                            editValueRef.current = text;
+                                            setEditValue(text);
+                                        }}
+                                        onKeyDown={onEditKeyDown}
+                                        onFocus={() => vdbg('node-editor focus', node.stableid)}
+                                        onBlur={() => vdbg('node-editor blur', node.stableid)}
+                                        onPointerDown={e => e.stopPropagation()}
+                                        style={{
+                                            display: 'block',
+                                            width: '100%',
+                                            textAlign: 'center',
+                                            whiteSpace: 'pre-wrap',
+                                            overflowWrap: 'anywhere',
+                                            wordBreak: 'break-word',
+                                            background: style.text?.background ?? 'transparent',
+                                            outline: 'none',
+                                            cursor: 'text',
+                                        }}
+                                    />
+                                </div>
                             </foreignObject>
                         ) : (
                             <foreignObject

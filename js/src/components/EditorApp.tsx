@@ -776,7 +776,7 @@ export function EditorApp(props: Props): React.ReactElement {
     const addNodeControls = (
         <fieldset disabled={disabled} className="vimipad-control">
             <legend className="h6">{t('editor:addnode')}</legend>
-            <div className="form-inline">
+            <div className="vimipad-control-line">
                 <label className="sr-only" htmlFor="vimipad-node-label">{t('editor:nodelabel')}</label>
                 <input
                     id="vimipad-node-label"
@@ -796,7 +796,7 @@ export function EditorApp(props: Props): React.ReactElement {
     const addRelationControls = (
         <fieldset disabled={disabled || state.nodes.length < 2} className="vimipad-control">
             <legend className="h6">{t('editor:addrelation')}</legend>
-            <div className="form-inline">
+            <div className="vimipad-control-line">
                 <label className="sr-only" htmlFor="vimipad-rel-source">{t('editor:subject')}</label>
                 <select
                     id="vimipad-rel-source"

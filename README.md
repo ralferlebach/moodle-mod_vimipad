@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.6.17 — connectors reworked: departure and arrival angles follow the bisector of the node-side perpendicular and the direct line, the path runs straight for the arrow length so heads point the right way, and multiple relations between the same nodes now run parallel. 207 mod_vimipad + 97 vimipadassess green; tsc + Jest (33 suites/207) green.**
+**Development status: 0.6.21 — fixes the 'sticky node' race where a node began moving on a second click without the button held: the drag (and resize) is now armed synchronously and the collaboration lock is acquired in the background, with lost-capture/cancel handlers that always disarm. 207 mod_vimipad + 97 vimipadassess green; tsc + Jest (35 suites/224) green.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

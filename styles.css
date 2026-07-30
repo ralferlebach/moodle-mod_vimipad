@@ -303,6 +303,32 @@
     color: #fff;
 }
 
+/* Each add-menu is stacked: the legend (heading) on its own line, then the
+   controls on a second line. The controls line lays its fields out in a row and
+   is allowed to wrap on narrow widths, but stays visually its own row under the
+   heading. */
+.vimipad-control > legend.h6 {
+    display: block;
+    margin-bottom: 0.4rem;
+}
+
+.vimipad-control-line {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.vimipad-control-line > .form-control {
+    flex: 1 1 auto;
+    min-width: 8rem;
+    margin-right: 0 !important;
+}
+
+.vimipad-control-line > .btn {
+    flex: 0 0 auto;
+}
+
 /* Controls row shown below the canvas / above the list. */
 .vimipad-controls-row {
     display: flex;

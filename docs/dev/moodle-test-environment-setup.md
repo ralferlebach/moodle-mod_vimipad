@@ -397,3 +397,15 @@ done
 ```
 External-Function-Tests MÜSSEN `require_once($CFG->dirroot.'/webservice/tests/helpers.php')`
 enthalten und `externallib_advanced_testcase` aus dem globalen Namespace nutzen.
+
+
+## Fallstrick: Composer-Self-Update-503 beim PHPUnit-Init
+
+`php admin/tool/phpunit/cli/init.php` versucht ein Composer-Self-Update. Liefert
+`https://getcomposer.org/versions` gerade HTTP 503, bricht init ab und die
+PHPUnit-Env bleibt auf der alten Plugin-Version ("was initialised for different
+version"), obwohl am Code nichts falsch ist. Umgehung:
+
+```bash
+php admin/tool/phpunit/cli/init.php --no-composer-self-update
+```

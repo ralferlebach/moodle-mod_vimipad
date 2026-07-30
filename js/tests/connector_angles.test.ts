@@ -22,7 +22,8 @@
  */
 
 import {
-    bisectAngles, connectorExitAngle, freeConnectorPath, offsetAnchors, orientationOf, siblingOffsets,
+    bisectAngles, connectorExitAngle, freeConnectorPath, labelPoint, offsetAnchors, orientationOf,
+    siblingOffsets,
 } from '../src/canvas/connection_geometry';
 
 const deg = (radians: number): number => radians * 180 / Math.PI;
@@ -116,5 +117,40 @@ describe('free connector path', () => {
     test('coincident anchors do not produce NaN', () => {
         const d = freeConnectorPath({x: 5, y: 5}, {x: 5, y: 5}, 12);
         expect(d.includes('NaN')).toBe(false);
+    });
+});
+
+describe('label follows its own connector', () => {
+    const from = {x: 0, y: 0};
+    const to = {x: 200, y: 0};
+
+    test('siblings get labels on different sides of the centre line', () => {
+        const offsets = siblingOffsets(2, 16); // [-8, 8]
+        const a = offsetAnchors(from, to, offsets[0]);
+        const b = offsetAnchors(from, to, offsets[1]);
+        const la = labelPoint(a.from, a.to, offsets[0]);
+        const lb = labelPoint(b.from, b.to, offsets[1]);
+        // A horizontal pair offsets vertically; the two labels straddle y = 0.
+        expect(Math.sign(la.y)).toBe(-Math.sign(lb.y));
+        expect(la.y).toBeCloseTo(-lb.y, 6);
+        expect(la.y).not.toBeCloseTo(0, 1);
+    });
+
+    test('the single-connection label stays on the centre line', () => {
+        const l = labelPoint(from, to, 0);
+        expect(l).toEqual({x: 100, y: 0});
+    });
+
+    test('the label sits near the peak of its own curved path', () => {
+        const offset = 12;
+        const shifted = offsetAnchors(from, to, offset);
+        const label = labelPoint(shifted.from, shifted.to, offset);
+        // The path bulges to roughly the same perpendicular distance as the label.
+        const d = freeConnectorPath(shifted.from, shifted.to, 12);
+        const ys = [...d.matchAll(/-?\d+(?:\.\d+)?/g)].map(Number).filter((_, i) => i % 2 === 1);
+        const maxAbsY = Math.max(...ys.map(Math.abs));
+        // Label offset and the path's vertical extent are the same order of size.
+        expect(Math.abs(label.y)).toBeGreaterThan(offset - 1);
+        expect(maxAbsY).toBeGreaterThan(offset - 1);
     });
 });

@@ -4,7 +4,88 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.17** (2026072731).
+> release is **0.6.21** (2026072735).
+
+## 0.6.21 (2026072735) — fix the "sticky node" drag on the second click
+
+- **Symptom.** Click a node, wait, click again — the node starts following the
+  cursor with no button held. It happened at most once, then behaved normally.
+- **Root cause.** `onNodePointerDown` awaited the collaboration lock
+  (`beginEdit`, a network round-trip) *before* capturing the pointer and setting
+  the drag id. On the first interaction after a pause the lock isn't warm, so the
+  await yields a tick; if the pointer was released in that gap, `onPointerUp` ran
+  while `dragId` was still null and never cleared it. The node stayed armed, so
+  the next bare `pointermove` moved it. The following `pointerup` finally cleared
+  `dragId`, which is why it never recurred.
+- **Fix.** The drag (and the resize handle, which had the identical bug) is now
+  armed synchronously — capture and id set in the same event turn — and the lock
+  is acquired in the background, cancelling the drag only if it is refused and no
+  move has started yet. Added `onPointerCancel`/`onLostPointerCapture` handlers
+  that always disarm and release, so an interrupted gesture can't latch either.
+- **Verification.** New pure module `canvas/drag_arm.ts` models the sequence; 6
+  tests pin it, including the exact race (pointer-up while the lock is in flight
+  leaves nothing armed) and that a refusal never yanks a drag already in motion.
+  **Jest 35 suites / 224 tests**; 207 `mod_vimipad` + 97 `vimipadassess` green;
+  phpcs clean; bundle reproducible.
+
+## 0.6.20 (2026072734) — add-menus stacked two-line
+
+- The "Add concept" and "Add relation" menus used Bootstrap's `form-inline`,
+  which laid the heading's controls out in a single row. They now stack: the
+  legend on its own line, the controls on a second `vimipad-control-line` (a flex
+  row that wraps on narrow widths but stays under the heading). The old `mr-2`
+  spacing is replaced by a flex `gap`.
+- No behaviour change, markup/CSS only. **Jest 34 suites / 218 tests**; 207
+  `mod_vimipad` + 97 `vimipadassess` green; phpcs clean; bundle reproducible.
+
+## 0.6.19 (2026072733) — connector labels follow their own parallel connector
+
+Follow-up to 0.6.17: the lines were separated but the labels were not.
+
+- **Root cause.** The label layer computed its anchor as the midpoint of the two
+  node *centres* (`positionOf`), a separate code path that never saw the edge
+  anchoring or the sibling offset introduced for parallel connections. So every
+  label of a multi-relation pair piled onto the same centre line.
+- **Fix.** The label layer now derives the same edge anchors and the same
+  `siblingOffsets` slot as the line layer, then places the label at the curve
+  peak via `labelPoint(anchors, offset)`. Each label rides its own connector; a
+  lone relation still sits on the centre line.
+- **Verification:** 3 new tests — siblings' labels straddle the centre line
+  symmetrically, a single label stays centred, and the label offset matches the
+  path's own vertical extent. **Jest 34 suites / 218 tests**; 207 `mod_vimipad` +
+  97 `vimipadassess` green; phpcs clean; bundle reproducible. Visual result needs
+  a browser.
+- Env note: `phpunit/cli/init.php` self-updates Composer and aborts on a
+  getcomposer.org 503, leaving the env on the old version; run it with
+  `--no-composer-self-update`. Recorded in the environment setup doc.
+
+## 0.6.18 (2026072732) — A6: Enter makes a line, not a column
+
+Two faults compounded here, which is why multi-line labels never worked.
+
+- **Enter produced columns.** The contenteditable element was styled with
+  `labelBox(...)`, which sets `display: flex` (direction `row`). Browsers
+  implement Enter by inserting a block per line, and inside a flex row each of
+  those blocks becomes a **flex item**, so the lines were laid out side by side
+  as columns. The centring wrapper now carries the flex layout and the editable
+  element itself stays a block.
+- **Line breaks were never saved.** `onInput` read `textContent`, which ignores
+  that markup and concatenates: "A⏎B" came back as "AB". A new
+  `canvas/editable_text.ts` walks the tree and turns block boundaries and `<br>`
+  into real newlines. `innerText` would also do this but is not implemented
+  consistently outside browsers, so the explicit walk is used and is fully
+  covered by tests.
+- **Node growth follows from the fix.** `nodeWidth`/`nodeHeight` already split on
+  `\n`; they simply never saw one. With breaks preserved the box grows per line
+  while typing, since the live edit value feeds the size.
+- **Verification:** 8 new unit tests including `<br>`, Chrome/Firefox
+  div-per-line markup, nested inline formatting, paragraphs, empty input and an
+  explicit assertion that `textContent` would have lost the breaks. **Jest 34
+  suites / 215 tests**; 207 `mod_vimipad` + 97 `vimipadassess` green; phpcs clean;
+  bundle reproducible. Needs a browser to confirm the felt behaviour.
+- Still rough: `nodeHeight` estimates characters per line at a fixed ~7px, so a
+  label scaled up with A+ can still overflow. Left alone deliberately rather than
+  guessed at without being able to measure text.
 
 ## 0.6.17 (2026072731) — A3: connector angles and parallel sibling connections
 
