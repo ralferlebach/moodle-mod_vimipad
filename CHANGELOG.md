@@ -4,7 +4,37 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.16** (2026072730).
+> release is **0.6.17** (2026072731).
+
+## 0.6.17 (2026072731) — A3: connector angles and parallel sibling connections
+
+- **Root cause of the odd arrow heads.** For the curved style `relLinePath` built
+  a cubic Bezier whose control points were *always vertical*
+  (`from.x, from.y ± k` / `to.x, to.y ∓ k`), so a connection left and entered its
+  nodes vertically no matter how the nodes were actually placed. Because the
+  marker uses `orient="auto"`, the head followed that vertical end tangent and
+  pointed the wrong way — most visibly on side-by-side nodes.
+- **Departure/arrival angle, as specified.** The direct line now classifies the
+  connection as basically horizontal or vertical; the axis-aligned perpendicular
+  of that side (the "Lot") is bisected with the direct line's angle, and that
+  bisector is the angle at which the connection leaves or arrives outside the
+  node shape. The head uses the same angle because the path runs **straight for
+  the arrow's length** (`ARROW_STUB`) before curving; the curve handles continue
+  those directions, so the joins stay smooth.
+- **Parallel connections.** Relations sharing a node pair are grouped into slots
+  and their anchors are shifted symmetrically perpendicular to the direct line
+  (`siblingOffsets` + new `offsetAnchors`), so multiple relations run parallel
+  instead of overlapping. This applies to straight connections too, not just free
+  ones.
+- New pure helpers in `canvas/connection_geometry.ts`: `orientationOf`,
+  `bisectAngles`, `connectorExitAngle`, `offsetAnchors`, `freeConnectorPath`.
+- **Verification:** 12 new unit tests covering orientation, bisecting across the
+  0/360 wrap, horizontal and diagonal departure angles, mirrored ends, symmetric
+  offsets, parallelism (the direction vector is unchanged) and the straight run.
+  **Jest 33 suites / 207 tests**; 207 `mod_vimipad` + 97 `vimipadassess` green;
+  phpcs + phpcpd clean; bundles reproducible. The visual result needs a browser.
+- Adopts the updated `makefile` (its `check` target now also runs `build`, which
+  would have caught the stale AMD bundle behind T1).
 
 ## 0.6.16 (2026072730) — A1: pointer mapping now honours the aspect ratio
 

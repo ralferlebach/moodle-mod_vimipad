@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.16** (2026072730)
+**Bogen:** 0.5.32 (2026072712) → **0.6.17** (2026072731)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -282,6 +282,23 @@
   gekoppelt -> Letterbox-Raender. Anpassung an das Element-Seitenverhaeltnis
   waere eine reine UX-Verbesserung, aber ohne Browser-Sicht riskant.
 
+**0.6.17 - A3: Verbinderwinkel + parallele Mehrfachverbinder**
+- Ursache der schraegen Pfeilspitzen: relLinePath baute bei 'curved' eine Bezier
+  mit IMMER vertikalen Kontrollpunkten -> Verbinder verliess/betrat Nodes stets
+  senkrecht; marker orient=auto folgte dieser Endtangente.
+- Neu nach Spezifikation: direkte Linie klassifiziert horizontal/vertikal; Lot
+  der betreffenden Seite wird mit dem Linienwinkel halbiert -> Abgangs-/
+  Ankunftswinkel ausserhalb der Node-Form. Pfad laeuft ARROW_STUB (12) gerade,
+  dann Kurve, deren Handles dieselbe Richtung fortsetzen (glatte Uebergaenge).
+  Pfeilspitze erbt dadurch automatisch den richtigen Winkel.
+- Mehrfachverbinder: Gruppierung je Node-Paar (siblingSlots) + offsetAnchors
+  verschiebt beide Anker symmetrisch senkrecht -> parallele Verbinder, auch bei
+  geraden Linien.
+- Neue reine Helfer: orientationOf, bisectAngles, connectorExitAngle,
+  offsetAnchors, freeConnectorPath. 12 neue Unit-Tests.
+- makefile von Ralf uebernommen (check ruft jetzt build -> haette T1 gefangen).
+- Verifiziert: Jest 33/207; 207+97; phpcs/phpcpd clean; Bundles reproduzierbar.
+
 **0.6.12 - SVG/PNG-Export inkl. Container + SVG-Round-Trip-Import**
 - computeContentBounds bezieht Container-Boxen in die Export-viewBox ein (Container
   ausserhalb der Nodes wird nicht mehr beschnitten); Container-Chrome (Delete/
@@ -348,7 +365,7 @@ PHPUnit:  OK - 207 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + Post
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
 Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
-Frontend: tsc 0 · Jest 32 Suites/195 · esbuild- UND AMD-Bundle byte-reproduzierbar
+Frontend: tsc 0 · Jest 33 Suites/207 · esbuild- UND AMD-Bundle byte-reproduzierbar
 Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ```
 
@@ -356,7 +373,7 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072730 / 0.6.16, package.json + lock (inkl. Frontend).
+- [x] Version konsistent: version.php 2026072731 / 0.6.17, package.json + lock (inkl. Frontend).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.

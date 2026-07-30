@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.6.16 — pointer-to-canvas mapping fixed: it now honours preserveAspectRatio instead of assuming the viewBox fills the element, so cursor position and drag speed match the canvas again. Builds on the 0.6.15 UI cleanup. 207 mod_vimipad + 97 vimipadassess green; tsc + Jest (32 suites/195) green.**
+**Development status: 0.6.17 — connectors reworked: departure and arrival angles follow the bisector of the node-side perpendicular and the direct line, the path runs straight for the arrow length so heads point the right way, and multiple relations between the same nodes now run parallel. 207 mod_vimipad + 97 vimipadassess green; tsc + Jest (33 suites/207) green.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

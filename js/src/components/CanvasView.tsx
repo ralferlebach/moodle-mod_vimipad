@@ -32,7 +32,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import React, {useCallback, useEffect, useReducer, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas} from '../graph/autolayout';
 import {EditorState} from '../store/reducer';
 import {LayoutMap, Point, Size, SizeMap, FormConfig} from '../types';
@@ -46,6 +46,7 @@ import {parseNodeStyle} from '../canvas/node_style';
 import {boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBox, serializeGeometry} from '../canvas/container_geometry';
 import {isLocked, writeLock} from '../canvas/element_lock';
 import {screenToViewBox} from '../canvas/viewport';
+import {freeConnectorPath, offsetAnchors, siblingOffsets} from '../canvas/connection_geometry';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {TextEditMenu} from './TextEditMenu';
 import {FA, Icon} from '../canvas/icons';
@@ -133,6 +134,16 @@ const HANDLE = 9;
 /** Finger-friendly hit area around each corner handle (touch targets). */
 const HANDLE_HIT = 26;
 // Pan/zoom viewport limits: view width can shrink to a 4x zoom-in, grow to full canvas.
+/**
+ * Straight run at each connector end, in canvas units. Covers the arrow marker
+ * (markerWidth 7 scaled by the stroke width) so the head sits on a straight
+ * piece and therefore points the way the connection really goes.
+ */
+const ARROW_STUB = 12;
+
+/** Perpendicular spacing between parallel connections of the same node pair. */
+const SIBLING_SPACING = 16;
+
 const MIN_VIEW_W = CANVAS_WIDTH * 0.25;
 const MAX_VIEW_W = CANVAS_WIDTH;
 const VIEW_ASPECT = CANVAS_HEIGHT / CANVAS_WIDTH;
@@ -322,6 +333,21 @@ export function CanvasView(props: Props): React.ReactElement {
         const rect = svg.getBoundingClientRect();
         return screenToViewBox({x: clientX, y: clientY}, rect, viewRef.current);
     }, []);
+
+    // Relations sharing a node pair are drawn as parallel lines rather than on
+    // top of each other; this maps each relation to its slot in its group.
+    const siblingSlots = useMemo(() => {
+        const groups = new Map<string, string[]>();
+        for (const rel of state.relations) {
+            const key = [rel.sourceid, rel.targetid].slice().sort().join('|');
+            const list = groups.get(key) ?? [];
+            list.push(rel.stableid);
+            groups.set(key, list);
+        }
+        const slots = new Map<string, {index: number; count: number}>();
+        groups.forEach(ids => ids.forEach((id, index) => slots.set(id, {index, count: ids.length})));
+        return slots;
+    }, [state.relations]);
 
     // Container drawing (isolated from the node/connect pointer state machine:
     // a dedicated overlay captures these events only while the tool is active).
@@ -1075,13 +1101,26 @@ export function CanvasView(props: Props): React.ReactElement {
                 const fromSize = srcNode ? sizeOf(srcNode.stableid, srcNode.label) : {w: 70, h: 40};
                 const toSize = tgtNode ? sizeOf(tgtNode.stableid, tgtNode.label) : {w: 70, h: 40};
                 const isTree = sharedBifurcation;
-                const from = isTree ? {x: fromC.x, y: fromC.y + fromSize.h / 2} : edgePoint(fromC, fromSize, toC);
-                const to = isTree ? {x: toC.x, y: toC.y - toSize.h / 2} : edgePoint(toC, toSize, fromC);
+                const slot = siblingSlots.get(rel.stableid) ?? {index: 0, count: 1};
+                const slotOffset = siblingOffsets(slot.count, SIBLING_SPACING)[slot.index] ?? 0;
+                const baseFrom = isTree
+                    ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
+                    : edgePoint(fromC, fromSize, toC);
+                const baseTo = isTree
+                    ? {x: toC.x, y: toC.y - toSize.h / 2}
+                    : edgePoint(toC, toSize, fromC);
+                // Multiple relations between the same pair are shifted symmetrically
+                // perpendicular to the direct line, so they run parallel.
+                const shifted = isTree ? {from: baseFrom, to: baseTo} : offsetAnchors(baseFrom, baseTo, slotOffset);
+                const from = shifted.from;
+                const to = shifted.to;
                 const selected = isSelected(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
                 const path = isTree
                     ? treeBusPath(fromC, fromSize, toC, toSize)
-                    : relLinePath(from, to, relLine);
+                    : (relLine === 'curved'
+                        ? freeConnectorPath(from, to, ARROW_STUB)
+                        : relLinePath(from, to, relLine));
                 const stroke = selected ? selColor : 'currentColor';
                 const strokeWidth = selected ? 2.5 : 1.5;
                 const markerStart = d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
