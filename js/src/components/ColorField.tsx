@@ -41,6 +41,12 @@ interface Props {
     label: string;
     /** Commit a chosen colour (only fired on OK). */
     onChange: (color: string) => void;
+    /**
+     * Clear the formatting back to the default. When given, the popover offers a
+     * reset as a third action next to cancel/confirm, so no extra sub-menu is
+     * needed just to reach it.
+     */
+    onReset?: () => void;
     t: (key: string) => string;
 }
 
@@ -58,7 +64,7 @@ const SWATCHES = [
  * @returns The colour field element.
  */
 export function ColorField(props: Props): React.ReactElement {
-    const {value, fallback, disabled, icon, label, onChange, t} = props;
+    const {value, fallback, disabled, icon, label, onChange, onReset, t} = props;
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState(value ?? fallback);
 
@@ -117,6 +123,19 @@ export function ColorField(props: Props): React.ReactElement {
                         ))}
                     </div>
                     <div className="vimipad-color-actions">
+                        {onReset && (
+                            <button
+                                type="button"
+                                className="vimipad-dock-btn"
+                                title={t('editor:fmt_reset')}
+                                aria-label={t('editor:fmt_reset')}
+                                onClick={() => {
+                                    vdbg('color reset', label);
+                                    onReset();
+                                    setOpen(false);
+                                }}
+                            ><Icon name={FA.reset} /></button>
+                        )}
                         <button
                             type="button"
                             className="vimipad-dock-btn"

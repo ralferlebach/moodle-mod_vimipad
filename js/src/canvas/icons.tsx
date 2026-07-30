@@ -48,6 +48,8 @@ export const FA = {
     textColor: 'fa-solid fa-palette',
     highlight: 'fa-solid fa-highlighter',
     reset: 'fa-solid fa-eraser',
+    lock: 'fa-solid fa-lock',
+    unlock: 'fa-solid fa-lock-open',
     duplicate: 'fa-solid fa-clone',
     delete: 'fa-solid fa-trash',
     move: 'fa-solid fa-up-down-left-right',

@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.14** (2026072728)
+**Bogen:** 0.5.32 (2026072712) → **0.6.15** (2026072729)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -242,6 +242,29 @@
   Revisionen). 206 mod_vimipad (+1) + 97 vimipadassess grün; phpcs/phpcpd clean;
   Bundle byte-identisch (kein JS geaendert).
 
+**0.6.15 - UI-Aufraeumung (T1, T2, T6, A4, A5, A2-Verdacht)**
+- T1 Ursache: amd/build/init.min.js war stale (wird von Moodles Grunt gebaut,
+  NICHT von build.mjs; seit 0.6.7 nicht neu gebaut). Browser fragte veraltete
+  STRING_KEYS -> init.js gab Rohschluessel zurueck.
+  CI-LUECKE: Reproducibility-Job diffte nur editor_lazy; der Grunt-Schritt
+  verglich sein Ergebnis nie mit dem committeten Artefakt und baute revision.js
+  gar nicht -> stale Build lief gruen durch. CI baut jetzt beide AMD-Quellen und
+  hat ein git-diff-Gate. Haertung: init.js liefert undefined, Bundle faellt auf
+  eigene englische Fallbacks zurueck. Neuer amd_string_keys_test.
+- T6/T2: Autoren-Bereich unter dem Canvas entfernt; Container-Button in der
+  Toolbar zwischen Neu-anordnen und Export; Lock-Mode-Toggle mit Vollbild in
+  rechter Toolbar-Gruppe. Beide nur bei manageprofiles.
+- T3-Kern: Lock-Button im Element-Dock bei aktivem Lock-Mode; gesperrtes Element
+  zeigt nur noch diesen Toggle.
+- A4: Farb-Zwischenmenue weg, Reset als dritte Aktion im Farbwaehler.
+- A5: Confirm-Buttons als outline-success mit gruenem Hover.
+- A2 (Verdacht): Dock-foreignObject (300x320) jetzt pointer-events:none.
+  BROWSER-PRUEFUNG noetig.
+- Verifiziert: 207+97 grün; phpcs clean; tsc clean; Jest 31/189 (neu color_field);
+  beide Bundles reproduzierbar.
+- Offen aus dem Issue-Satz: A1, A3, A6, T3-Restteil (Mod-Setting fuer Lernende),
+  T4 (Container formatier-/beschriftbar), T5 (Neu-Ausrichten respektiert Container).
+
 **0.6.12 - SVG/PNG-Export inkl. Container + SVG-Round-Trip-Import**
 - computeContentBounds bezieht Container-Boxen in die Export-viewBox ein (Container
   ausserhalb der Nodes wird nicht mehr beschnitten); Container-Chrome (Delete/
@@ -304,11 +327,11 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 206 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 207 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
 Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
-Frontend: tsc 0 · Jest 30 Suites/185 · esbuild-Bundle byte-reproduzierbar
+Frontend: tsc 0 · Jest 31 Suites/189 · esbuild- UND AMD-Bundle byte-reproduzierbar
 Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ```
 
@@ -316,7 +339,7 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072728 / 0.6.14, package.json + lock (inkl. Frontend).
+- [x] Version konsistent: version.php 2026072729 / 0.6.15, package.json + lock (inkl. Frontend).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.

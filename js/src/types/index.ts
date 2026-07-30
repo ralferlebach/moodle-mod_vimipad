@@ -191,7 +191,7 @@ export interface MountConfig {
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */
-    getString?: (key: string) => string;
+    getString?: (key: string) => string | undefined;
 }
 
 /**
@@ -206,5 +206,5 @@ export interface RevisionConfig {
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */
-    getString?: (key: string) => string;
+    getString?: (key: string) => string | undefined;
 }

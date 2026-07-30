@@ -44,7 +44,7 @@ import {labelBox, shapeElement} from '../canvas/shapes';
 import {useDismiss} from '../hooks/use_dismiss';
 import {parseNodeStyle} from '../canvas/node_style';
 import {boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBox, serializeGeometry} from '../canvas/container_geometry';
-import {isLocked} from '../canvas/element_lock';
+import {isLocked, writeLock} from '../canvas/element_lock';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {TextEditMenu} from './TextEditMenu';
 import {FA, Icon} from '../canvas/icons';
@@ -115,6 +115,16 @@ interface Props {
     onUpdateContainer?: (stableid: string, geometryjson: string) => void;
     /** Rename a container. */
     onRenameContainer?: (stableid: string, label: string) => void;
+    /** Whether the viewer may author/manage the template. */
+    canManage?: boolean;
+    /** Toggle container drawing mode (author tool, lives in the canvas toolbar). */
+    onToggleDrawContainer?: () => void;
+    /** Whether lock mode is armed (element docks then offer a lock toggle). */
+    lockMode?: boolean;
+    /** Toggle lock mode. */
+    onToggleLockMode?: () => void;
+    /** Persist a new metadata JSON (used by the dock's lock toggle). */
+    onSetElementLock?: (kind: 'node' | 'relation' | 'container', stableid: string, metadatajson: string) => void;
 }
 
 /** Size of a corner resize handle, in canvas units. */
@@ -782,6 +792,19 @@ export function CanvasView(props: Props): React.ReactElement {
                 >
                     <Icon name={FA.reArrange} />
                 </button>
+                {props.canManage && props.onToggleDrawContainer && (
+                    <button
+                        type="button"
+                        className={`btn btn-light vimipad-canvas-action${props.drawingContainer ? ' active' : ''}`}
+                        onClick={() => props.onToggleDrawContainer?.()}
+                        disabled={disabled}
+                        aria-pressed={props.drawingContainer === true}
+                        title={props.drawingContainer ? t('editor:drawcontainerdone') : t('editor:drawcontainer')}
+                        aria-label={props.drawingContainer ? t('editor:drawcontainerdone') : t('editor:drawcontainer')}
+                    >
+                        <Icon name={FA.container} />
+                    </button>
+                )}
                 {!expanded && (
                     <div className="vimipad-export" ref={exportRef}>
                         <button
@@ -838,16 +861,34 @@ export function CanvasView(props: Props): React.ReactElement {
                     </div>
                 )}
             </div>
-            <button
-                type="button"
-                className="btn btn-light vimipad-canvas-fullview vimipad-canvas-action"
-                onClick={() => { void toggleFullview(); }}
-                title={expanded ? t('editor:normalview') : t('editor:fullview')}
-                aria-label={expanded ? t('editor:normalview') : t('editor:fullview')}
-                aria-pressed={expanded}
+            <div
+                className="vimipad-canvas-actions vimipad-canvas-actions--right"
+                role="toolbar"
+                aria-label={t('editor:actions')}
             >
-                <Icon name={expanded ? FA.compress : FA.expand} />
-            </button>
+                {props.canManage && props.onToggleLockMode && (
+                    <button
+                        type="button"
+                        className={`btn btn-light vimipad-canvas-action${props.lockMode ? ' active' : ''}`}
+                        onClick={() => props.onToggleLockMode?.()}
+                        aria-pressed={props.lockMode === true}
+                        title={t('editor:lockmode')}
+                        aria-label={t('editor:lockmode')}
+                    >
+                        <Icon name={props.lockMode ? FA.lock : FA.unlock} />
+                    </button>
+                )}
+                <button
+                    type="button"
+                    className="btn btn-light vimipad-canvas-fullview vimipad-canvas-action"
+                    onClick={() => { void toggleFullview(); }}
+                    title={expanded ? t('editor:normalview') : t('editor:fullview')}
+                    aria-label={expanded ? t('editor:normalview') : t('editor:fullview')}
+                    aria-pressed={expanded}
+                >
+                    <Icon name={expanded ? FA.compress : FA.expand} />
+                </button>
+            </div>
             <svg
                 ref={svgRef}
                 className="vimipad-canvas border rounded"
@@ -1321,6 +1362,7 @@ export function CanvasView(props: Props): React.ReactElement {
                             width={300}
                             height={editing ? 300 : 320}
                             style={{overflow: 'visible'}}
+                            pointerEvents="none"
                         >
                             <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
                                 {editing ? (
@@ -1341,6 +1383,18 @@ export function CanvasView(props: Props): React.ReactElement {
                                         onDuplicate={() => onDuplicateNode && onDuplicateNode(node.stableid)}
                                         onDelete={() => onDeleteNode && onDeleteNode(node.stableid)}
                                         onEditText={() => startNodeEdit(node.stableid, node.label)}
+                                        lockMode={props.lockMode}
+                                        locked={isLocked(node.metadatajson)}
+                                        onToggleLock={props.onSetElementLock && props.canManage
+                                            ? () => props.onSetElementLock?.(
+                                                'node',
+                                                node.stableid,
+                                                writeLock(node.metadatajson, {
+                                                    locked: !isLocked(node.metadatajson),
+                                                    editable: [],
+                                                })
+                                            )
+                                            : undefined}
                                         t={t}
                                     />
                                 )}
@@ -1365,6 +1419,7 @@ export function CanvasView(props: Props): React.ReactElement {
                         width={300}
                         height={70}
                         style={{overflow: 'visible'}}
+                        pointerEvents="none"
                     >
                         <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
                             {editing ? (

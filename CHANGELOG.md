@@ -4,7 +4,44 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.14** (2026072728).
+> release is **0.6.15** (2026072729).
+
+## 0.6.15 (2026072729) — UI cleanup: toolbar author tools, lock mode, colour menu
+
+Addresses the reported UI issues T1, T2, T6, A4, A5 and (tentatively) A2.
+
+- **T1 — raw string keys in the editor.** Root cause: `amd/build/init.min.js` was
+  stale. It is rebuilt by Moodle's Grunt, not by `build.mjs`, and had not been
+  rebuilt since 0.6.7, so the browser requested an outdated `STRING_KEYS` list and
+  `init.js` echoed the raw key for anything missing. Both AMD artefacts are
+  rebuilt. **CI gap closed:** the reproducibility job only diffed the esbuild
+  bundle and the Grunt step never compared its output against the committed
+  artefact (and never built `revision.js` at all), so a stale build shipped
+  green. CI now builds both AMD sources and gates them with `git diff
+  --exit-code`. **Hardened:** `init.js` returns `undefined` for unknown keys and
+  the bundle falls back to its own English strings, so a stale build degrades to
+  English rather than raw ids. New `amd_string_keys_test` guards the other
+  direction (every requested key exists in `lang/en`).
+- **T6 / T2 — author tools relocated.** The author area below the canvas is gone.
+  Container drawing is now a toolbar button between re-arrange and export, and a
+  new lock-mode toggle sits with the full-view button in a right-hand toolbar
+  group. Both are shown only with `mod/vimipad:manageprofiles`.
+- **T3 (core) — locking moved into the element dock.** With lock mode armed, a
+  node's dock offers a lock toggle left of delete; a locked element's dock is
+  reduced to that toggle, so no text, colour, shape or structural editing is
+  offered.
+- **A4 — colour sub-menu removed.** The palette button opens the picker directly;
+  the formatting reset is now a third action inside the picker next to
+  cancel/confirm.
+- **A5 — confirm buttons** read as outline-success (green on white) and light up
+  solid green on hover/focus, clearly distinct from neutral dock buttons.
+- **A2 (tentative)** — the dock's `foreignObject` (300x320) is now
+  `pointer-events: none`, so the empty area below a selected node no longer
+  swallows clicks. Needs confirmation in a browser.
+- **Verification:** **207 `mod_vimipad`** + **97 `vimipadassess`** green; phpcs
+  clean; `tsc` clean; **Jest 31 suites / 189 tests** (new `color_field`); esbuild
+  and AMD bundles both rebuilt and byte-reproducible. Visual result runs in CI /
+  the browser.
 
 ## 0.6.14 (2026072728) — revision view reconstructs containers
 

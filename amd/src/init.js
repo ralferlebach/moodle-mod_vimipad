@@ -42,6 +42,7 @@ const STRING_KEYS = [
     'editor:containers', 'editor:containerdelete', 'editor:drawcontainer', 'editor:drawcontainerdone',
     'editor:node', 'editor:templatelocks', 'editor:templatelockshint', 'editor:lockallowlabel',
     'editor:importnovimidata', 'editor:authortools',
+    'editor:lockmode', 'editor:lockelement', 'editor:unlockelement',
     'editor:add', 'editor:addnode', 'editor:addrelation', 'editor:actions',
     'editor:beingedited', 'editor:cancel', 'editor:canvasaria', 'editor:canvashint',
     'editor:canvasview', 'editor:canvasplaceholder',
@@ -130,7 +131,11 @@ export const init = async(cmid, selector = 'vimipad-editor-root') => {
             readonly: element.dataset.readonly === '1',
             targetUserid: parseInt(element.dataset.targetuserid || '0', 10),
             callService: buildTransport(),
-            getString: (key) => strings[key] ?? key,
+            // Return undefined for unknown keys so the bundle's own English
+            // fallbacks apply. Echoing the key here would surface raw ids like
+            // "editor:authortools" in the UI whenever this built module is older
+            // than the language file (e.g. amd/build not rebuilt after an edit).
+            getString: (key) => strings[key],
         });
     } catch (error) {
         element.textContent = error.message;

@@ -148,14 +148,21 @@
     flex-wrap: nowrap;
 }
 
+/* Confirm actions read as "outline success": green-on-white at rest so they are
+   distinguishable from the neutral dock buttons, and they light up solid green
+   on hover/focus. Applies to every confirm button in the canvas menus. */
 .vimipad-dock-confirm {
+    border-color: var(--vimipad-success, #198754);
+    background: #fff;
+    color: var(--vimipad-success, #198754);
+}
+
+.vimipad-dock-confirm:hover:not(:disabled),
+.vimipad-dock-confirm:focus-visible:not(:disabled) {
     border-color: var(--vimipad-success, #198754);
     background: var(--vimipad-success, #198754);
     color: #fff;
-}
-
-.vimipad-dock-confirm:hover:not(:disabled) {
-    background: var(--vimipad-success-dark, #157347);
+    box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.35);
 }
 
 .vimipad-dock-select {
@@ -431,11 +438,24 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-.vimipad-canvas-fullview {
-    position: absolute;
-    top: 0.5rem;
+/* Right-hand overlay group: lock mode toggle + full view, mirroring the
+   left-hand actions toolbar. */
+.vimipad-canvas-actions--right {
+    left: auto;
     right: 0.5rem;
-    z-index: 3;
+}
+
+/* The full view button now sits inside the right-hand group, so it no longer
+   positions itself. */
+.vimipad-canvas-fullview {
+    position: static;
+}
+
+/* Lock mode is a teacher mode: make it obvious when it is armed. */
+.vimipad-canvas-action.active {
+    border-color: var(--vimipad-primary, #0d6efd);
+    background: var(--vimipad-primary, #0d6efd);
+    color: #fff;
 }
 
 /* Comfortable, clearly-sized icon buttons for the canvas overlays. */

@@ -41,7 +41,7 @@ import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
 import {useCollaboration} from '../collab/use_collaboration';
 import {useConstraintHints} from '../hooks/use_constraint_hints';
 import {ConstraintBanner} from './ConstraintBanner';
-import {LockPanel, LockKind} from './LockPanel';
+import {LockKind} from './LockPanel';
 import {operationToAction} from '../collab/apply_remote';
 
 /**
@@ -118,6 +118,7 @@ export function EditorApp(props: Props): React.ReactElement {
     const [relTarget, setRelTarget] = useState('');
     const [relLabel, setRelLabel] = useState('');
     const [drawingContainer, setDrawingContainer] = useState(false);
+    const [lockMode, setLockMode] = useState(false);
 
     // Undo/redo. In a server-authoritative editor an undo is the inverse
     // operation sent to the server, not a local rollback (see store/history).
@@ -830,42 +831,6 @@ export function EditorApp(props: Props): React.ReactElement {
         </fieldset>
     );
 
-    const containerControls = (
-        <fieldset disabled={disabled} className="vimipad-control">
-            <legend className="h6">{t('editor:containers')}</legend>
-            <button
-                type="button"
-                className={drawingContainer ? 'btn btn-secondary active' : 'btn btn-outline-secondary'}
-                aria-pressed={drawingContainer}
-                onClick={() => setDrawingContainer(v => !v)}
-            >
-                <Icon name={FA.container} /> {drawingContainer ? t('editor:drawcontainerdone') : t('editor:drawcontainer')}
-            </button>
-        </fieldset>
-    );
-
-    const lockPanel = (
-        <LockPanel
-            nodes={state.nodes}
-            relations={state.relations}
-            containers={state.containers ?? []}
-            disabled={disabled}
-            t={t}
-            onSetLock={setElementLock}
-        />
-    );
-
-    // Author-only tools, grouped into one clearly delimited area. Rendering the
-    // whole group behind canmanage also gates container drawing to authors.
-    const authorTools = state.canmanage ? (
-        <div className="vimipad-author-tools" role="group" aria-label={t('editor:authortools')}>
-            <div className="vimipad-author-tools-heading small text-uppercase text-muted">
-                {t('editor:authortools')}
-            </div>
-            {containerControls}
-            {lockPanel}
-        </div>
-    ) : null;
 
     return (
         <div className="vimipad-editor" ref={rootRef}>
@@ -919,11 +884,15 @@ export function EditorApp(props: Props): React.ReactElement {
                         onFinishDrawContainer={() => setDrawingContainer(false)}
                         onUpdateContainer={updateContainerGeometry}
                         onRenameContainer={renameContainer}
+                        canManage={state.canmanage === true}
+                        onToggleDrawContainer={() => setDrawingContainer(v => !v)}
+                        lockMode={lockMode}
+                        onToggleLockMode={() => setLockMode(v => !v)}
+                        onSetElementLock={setElementLock}
                     />
                     <div className="vimipad-controls-row">
                         {addNodeControls}
                         {addRelationControls}
-                        {authorTools}
                     </div>
                 </>
             ) : (

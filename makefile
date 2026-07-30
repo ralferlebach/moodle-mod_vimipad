@@ -58,7 +58,7 @@ fix: clear fix-phpdoc fix-lint-php build
 	@echo ""
 	@echo "=== All fixes complete. ==="
 
-check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-react test-react phpunit
+check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-react build test-react phpunit
 	@echo ""
 	@echo "=== All checks complete. Review output above for errors. ==="
 
@@ -132,9 +132,7 @@ amd:
 	@echo ""
 	@echo "=== AMD rebuild (skipped when amd/src/ is empty) ==="
 	@if ls $(PLUGIN_DIR)/amd/src/*.js 2>/dev/null | grep -q .; then \
-		files=$$(find $(PLUGIN_REL)/amd/src -name '*.js' \
-			| tr '\n' ',' | sed 's/,$$//'); \
-		cd $(MOODLE_ROOT) && $(NPX) grunt amd --root=. --force --files="$$files"; \
+		cd $(PLUGIN_DIR) && $(NPX) grunt amd --force; \
 	else \
 		echo "No AMD source files — skipped."; \
 	fi
