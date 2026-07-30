@@ -118,8 +118,10 @@ interface Props {
     onUpdateContainer?: (stableid: string, geometryjson: string) => void;
     /** Rename a container. */
     onRenameContainer?: (stableid: string, label: string) => void;
-    /** Whether the viewer may author/manage the template. */
+    /** Whether the viewer may author/manage the template (container drawing). */
     canManage?: boolean;
+    /** Whether the viewer may use lock mode (teachers, or learners if enabled). */
+    canLock?: boolean;
     /** Toggle container drawing mode (author tool, lives in the canvas toolbar). */
     onToggleDrawContainer?: () => void;
     /** Whether lock mode is armed (element docks then offer a lock toggle). */
@@ -946,7 +948,7 @@ export function CanvasView(props: Props): React.ReactElement {
                 role="toolbar"
                 aria-label={t('editor:actions')}
             >
-                {props.canManage && props.onToggleLockMode && (
+                {props.canLock && props.onToggleLockMode && (
                     <button
                         type="button"
                         className={`btn btn-light vimipad-canvas-action${props.lockMode ? ' active' : ''}`}
@@ -1514,7 +1516,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                         onEditText={() => startNodeEdit(node.stableid, node.label)}
                                         lockMode={props.lockMode}
                                         locked={isLocked(node.metadatajson)}
-                                        onToggleLock={props.onSetElementLock && props.canManage
+                                        onToggleLock={props.onSetElementLock && props.canLock
                                             ? () => props.onSetElementLock?.(
                                                 'node',
                                                 node.stableid,

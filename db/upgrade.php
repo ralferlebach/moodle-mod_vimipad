@@ -297,5 +297,24 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072717, 'vimipad');
     }
 
+    if ($oldversion < 2026072736) {
+        $table = new xmldb_table('vimipad');
+        $field = new xmldb_field(
+            'lockmodeforlearners',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'minrelations'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026072736, 'vimipad');
+    }
+
     return true;
 }

@@ -885,6 +885,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         onUpdateContainer={updateContainerGeometry}
                         onRenameContainer={renameContainer}
                         canManage={state.canmanage === true}
+                        canLock={state.canmanage === true || state.lockmodeforlearners === true}
                         onToggleDrawContainer={() => setDrawingContainer(v => !v)}
                         lockMode={lockMode}
                         onToggleLockMode={() => setLockMode(v => !v)}

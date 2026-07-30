@@ -74,6 +74,7 @@ class get_workspace extends external_api {
         $canmanage = has_capability('mod/vimipad:manageprofiles', $context);
 
         $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
+        $lockmodeforlearners = !empty($instance->lockmodeforlearners);
         $service = new workspace_service();
 
         $target = (int) $params['targetuserid'];
@@ -82,7 +83,7 @@ class get_workspace extends external_api {
             require_capability('mod/vimipad:grade', $context);
             $workspace = $service->find_for_user($instance, $target);
             if ($workspace === null) {
-                return self::empty_state($instance, $canmanage);
+                return self::empty_state($instance, $canmanage, $lockmodeforlearners);
             }
         } else {
             $workspace = $service->get_or_create_for_user(
@@ -109,6 +110,7 @@ class get_workspace extends external_api {
             'relations' => array_map([self::class, 'map_relation'], $state['relations']),
             'containers' => array_map([self::class, 'map_container'], $state['containers']),
             'canmanage' => $canmanage,
+            'lockmodeforlearners' => $lockmodeforlearners,
             'collab' => helper::collab_config(),
         ];
     }
@@ -118,9 +120,14 @@ class get_workspace extends external_api {
      *
      * @param \stdClass $instance The activity instance.
      * @param bool $canmanage Whether the viewer may author/manage templates.
+     * @param bool $lockmodeforlearners Whether learners may also use lock mode.
      * @return array
      */
-    private static function empty_state(\stdClass $instance, bool $canmanage = false): array {
+    private static function empty_state(
+        \stdClass $instance,
+        bool $canmanage = false,
+        bool $lockmodeforlearners = false
+    ): array {
         return [
             'workspaceid' => 0,
             'revision' => 0,
@@ -132,6 +139,7 @@ class get_workspace extends external_api {
             'relations' => [],
             'containers' => [],
             'canmanage' => $canmanage,
+            'lockmodeforlearners' => $lockmodeforlearners,
             'collab' => helper::collab_config(),
         ];
     }
@@ -236,6 +244,11 @@ class get_workspace extends external_api {
             'canmanage' => new external_value(
                 PARAM_BOOL,
                 'Whether the viewer may author/manage templates (set element locks)',
+                VALUE_OPTIONAL
+            ),
+            'lockmodeforlearners' => new external_value(
+                PARAM_BOOL,
+                'Whether learners may also toggle lock mode in this activity',
                 VALUE_OPTIONAL
             ),
             'collab' => new external_single_structure([

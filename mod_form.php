@@ -134,6 +134,15 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->setDefault('matchmode', \mod_vimipad\local\assess\matcher_factory::MODE_EXACT);
         $mform->addHelpButton('matchmode', 'matchmode', 'mod_vimipad');
 
+        // Authoring: let learners toggle lock mode too (teachers always can).
+        $mform->addElement(
+            'advcheckbox',
+            'lockmodeforlearners',
+            get_string('lockmodeforlearners', 'mod_vimipad')
+        );
+        $mform->setDefault('lockmodeforlearners', 0);
+        $mform->addHelpButton('lockmodeforlearners', 'lockmodeforlearners', 'mod_vimipad');
+
         // Availability: optional due and cut-off dates.
         $mform->addElement('header', 'availability', get_string('availability', 'mod_vimipad'));
 

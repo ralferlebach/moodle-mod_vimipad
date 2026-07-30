@@ -150,6 +150,7 @@ final class backup_restore_test extends \advanced_testcase {
             'allowedrelationtypes' => 'contains',
             'minnodes' => 4,
             'minrelations' => 2,
+            'lockmodeforlearners' => 1,
         ]);
         // A grade (referencing the snapshot) and a journal entry.
         $DB->insert_record('vimipad_grade', (object) [
@@ -200,6 +201,7 @@ final class backup_restore_test extends \advanced_testcase {
         // Assessment and peer-review settings survive the restore.
         $this->assertSame(1, (int) $newinstance->matchmode);
         $this->assertSame('reference,structure', $newinstance->activescorers);
+        $this->assertSame(1, (int) $newinstance->lockmodeforlearners);
         $this->assertSame(1, (int) $newinstance->peerreviewmode);
         $this->assertSame(3, (int) $newinstance->peerreviewcount);
         $this->assertSame("Cell\nDNA", $newinstance->requiredconcepts);

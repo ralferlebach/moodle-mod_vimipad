@@ -33,6 +33,7 @@
         <FIELD NAME="allowedrelationtypes" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Allowed relation types; empty = every type allowed"/>
         <FIELD NAME="minnodes" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Minimum concepts required to submit (0 = off)"/>
         <FIELD NAME="minrelations" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Minimum relations required to submit (0 = off)"/>
+        <FIELD NAME="lockmodeforlearners" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if learners may also toggle lock mode and manage element locks"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>

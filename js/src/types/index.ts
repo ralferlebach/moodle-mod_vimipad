@@ -79,6 +79,8 @@ export interface WorkspaceState {
     containers?: VimiContainer[];
     /** Whether the viewer may author/manage the template (set element locks). */
     canmanage?: boolean;
+    /** Whether learners may also toggle lock mode in this activity. */
+    lockmodeforlearners?: boolean;
     collab?: CollabConfig;
 }
 

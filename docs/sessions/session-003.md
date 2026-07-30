@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.21** (2026072735)
+**Bogen:** 0.5.32 (2026072712) → **0.6.22** (2026072736)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -346,6 +346,21 @@
 - Reines Modul canvas/drag_arm.ts + 6 Tests (inkl. reproduzierter Race).
   Jest 35/224; 207+97; phpcs clean.
 
+**0.6.22 - T3-Rest: Sperrmodus per Mod-Setting auch fuer Lernende**
+- Neues Aktivitaets-Setting lockmodeforlearners (Default 0). Lehrende immer;
+  mit Setting an auch Lernende (Toggle + Sperren/Entsperren).
+- Semantik: aus = nur manageprofiles verwaltet Sperren, Lernende gebunden
+  (unveraendert); an = kooperativ, apply_operation gibt allen Editierenden den
+  Lock-Bypass. Im Hilfetext dokumentiert.
+- Schema-Feld (install.xml + upgrade 2026072736), Backup-Element + Restore-
+  Roundtrip-Assertion. get_workspace meldet das Flag; Frontend gated Lock-Mode +
+  Lock-Buttons auf canManage ODER lockmodeforlearners, Container-Zeichnen bleibt
+  autorenseitig.
+- Neuer lockmode_for_learners_test. 210 (+3)+97; phpcs/phpcpd clean; 435/435;
+  Jest 35/224; beide Bundles neu gebaut+reproduzierbar.
+- Merke: Schemaaenderung wird von PHPUnit-init nur bei Versionssprung neu
+  gebaut - version.php zuerst hochziehen.
+
 **0.6.12 - SVG/PNG-Export inkl. Container + SVG-Round-Trip-Import**
 - computeContentBounds bezieht Container-Boxen in die Export-viewBox ein (Container
   ausserhalb der Nodes wird nicht mehr beschnitten); Container-Chrome (Delete/
@@ -408,7 +423,7 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 207 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 210 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
 Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
@@ -420,7 +435,7 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072735 / 0.6.21, package.json + lock (inkl. Frontend).
+- [x] Version konsistent: version.php 2026072736 / 0.6.22, package.json + lock (inkl. Frontend).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.

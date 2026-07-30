@@ -45,7 +45,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             'duedate', 'cutoffdate', 'requireallteamsubmit', 'referencesnapshotid',
             'matchmode', 'activescorers', 'peerreviewmode', 'peerreviewcount',
             'requiredconcepts', 'forbiddenconcepts', 'allowedrelationtypes',
-            'minnodes', 'minrelations',
+            'minnodes', 'minrelations', 'lockmodeforlearners',
             'timecreated', 'timemodified',
         ]);
 

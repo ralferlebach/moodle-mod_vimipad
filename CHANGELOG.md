@@ -4,7 +4,29 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.21** (2026072735).
+> release is **0.6.22** (2026072736).
+
+## 0.6.22 (2026072736) — T3: offer lock mode to learners (activity setting)
+
+- New activity setting **"Allow learners to use lock mode"**
+  (`lockmodeforlearners`, default off). Teachers can always use lock mode; with
+  this on, learners can toggle lock mode and lock/unlock elements too.
+- **Semantics.** Off (default): only `mod/vimipad:manageprofiles` holders manage
+  locks and learners are strictly bound — unchanged behaviour. On: locks become a
+  cooperative tool; `apply_operation` grants the lock bypass to everyone with edit
+  access in that activity, so any editor can lock or unlock. Documented in the
+  setting's help text.
+- Schema: `lockmodeforlearners` int(1) on the `vimipad` table (install.xml +
+  upgrade step 2026072736); added to the activity backup element and covered by
+  the restore roundtrip test. `get_workspace` reports the flag so the editor
+  shows lock mode; the toggle and the per-element lock buttons are now gated on
+  "can manage OR lock mode for learners", while container drawing stays
+  author-only.
+- **Verification:** new `lockmode_for_learners_test` (learner may edit a locked
+  node when enabled; blocked when disabled; the flag is reported); backup roundtrip
+  extended to assert the field survives. **210 `mod_vimipad`** (+3) + **97
+  `vimipadassess`** green; phpcs + phpcpd clean; lang 435/435; Jest 35/224; both
+  bundles rebuilt and reproducible.
 
 ## 0.6.21 (2026072735) — fix the "sticky node" drag on the second click
 
