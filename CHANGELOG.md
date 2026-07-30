@@ -4,7 +4,29 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.6** (2026072720).
+> release is **0.6.7** (2026072721).
+
+## 0.6.7 (2026072721) — CI: release workflow handles Moodle 5.2+ public/ layout
+
+CI-only fix (no plugin code change). Merging to `main` runs the release workflow,
+whose matrix includes MOODLE_502_STABLE. Moodle 5.2 introduced the separated
+public directory, installing the plugin under `moodle/public/mod/vimipad/`
+instead of `moodle/mod/vimipad/`. The bundle-verification and AMD-rebuild steps
+hardcoded the 4.x path, so the 5.2 job failed at "Verify editor bundle installed"
+(`test -f` on a non-existent path), turning the whole run red — even though the
+0.6.x dev CI was green (its AMD steps run in a 405-only job).
+
+- `moodle-release.yml`: added a "Resolve plugin path" step that detects the
+  `public/` layout and exports the real plugin dir. "Verify editor bundle
+  installed" now checks the resolved path (all Moodle versions). The
+  `npm install` + `npx grunt amd` rebuild + its follow-up verify are gated to the
+  non-public layout (4.x / 5.0), where the existing paths are correct; on 5.2 they
+  are skipped, since AMD/bundle reproducibility is already covered by the
+  version-agnostic "Bundle reproducibility" job.
+- `moodle-ci.yml` unchanged: its AMD steps already run in a 405-only job, so the
+  dev CI was unaffected.
+- No plugin files changed; PHPUnit still **200 `mod_vimipad`** + **97
+  `vimipadassess`** green, whole-plugin phpcs + phpcpd clean.
 
 ## 0.6.6 (2026072720) — de-duplicate read access control (phpcpd)
 

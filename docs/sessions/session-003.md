@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.5.33** (2026072713)
+**Bogen:** 0.5.32 (2026072712) → **0.6.7** (2026072721)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend statisch.
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -127,6 +127,18 @@
   Kopie -> sicherheitsrelevanter Block kann nicht mehr driften.
 - phpcpd (`--min-lines 5 --min-tokens 70`): **keine Klone** (vorher 1 Klon, 18 Zeilen).
 
+**0.6.7 - Release-CI: Moodle-5.2-`public/`-Pfad (CI-only, kein Plugin-Code)**
+- Merge in `main` triggert `moodle-release.yml` (Matrix inkl. MOODLE_502). 5.2
+  hat den getrennten `public/`-Ordner -> Plugin unter `moodle/public/mod/vimipad/`.
+  Die fest verdrahteten 4.x-Pfade liessen den 502-Job bei „Verify editor bundle
+  installed" (`test -f`) fallen; der Dev-CI war grün, weil dort die AMD-Steps in
+  einem 405-only-Job laufen.
+- Fix: „Resolve plugin path"-Step erkennt `public/`; Bundle-Existenzpruefung
+  nutzt den aufgeloesten Pfad (alle Versionen); `npm install`+`npx grunt amd`+
+  Folge-Verify sind auf Nicht-`public` (4.x/5.0) begrenzt (dort stimmen die
+  Pfade), auf 5.2 uebernimmt die AMD-Reproduzierbarkeit der versionsunabhaengige
+  „Bundle reproducibility"-Job. `moodle-ci.yml` unveraendert.
+
 ---
 
 ### Entscheidungen getroffen
@@ -184,7 +196,7 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072720 / 0.6.6, package.json + lock.
+- [x] Version konsistent: version.php 2026072721 / 0.6.7, package.json + lock (CI-only).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -194,15 +206,13 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.6.6 — 0.6-Autoren-Backend komplett: Container+Import (0.6.1); Constraint-
-> Engine+Gate (0.6.2)+Felder (0.6.3); Struktursperren (0.6.4); Status-Endpoint
-> (0.6.5); Read-Access entdoppelt (0.6.6). Real auf Moodle 4.5.12 (200+97 grün);
+> 0.6.7 — 0.6-Autoren-Backend komplett (0.6.1–0.6.6) + Release-CI-Fix fuer
+> Moodle 5.2 `public/` (0.6.7, CI-only). Real auf Moodle 4.5.12 (200+97 grün);
 > ganzes Plugin phpcs- und phpcpd-clean.
 
 **Zuletzt abgeschlossen:**
-> 0.6.1 Container+Import; 0.6.2 Engine+Gate; 0.6.3 Felder; 0.6.4 Struktursperren;
-> 0.6.5 Status-Endpoint; 0.6.6 Read-Access-Helfer (phpcpd). Konvention: 0.6.x ohne
-> alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
+> 0.6.1–0.6.6 Autoren-Backend; 0.6.7 Release-CI-Fix (Moodle-5.2 public/). Konvention:
+> 0.6.x ohne alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
 
 **Als nächstes geplant:**
 > Frontend: Hinweis-Banner im Editor (ruft `get_constraint_status` debounced),
