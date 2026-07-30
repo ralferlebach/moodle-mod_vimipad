@@ -32,6 +32,20 @@ use mod_vimipad\local\operation\operation_type;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class operation_service {
+    /** @var bool Whether template element locks are bypassed (author/manage context). */
+    private bool $bypasslocks;
+
+    /**
+     * Construct the service, optionally bypassing template element locks.
+     *
+     * @param bool $bypasslocks If true, template element locks are not enforced,
+     *                          for users who may author/manage the template
+     *                          (mod/vimipad:manageprofiles). Learners get false.
+     */
+    public function __construct(bool $bypasslocks = false) {
+        $this->bypasslocks = $bypasslocks;
+    }
+
     /**
      * Apply a single operation to a workspace.
      *
@@ -205,6 +219,11 @@ class operation_service {
 
             case operation_type::NODE_UPDATE:
                 $node = $this->get_live_node($workspaceid, $payload['stableid']);
+                $this->assert_element_editable(
+                    $node->metadatajson,
+                    'update',
+                    $this->changed_fields($payload, ['label', 'type', 'content', 'metadatajson'])
+                );
                 $update = ['id' => $node->id, 'modifiedby' => $userid, 'timemodified' => $now];
                 foreach (['label', 'type', 'content', 'metadatajson'] as $field) {
                     if (array_key_exists($field, $payload)) {
@@ -216,6 +235,7 @@ class operation_service {
 
             case operation_type::NODE_DELETE:
                 $node = $this->get_live_node($workspaceid, $payload['stableid']);
+                $this->assert_element_editable($node->metadatajson, 'delete');
                 $DB->update_record('vimipad_node', (object) [
                     'id' => $node->id, 'deleted' => 1, 'modifiedby' => $userid, 'timemodified' => $now,
                 ]);
@@ -257,6 +277,11 @@ class operation_service {
 
             case operation_type::RELATION_UPDATE:
                 $relation = $this->get_live_relation($workspaceid, $payload['stableid']);
+                $this->assert_element_editable(
+                    $relation->metadatajson,
+                    'update',
+                    $this->changed_fields($payload, ['type', 'label', 'metadatajson', 'direction'])
+                );
                 $update = ['id' => $relation->id, 'modifiedby' => $userid, 'timemodified' => $now];
                 foreach (['type', 'label', 'metadatajson'] as $field) {
                     if (array_key_exists($field, $payload)) {
@@ -271,6 +296,7 @@ class operation_service {
 
             case operation_type::RELATION_DELETE:
                 $relation = $this->get_live_relation($workspaceid, $payload['stableid']);
+                $this->assert_element_editable($relation->metadatajson, 'delete');
                 $DB->update_record('vimipad_relation', (object) [
                     'id' => $relation->id, 'deleted' => 1, 'modifiedby' => $userid, 'timemodified' => $now,
                 ]);
@@ -278,6 +304,11 @@ class operation_service {
 
             case operation_type::RELATION_RETARGET:
                 $relation = $this->get_live_relation($workspaceid, $payload['stableid']);
+                $this->assert_element_editable(
+                    $relation->metadatajson,
+                    'update',
+                    (!empty($payload['newsource']) || !empty($payload['newtarget'])) ? ['endpoints'] : []
+                );
                 $update = ['id' => $relation->id, 'modifiedby' => $userid, 'timemodified' => $now];
                 if (!empty($payload['newsource'])) {
                     $this->assert_node_exists($workspaceid, $payload['newsource']);
@@ -288,6 +319,84 @@ class operation_service {
                     $update['targetid'] = $payload['newtarget'];
                 }
                 $DB->update_record('vimipad_relation', (object) $update);
+                return null;
+
+            case operation_type::CONTAINER_CREATE:
+                $stableid = $this->pick_stable_id($payload, 'container');
+                $record = [
+                    'workspaceid' => $workspaceid,
+                    'stableid' => $stableid,
+                    'type' => $payload['type'],
+                    'label' => $payload['label'] ?? null,
+                    'geometryjson' => $payload['geometryjson'] ?? null,
+                    'metadatajson' => $payload['metadatajson'] ?? null,
+                    'deleted' => 0,
+                ];
+                // Reuse any existing row with this stable id (revive a
+                // soft-deleted container), keeping the unique index intact.
+                $existing = $DB->get_record('vimipad_container', [
+                    'workspaceid' => $workspaceid, 'stableid' => $stableid,
+                ]);
+                if ($existing) {
+                    $record['id'] = $existing->id;
+                    $DB->update_record('vimipad_container', (object) $record);
+                } else {
+                    $DB->insert_record('vimipad_container', (object) $record);
+                }
+                return $stableid;
+
+            case operation_type::CONTAINER_UPDATE:
+                $container = $this->get_live_container($workspaceid, $payload['stableid']);
+                $this->assert_element_editable(
+                    $container->metadatajson,
+                    'update',
+                    $this->changed_fields($payload, ['type', 'label', 'geometryjson', 'metadatajson'])
+                );
+                $update = ['id' => $container->id];
+                foreach (['type', 'label', 'geometryjson', 'metadatajson'] as $field) {
+                    if (array_key_exists($field, $payload)) {
+                        $update[$field] = $payload[$field];
+                    }
+                }
+                $DB->update_record('vimipad_container', (object) $update);
+                return null;
+
+            case operation_type::CONTAINER_DELETE:
+                $container = $this->get_live_container($workspaceid, $payload['stableid']);
+                $this->assert_element_editable($container->metadatajson, 'delete');
+                $DB->set_field('vimipad_container', 'deleted', 1, ['id' => $container->id]);
+                // Membership rows are meaningless once the container is gone.
+                $DB->delete_records('vimipad_membership', ['containerid' => $container->id]);
+                return null;
+
+            case operation_type::MEMBERSHIP_ADD:
+                $container = $this->get_live_container($workspaceid, $payload['containerstableid']);
+                $criteria = [
+                    'containerid' => $container->id,
+                    'itemtype' => $payload['itemtype'],
+                    'itemstableid' => $payload['itemstableid'],
+                ];
+                // Upsert: at most one membership per (container, itemtype, item).
+                $existing = $DB->get_record('vimipad_membership', $criteria);
+                $rec = $criteria + [
+                    'role' => $payload['role'] ?? null,
+                    'sortorder' => isset($payload['sortorder']) ? (int) $payload['sortorder'] : 0,
+                ];
+                if ($existing) {
+                    $rec['id'] = $existing->id;
+                    $DB->update_record('vimipad_membership', (object) $rec);
+                } else {
+                    $DB->insert_record('vimipad_membership', (object) $rec);
+                }
+                return null;
+
+            case operation_type::MEMBERSHIP_REMOVE:
+                $container = $this->get_live_container($workspaceid, $payload['containerstableid']);
+                $DB->delete_records('vimipad_membership', [
+                    'containerid' => $container->id,
+                    'itemtype' => $payload['itemtype'],
+                    'itemstableid' => $payload['itemstableid'],
+                ]);
                 return null;
 
             default:
@@ -351,6 +460,74 @@ class operation_service {
             throw new \moodle_exception('error:relationnotfound', 'mod_vimipad');
         }
         return $relation;
+    }
+
+    /**
+     * Fetch a live (not soft-deleted) container by its stable id.
+     *
+     * @param int $workspaceid The workspace id.
+     * @param string $stableid The container stable id.
+     * @return \stdClass The container record.
+     * @throws \moodle_exception If not found.
+     */
+    private function get_live_container(int $workspaceid, string $stableid): \stdClass {
+        global $DB;
+        $container = $DB->get_record(
+            'vimipad_container',
+            ['workspaceid' => $workspaceid, 'stableid' => $stableid, 'deleted' => 0]
+        );
+        if (!$container) {
+            throw new \moodle_exception('error:containernotfound', 'mod_vimipad');
+        }
+        return $container;
+    }
+
+    /**
+     * Enforce a template structural lock carried in an element's metadata.
+     *
+     * A locked element (metadata `{"locked": true}`) cannot be deleted, and can
+     * only be updated in the fields listed in its `editable` whitelist (e.g.
+     * `{"locked": true, "editable": ["label"]}`). Elements without the flag are
+     * unaffected. This protects teacher-provided scaffolds while leaving the
+     * rest of the map freely editable.
+     *
+     * @param string|null $metadatajson The live element's metadata JSON.
+     * @param string $mode 'delete' or 'update'.
+     * @param string[] $changedfields Fields the update would change (update mode).
+     * @return void
+     * @throws \moodle_exception error:elementlocked if the change is not permitted.
+     */
+    private function assert_element_editable(?string $metadatajson, string $mode, array $changedfields = []): void {
+        if ($this->bypasslocks) {
+            return;
+        }
+        if ($metadatajson === null || $metadatajson === '') {
+            return;
+        }
+        $meta = json_decode($metadatajson, true);
+        if (!is_array($meta) || empty($meta['locked'])) {
+            return;
+        }
+        if ($mode === 'delete') {
+            throw new \moodle_exception('error:elementlocked', 'mod_vimipad');
+        }
+        $editable = is_array($meta['editable'] ?? null) ? $meta['editable'] : [];
+        foreach ($changedfields as $field) {
+            if (!in_array($field, $editable, true)) {
+                throw new \moodle_exception('error:elementlocked', 'mod_vimipad');
+            }
+        }
+    }
+
+    /**
+     * The subset of candidate fields the payload would actually change.
+     *
+     * @param array $payload The operation payload.
+     * @param string[] $candidates Mutable field names for the element.
+     * @return string[]
+     */
+    private function changed_fields(array $payload, array $candidates): array {
+        return array_values(array_intersect($candidates, array_keys($payload)));
     }
 
     /**

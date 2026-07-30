@@ -55,6 +55,12 @@ interface Props {
     /** Start inline text editing of the element's label. */
     onEditText?: () => void;
     t: (key: string) => string;
+    /** Whether lock mode is armed; only then is the lock toggle offered. */
+    lockMode?: boolean;
+    /** Whether this element currently carries a template lock. */
+    locked?: boolean;
+    /** Toggle the template lock on this element. */
+    onToggleLock?: () => void;
 }
 
 /** Which expandable panel is open, if any. */
@@ -77,8 +83,8 @@ const SHAPE_LABEL: Record<NodeShape, string> = {
  * @returns The dock element.
  */
 export function NodeFormatToolbar(props: Props): React.ReactElement {
-    const {kind = 'node', target, profile, formconfig, disabled, defaultPanel, onChangeStyle, onDuplicate, onDelete, onEditText, t}
-        = props;
+    const {kind = 'node', target, profile, formconfig, disabled, defaultPanel, onChangeStyle, onDuplicate, onDelete,
+        onEditText, lockMode, locked, onToggleLock, t} = props;
     const isNode = kind !== 'relation';
     const [panel, setPanel] = useState<Panel>(defaultPanel ?? 'none');
     const style = parseNodeStyle(target.metadatajson);
@@ -86,6 +92,25 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
 
     const apply = (change: NodeStyle): void => onChangeStyle(withNodeStyle(target.metadatajson, change));
     const toggle = (p: Panel): void => setPanel(cur => (cur === p ? 'none' : p));
+
+    // A locked element offers nothing but the lock toggle while lock mode is on:
+    // no text, format, colour or structural editing.
+    if (lockMode && locked && onToggleLock) {
+        return (
+            <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:fmt_toolbar')}>
+                <div className="vimipad-node-dock-row">
+                    <button
+                        type="button"
+                        className="vimipad-dock-btn active"
+                        aria-pressed={true}
+                        title={t('editor:unlockelement')}
+                        aria-label={t('editor:unlockelement')}
+                        onClick={onToggleLock}
+                    ><Icon name={FA.lock} /></button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:fmt_toolbar')}>
@@ -102,15 +127,16 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                     ><Icon name={FA.shape} /></button>
                 )}
                 {isNode && (
-                    <button
-                        type="button"
-                        className={`vimipad-dock-btn${panel === 'fill' ? ' active' : ''}`}
-                        aria-pressed={panel === 'fill'}
+                    <ColorField
+                        value={style.fill}
+                        fallback={DEFAULT_FILL}
                         disabled={disabled}
-                        title={t('editor:fmt_fill')}
-                        aria-label={t('editor:fmt_fill')}
-                        onClick={() => toggle('fill')}
-                    ><Icon name={FA.fill} /></button>
+                        icon={FA.fill}
+                        label={t('editor:fmt_fill')}
+                        onChange={c => apply({fill: c})}
+                        onReset={() => onChangeStyle(serialiseNodeStyle({}))}
+                        t={t}
+                    />
                 )}
                 <button
                     type="button"
@@ -129,6 +155,16 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                         aria-label={t('editor:fmt_duplicate')}
                         onClick={onDuplicate}
                     ><Icon name={FA.duplicate} /></button>
+                )}
+                {lockMode && onToggleLock && (
+                    <button
+                        type="button"
+                        className={`vimipad-dock-btn${locked ? ' active' : ''}`}
+                        aria-pressed={locked === true}
+                        title={t(locked ? 'editor:unlockelement' : 'editor:lockelement')}
+                        aria-label={t(locked ? 'editor:unlockelement' : 'editor:lockelement')}
+                        onClick={onToggleLock}
+                    ><Icon name={locked ? FA.lock : FA.unlock} /></button>
                 )}
                 <button
                     type="button"
@@ -157,27 +193,6 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                 </div>
             )}
 
-            {isNode && panel === 'fill' && (
-                <div className="vimipad-node-dock-panel">
-                    <ColorField
-                        value={style.fill}
-                        fallback={DEFAULT_FILL}
-                        disabled={disabled}
-                        icon={FA.fill}
-                        label={t('editor:fmt_fill')}
-                        onChange={c => apply({fill: c})}
-                        t={t}
-                    />
-                    <button
-                        type="button"
-                        className="vimipad-dock-btn"
-                        disabled={disabled}
-                        title={t('editor:fmt_reset')}
-                        aria-label={t('editor:fmt_reset')}
-                        onClick={() => onChangeStyle(serialiseNodeStyle({}))}
-                    ><Icon name={FA.reset} /></button>
-                </div>
-            )}
 
         </div>
     );

@@ -82,6 +82,8 @@ class import_map extends external_api {
         return [
             'nodes' => $counts['nodes'],
             'relations' => $counts['relations'],
+            'containers' => $counts['containers'] ?? 0,
+            'memberships' => $counts['memberships'] ?? 0,
             'revision' => $revision,
         ];
     }
@@ -95,6 +97,8 @@ class import_map extends external_api {
         return new external_single_structure([
             'nodes' => new external_value(PARAM_INT, 'Number of nodes imported'),
             'relations' => new external_value(PARAM_INT, 'Number of relations imported'),
+            'containers' => new external_value(PARAM_INT, 'Number of containers imported'),
+            'memberships' => new external_value(PARAM_INT, 'Number of memberships imported'),
             'revision' => new external_value(PARAM_INT, 'The workspace revision after import'),
         ]);
     }

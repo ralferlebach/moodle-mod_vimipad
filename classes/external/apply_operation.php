@@ -98,7 +98,10 @@ class apply_operation extends external_api {
             throw new \invalid_parameter_exception('payloadjson must decode to a JSON object');
         }
 
-        $service = new operation_service();
+        // Locks are bypassed by template authors, and by everyone when the
+        // activity opts learners into lock mode (locking is then cooperative).
+        $canmanage = has_capability('mod/vimipad:manageprofiles', $context);
+        $service = new operation_service($canmanage || !empty($instance->lockmodeforlearners));
         $result = $service->apply(
             (int) $workspace->id,
             $params['baserevision'],

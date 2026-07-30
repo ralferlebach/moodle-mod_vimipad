@@ -4,7 +4,621 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.5.34** (2026072714).
+> release is **0.6.24** (2026072738).
+
+## 0.6.23 (2026072737) — T5: re-arrange keeps container membership
+
+- Re-arrange laid out nodes by graph structure and ignored containers, so a
+  container's member nodes scattered and the box stayed put — the visual grouping
+  broke.
+- Now, before re-layout, the nodes spatially inside each container are recorded
+  (a node belongs to a container when its centre is within the box, matching what
+  the user sees — there is no separate assignment step). After the new layout each
+  non-empty container is refitted to the bounding box of its members' new
+  positions (plus padding), so members stay inside and the container follows them.
+  Empty containers are left where they are.
+- The refit rides in the same undo/redo entry as the layout change: one
+  re-arrange, one undo restores both node positions and container geometry.
+- New pure helpers `centerInBox` and `boundingBox` in `canvas/container_geometry`
+  (with a minimum-size clamp); 6 tests. Pure frontend — 210 `mod_vimipad` + 97
+  `vimipadassess` unchanged; phpcs clean; **Jest 36 suites / 230 tests**; bundle
+  reproducible. The felt result needs a browser.
+
+## 0.6.24 (2026072738) — T4: containers format and label like nodes
+
+- Containers now carry the **same style model as nodes** — shape (rounded rect,
+  rect, ellipse), fill colour and text styling (colour, bold, italic) — stored in
+  their `metadatajson`. A selected container shows the same format toolbar a node
+  does (shape, fill, text, delete), and its label is edited inline by
+  double-clicking the title. With no style set a container keeps its default
+  dashed look; once styled it renders as a shaped, filled box.
+- **Four-corner resize.** Containers previously resized from a single
+  bottom-right handle; they now have handles on all four corners like nodes, each
+  keeping the opposite corner fixed. New pure helper `resizeBoxCorner`
+  (nw/ne/sw/se, minimum-size clamped, opposite edge anchored).
+- The backend already accepts `label`, `geometryjson` and `metadatajson` on
+  `container_update`; this change wires the frontend to it and confirms the path.
+- **Verification:** new `container_style_test` (create with shape+fill+text, then
+  re-style via `container_update`, and confirm renaming does not clear the style)
+  and 5 `resizeBoxCorner` tests. **211 `mod_vimipad`** (+1) + **97
+  `vimipadassess`** green; phpcs + phpcpd + stylelint clean; lang 435/435; **Jest
+  37 suites / 237 tests**; bundle reproducible. The visual result needs a browser.
+- With this, the whole A1–A6 / T1–T6 issue set is addressed.
+
+## 0.6.23 (2026072737) — T5: re-arrange keeps container membership; CI stylelint fix
+
+- **T5.** "Re-arrange" recomputes node positions from the graph and previously
+  ignored containers, so a node that sat inside a container could end up outside
+  it. Re-arrange now snapshots which nodes are inside each container (spatially,
+  by centre), computes the new layout, then refits each non-empty container to
+  the bounding box of its members' new positions (plus padding). Members stay
+  inside and the container follows them; empty containers are left in place. The
+  node move and every container refit go into a single undo/redo entry, so one
+  undo restores both the layout and the container boxes.
+- New pure helpers `centerInBox` and `boundingBox` in `canvas/container_geometry.ts`
+  (the latter clamps to the minimum container size); 6 unit tests cover
+  membership detection, the padded fit, minimum-size clamping and the empty case.
+- **CI stylelint fix.** `styles.css` used `margin-right: 0 !important` to override
+  Bootstrap's `mr-2` on the add-menu fields, which trips `declaration-no-important`.
+  The `mr-2` classes are dropped from the markup (the flex `gap` already spaces
+  them) and the `!important` rule is removed. Verified with Moodle's stylelint
+  config locally.
+- **Verification:** 210 `mod_vimipad` + 97 `vimipadassess` green (T5 is
+  frontend-only); phpcs + stylelint clean; **Jest 36 suites / 232 tests**;
+  bundle reproducible. The visual result of the refit needs a browser.
+
+## 0.6.22 (2026072736) — T3: offer lock mode to learners (activity setting)
+
+- New activity setting **"Allow learners to use lock mode"**
+  (`lockmodeforlearners`, default off). Teachers can always use lock mode; with
+  this on, learners can toggle lock mode and lock/unlock elements too.
+- **Semantics.** Off (default): only `mod/vimipad:manageprofiles` holders manage
+  locks and learners are strictly bound — unchanged behaviour. On: locks become a
+  cooperative tool; `apply_operation` grants the lock bypass to everyone with edit
+  access in that activity, so any editor can lock or unlock. Documented in the
+  setting's help text.
+- Schema: `lockmodeforlearners` int(1) on the `vimipad` table (install.xml +
+  upgrade step 2026072736); added to the activity backup element and covered by
+  the restore roundtrip test. `get_workspace` reports the flag so the editor
+  shows lock mode; the toggle and the per-element lock buttons are now gated on
+  "can manage OR lock mode for learners", while container drawing stays
+  author-only.
+- **Verification:** new `lockmode_for_learners_test` (learner may edit a locked
+  node when enabled; blocked when disabled; the flag is reported); backup roundtrip
+  extended to assert the field survives. **210 `mod_vimipad`** (+3) + **97
+  `vimipadassess`** green; phpcs + phpcpd clean; lang 435/435; Jest 35/224; both
+  bundles rebuilt and reproducible.
+
+## 0.6.21 (2026072735) — fix the "sticky node" drag on the second click
+
+- **Symptom.** Click a node, wait, click again — the node starts following the
+  cursor with no button held. It happened at most once, then behaved normally.
+- **Root cause.** `onNodePointerDown` awaited the collaboration lock
+  (`beginEdit`, a network round-trip) *before* capturing the pointer and setting
+  the drag id. On the first interaction after a pause the lock isn't warm, so the
+  await yields a tick; if the pointer was released in that gap, `onPointerUp` ran
+  while `dragId` was still null and never cleared it. The node stayed armed, so
+  the next bare `pointermove` moved it. The following `pointerup` finally cleared
+  `dragId`, which is why it never recurred.
+- **Fix.** The drag (and the resize handle, which had the identical bug) is now
+  armed synchronously — capture and id set in the same event turn — and the lock
+  is acquired in the background, cancelling the drag only if it is refused and no
+  move has started yet. Added `onPointerCancel`/`onLostPointerCapture` handlers
+  that always disarm and release, so an interrupted gesture can't latch either.
+- **Verification.** New pure module `canvas/drag_arm.ts` models the sequence; 6
+  tests pin it, including the exact race (pointer-up while the lock is in flight
+  leaves nothing armed) and that a refusal never yanks a drag already in motion.
+  **Jest 35 suites / 224 tests**; 207 `mod_vimipad` + 97 `vimipadassess` green;
+  phpcs clean; bundle reproducible.
+
+## 0.6.20 (2026072734) — add-menus stacked two-line
+
+- The "Add concept" and "Add relation" menus used Bootstrap's `form-inline`,
+  which laid the heading's controls out in a single row. They now stack: the
+  legend on its own line, the controls on a second `vimipad-control-line` (a flex
+  row that wraps on narrow widths but stays under the heading). The old `mr-2`
+  spacing is replaced by a flex `gap`.
+- No behaviour change, markup/CSS only. **Jest 34 suites / 218 tests**; 207
+  `mod_vimipad` + 97 `vimipadassess` green; phpcs clean; bundle reproducible.
+
+## 0.6.19 (2026072733) — connector labels follow their own parallel connector
+
+Follow-up to 0.6.17: the lines were separated but the labels were not.
+
+- **Root cause.** The label layer computed its anchor as the midpoint of the two
+  node *centres* (`positionOf`), a separate code path that never saw the edge
+  anchoring or the sibling offset introduced for parallel connections. So every
+  label of a multi-relation pair piled onto the same centre line.
+- **Fix.** The label layer now derives the same edge anchors and the same
+  `siblingOffsets` slot as the line layer, then places the label at the curve
+  peak via `labelPoint(anchors, offset)`. Each label rides its own connector; a
+  lone relation still sits on the centre line.
+- **Verification:** 3 new tests — siblings' labels straddle the centre line
+  symmetrically, a single label stays centred, and the label offset matches the
+  path's own vertical extent. **Jest 34 suites / 218 tests**; 207 `mod_vimipad` +
+  97 `vimipadassess` green; phpcs clean; bundle reproducible. Visual result needs
+  a browser.
+- Env note: `phpunit/cli/init.php` self-updates Composer and aborts on a
+  getcomposer.org 503, leaving the env on the old version; run it with
+  `--no-composer-self-update`. Recorded in the environment setup doc.
+
+## 0.6.18 (2026072732) — A6: Enter makes a line, not a column
+
+Two faults compounded here, which is why multi-line labels never worked.
+
+- **Enter produced columns.** The contenteditable element was styled with
+  `labelBox(...)`, which sets `display: flex` (direction `row`). Browsers
+  implement Enter by inserting a block per line, and inside a flex row each of
+  those blocks becomes a **flex item**, so the lines were laid out side by side
+  as columns. The centring wrapper now carries the flex layout and the editable
+  element itself stays a block.
+- **Line breaks were never saved.** `onInput` read `textContent`, which ignores
+  that markup and concatenates: "A⏎B" came back as "AB". A new
+  `canvas/editable_text.ts` walks the tree and turns block boundaries and `<br>`
+  into real newlines. `innerText` would also do this but is not implemented
+  consistently outside browsers, so the explicit walk is used and is fully
+  covered by tests.
+- **Node growth follows from the fix.** `nodeWidth`/`nodeHeight` already split on
+  `\n`; they simply never saw one. With breaks preserved the box grows per line
+  while typing, since the live edit value feeds the size.
+- **Verification:** 8 new unit tests including `<br>`, Chrome/Firefox
+  div-per-line markup, nested inline formatting, paragraphs, empty input and an
+  explicit assertion that `textContent` would have lost the breaks. **Jest 34
+  suites / 215 tests**; 207 `mod_vimipad` + 97 `vimipadassess` green; phpcs clean;
+  bundle reproducible. Needs a browser to confirm the felt behaviour.
+- Still rough: `nodeHeight` estimates characters per line at a fixed ~7px, so a
+  label scaled up with A+ can still overflow. Left alone deliberately rather than
+  guessed at without being able to measure text.
+
+## 0.6.17 (2026072731) — A3: connector angles and parallel sibling connections
+
+- **Root cause of the odd arrow heads.** For the curved style `relLinePath` built
+  a cubic Bezier whose control points were *always vertical*
+  (`from.x, from.y ± k` / `to.x, to.y ∓ k`), so a connection left and entered its
+  nodes vertically no matter how the nodes were actually placed. Because the
+  marker uses `orient="auto"`, the head followed that vertical end tangent and
+  pointed the wrong way — most visibly on side-by-side nodes.
+- **Departure/arrival angle, as specified.** The direct line now classifies the
+  connection as basically horizontal or vertical; the axis-aligned perpendicular
+  of that side (the "Lot") is bisected with the direct line's angle, and that
+  bisector is the angle at which the connection leaves or arrives outside the
+  node shape. The head uses the same angle because the path runs **straight for
+  the arrow's length** (`ARROW_STUB`) before curving; the curve handles continue
+  those directions, so the joins stay smooth.
+- **Parallel connections.** Relations sharing a node pair are grouped into slots
+  and their anchors are shifted symmetrically perpendicular to the direct line
+  (`siblingOffsets` + new `offsetAnchors`), so multiple relations run parallel
+  instead of overlapping. This applies to straight connections too, not just free
+  ones.
+- New pure helpers in `canvas/connection_geometry.ts`: `orientationOf`,
+  `bisectAngles`, `connectorExitAngle`, `offsetAnchors`, `freeConnectorPath`.
+- **Verification:** 12 new unit tests covering orientation, bisecting across the
+  0/360 wrap, horizontal and diagonal departure angles, mirrored ends, symmetric
+  offsets, parallelism (the direction vector is unchanged) and the straight run.
+  **Jest 33 suites / 207 tests**; 207 `mod_vimipad` + 97 `vimipadassess` green;
+  phpcs + phpcpd clean; bundles reproducible. The visual result needs a browser.
+- Adopts the updated `makefile` (its `check` target now also runs `build`, which
+  would have caught the stale AMD bundle behind T1).
+
+## 0.6.16 (2026072730) — A1: pointer mapping now honours the aspect ratio
+
+- **Root cause.** The canvas `<svg>` carries a viewBox but no
+  `preserveAspectRatio`, so the browser applies the default `xMidYMid meet`:
+  uniform scale plus centring. The screen-to-canvas conversion instead divided by
+  the element's width and height separately, i.e. it assumed the viewBox was
+  stretched to fill the element. That produced a wrong offset *and* a wrong
+  scale, differing per axis — the pointer drifted from the cursor and drags ran
+  at the wrong speed. In a reported session (element 1138x213, viewBox 826x551)
+  the horizontal scale was off by a factor of ~3.6; even on a normal-height
+  window `max-height: 60vh` keeps the element shorter than the viewBox implies,
+  so the error is present in everyday use too.
+- **Fix.** `toSvgPoint` now uses the browser's own `getScreenCTM().inverse()`,
+  which also accounts for CSS transforms on ancestors (full view). A new pure
+  module `canvas/viewport.ts` replicates the `meet` mapping as a fallback for
+  environments without a CTM (jsdom, tests).
+- **Tests** pin the mapping to the real reported geometry: uniform scale, centre
+  maps to centre, a 100 px drag equals 100/scale viewBox units, and an explicit
+  assertion that the previous stretch assumption was off by more than 3.5x.
+- Affects selecting, moving, resizing and drawing connectors alike, since they
+  all go through the same conversion.
+- **Verification:** 207 `mod_vimipad` + 97 `vimipadassess` green; phpcs clean;
+  `tsc` clean; **Jest 32 suites / 195 tests**; bundles reproducible. The felt
+  behaviour needs confirming in a browser.
+
+## 0.6.15 (2026072729) — UI cleanup: toolbar author tools, lock mode, colour menu
+
+Addresses the reported UI issues T1, T2, T6, A4, A5 and (tentatively) A2.
+
+- **T1 — raw string keys in the editor.** Root cause: `amd/build/init.min.js` was
+  stale. It is rebuilt by Moodle's Grunt, not by `build.mjs`, and had not been
+  rebuilt since 0.6.7, so the browser requested an outdated `STRING_KEYS` list and
+  `init.js` echoed the raw key for anything missing. Both AMD artefacts are
+  rebuilt. **CI gap closed:** the reproducibility job only diffed the esbuild
+  bundle and the Grunt step never compared its output against the committed
+  artefact (and never built `revision.js` at all), so a stale build shipped
+  green. CI now builds both AMD sources and gates them with `git diff
+  --exit-code`. **Hardened:** `init.js` returns `undefined` for unknown keys and
+  the bundle falls back to its own English strings, so a stale build degrades to
+  English rather than raw ids. New `amd_string_keys_test` guards the other
+  direction (every requested key exists in `lang/en`).
+- **T6 / T2 — author tools relocated.** The author area below the canvas is gone.
+  Container drawing is now a toolbar button between re-arrange and export, and a
+  new lock-mode toggle sits with the full-view button in a right-hand toolbar
+  group. Both are shown only with `mod/vimipad:manageprofiles`.
+- **T3 (core) — locking moved into the element dock.** With lock mode armed, a
+  node's dock offers a lock toggle left of delete; a locked element's dock is
+  reduced to that toggle, so no text, colour, shape or structural editing is
+  offered.
+- **A4 — colour sub-menu removed.** The palette button opens the picker directly;
+  the formatting reset is now a third action inside the picker next to
+  cancel/confirm.
+- **A5 — confirm buttons** read as outline-success (green on white) and light up
+  solid green on hover/focus, clearly distinct from neutral dock buttons.
+- **A2 (tentative)** — the dock's `foreignObject` (300x320) is now
+  `pointer-events: none`, so the empty area below a selected node no longer
+  swallows clicks. Needs confirmation in a browser.
+- **Verification:** **207 `mod_vimipad`** + **97 `vimipadassess`** green; phpcs
+  clean; `tsc` clean; **Jest 31 suites / 189 tests** (new `color_field`); esbuild
+  and AMD bundles both rebuilt and byte-reproducible. Visual result runs in CI /
+  the browser.
+
+## 0.6.14 (2026072728) — revision view reconstructs containers
+
+Closes the container gap in the historical revision viewer.
+
+- `reconstruction_service` now replays container operations (create / update /
+  delete) alongside nodes and relations, returning surviving containers at the
+  requested revision. `get_revision_state` populates the `containers` field it
+  already declared (VALUE_OPTIONAL). Viewing a past revision now shows that
+  revision's containers.
+- **No frontend change needed:** `getRevisionState` passes the state through and
+  `RevisionViewer` already renders `state.containers` via `CanvasView` in
+  read-only mode — the backend fix alone closes the loop.
+- **Verification:** new `test_reconstruct_containers` drives create → update
+  (label + geometry) → create → delete across revisions on real Moodle; **206
+  `mod_vimipad`** (+1) + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd
+  clean. Frontend unchanged (bundle byte-identical, Jest 30/185).
+
+## 0.6.13 (2026072727) — author tools grouped into one area, drawing author-gated
+
+Discoverability/permissions cleanup for the 0.6 authoring tools.
+
+- **One author area.** Draw-containers and the template `LockPanel` now live in a
+  single, clearly delimited "Author tools" group (`role="group"`, labelled) instead
+  of sitting inline among the learner-facing node/relation controls.
+- **Author-gated.** The whole group renders only when `canmanage`
+  (mod/vimipad:manageprofiles). This also closes the earlier gap where *drawing*
+  containers was open to any editor — it is now author-only, consistent with
+  moving/resizing/deleting locked containers.
+- Learners see only the node/relation controls; authors additionally see the
+  author area. Canvas view only (unchanged).
+- Lang: `editor:authortools` (en/de, 430/430 parity) + init.js key + fallback.
+- **Verification:** no PHP logic change; `tsc` clean; **Jest 30 suites / 185
+  tests**; esbuild bundle rebuilt and **byte-reproducible**; **205 `mod_vimipad`**
+  + **97 `vimipadassess`** green; whole-plugin phpcs clean. Visual placement runs
+  in CI.
+
+## 0.6.12 (2026072726) — SVG/PNG export with containers + SVG round-trip import
+
+Rounds out import/export for the 0.6 authoring tools. SVG/PNG/PDF export already
+existed (it serializes the live SVG, so containers have been drawn into it since
+0.6.9); this makes the export container-aware and adds an SVG re-import path.
+
+- **Containers in the export frame.** `computeContentBounds` now folds container
+  boxes into the export viewBox, so a container drawn beyond the nodes is no longer
+  clipped in the SVG/PNG/PDF output. Container interaction chrome (delete, resize
+  handle, draw overlay) is stripped from the exported image.
+- **SVG round-trip.** An exported SVG embeds the semantic map JSON in a
+  `<metadata id="vimipad-data">` element (the same envelope `export.php?format=json`
+  serves). Importing an `.svg` extracts that JSON and feeds it through the existing
+  import path — so an SVG is both a viewable image and a re-importable map. If the
+  SVG carries no embedded map, the import reports `editor:importnovimidata`.
+- Pure `extractMapData` and the embed step are unit-tested; a new
+  `test_container_roundtrip` proves containers survive export → import (the backend
+  basis the SVG round-trip stands on).
+- Lang: `editor:importnovimidata` (en/de, 429/429 parity) + init.js key + fallback.
+- **Verification:** `tsc` clean; **Jest 30 suites / 185 tests** (extended
+  `svg_export`); esbuild bundle rebuilt and **byte-reproducible**;
+  **205 `mod_vimipad`** + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd
+  clean. Actual download/upload flows run in the browser / CI.
+
+## 0.6.12 (2026072726) — SVG/PNG export with containers + SVG round-trip import
+
+Rounds out image output and adds a lossless SVG round-trip. No PHP logic change
+(one lang string); the round-trip rides on the existing JSON export/import.
+
+- **Containers in image output.** `computeContentBounds` now frames container
+  geometry as well as nodes, so SVG/PNG/PDF exports no longer clip a container
+  drawn beyond the nodes. Container interaction chrome (draw overlay, delete and
+  resize handles) is stripped from the exported SVG.
+- **SVG round-trip.** An exported SVG embeds the map's semantic JSON in a
+  `<metadata id="vimipad-data">` element (plain text node — jsdom-safe and
+  XML-escaped, no CDATA). The Import button now also accepts `.svg`: on import the
+  embedded JSON is extracted and fed through the existing `importMap`, so an
+  exported SVG re-imports exactly like a JSON export. An SVG without embedded data
+  is rejected with a clear message.
+- Pure, tested helpers: `extractMapData`, `MAP_DATA_ID`, extended
+  `serializeCanvasSvg(embedJson?)` and `computeContentBounds(containers)`.
+- Lang: `editor:importnovimidata` (en/de, 429/429 parity) + init.js key + fallback.
+- **Verification:** the JSON export/import round-trip incl. containers is covered
+  by existing `test_export_import_roundtrip` + `test_container_roundtrip`
+  (PHPUnit); embed/extract and container bounds by Jest. `tsc` clean; **Jest 30
+  suites / 185 tests**; esbuild bundle rebuilt and **byte-reproducible**; **205
+  `mod_vimipad`** + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd clean.
+  Browser download/upload and `@javascript` Behat run in CI.
+
+## 0.6.11 (2026072725) — containers: move, resize, rename, lock + undo/redo
+
+Completes the container authoring tool (the "Reste" of 0.6.9) — no PHP change;
+container_update was already enforced and manager-bypassed.
+
+- **Move / resize / rename on the canvas.** Each container now has a title bar
+  (drag to move, double-click to rename) and a bottom-right handle (drag to
+  resize, clamped to a minimum). The body stays non-interactive so nodes beneath
+  remain clickable; the drag uses pointer capture, isolated from the node/connect
+  gestures. Committed as `container_update` operations.
+- **Full undo/redo** for containers — create, delete, move, resize and rename all
+  push history entries and replay through `operationToAction` (create/delete since
+  0.6.9; move/resize/rename now), matching how nodes and relations behave.
+- **Lock containers.** The template `LockPanel` now lists containers too, so an
+  author can lock a container like any node or relation.
+- **Learner safety.** A locked container shows no move/resize/delete/rename
+  affordances to non-managers (the server already rejects such edits; this avoids
+  offering an action that would fail).
+- New pure geometry helpers `moveBox` / `resizeBox` (clamped), unit-tested.
+- **Verification:** `tsc` clean; **Jest 30 suites / 182 tests** (extended
+  `container_geometry`, `lock_panel`); esbuild bundle rebuilt and
+  **byte-reproducible**; **204 `mod_vimipad`** + **97 `vimipadassess`** green
+  (PHP unchanged); whole-plugin phpcs clean. Canvas drag visuals and `@javascript`
+  Behat run in CI.
+- Next: SVG/PNG export includes containers in bounds, and SVG round-trip import.
+
+## 0.6.10 (2026072724) — template lock editor (frontend authoring 3/3)
+
+Third and final 0.6 frontend/canvas authoring piece, completing the three-point
+frontend work. Authors can now lock individual elements so learners cannot
+restructure or delete them; the enforcement has existed server-side since 0.6.4,
+this makes it settable and adds the author bypass it needs.
+
+- **Backend:** `operation_service` gains a `bypasslocks` constructor flag; when
+  set, element-lock enforcement is skipped. `apply_operation` passes
+  `has_capability('mod/vimipad:manageprofiles')`, so authors/managers can set,
+  change and remove locks (and edit locked scaffolds) while learners stay bound.
+  `get_workspace` returns `canmanage` (VALUE_OPTIONAL) so the editor shows the
+  lock UI only to authors. Tests: manager bypass (`element_lock_test`), canmanage
+  reflects capability (`get_workspace_containers_test`).
+- **Frontend:** pure `element_lock.ts` (read/write the `locked` + `editable`
+  metadata, preserving other keys); `LockPanel` lists nodes and relations with a
+  per-element lock toggle and an "allow renaming" sub-toggle (keeps `label`
+  editable), dispatched as update operations. Shown only when `canmanage`. Locked
+  nodes render a small lock badge on the canvas for everyone.
+- Lang: `editor:node`, `editor:templatelocks`, `editor:templatelockshint`,
+  `editor:lockallowlabel` (en/de, 428/428 parity) + init.js keys + mount fallbacks.
+- **Verification:** `tsc` clean; **Jest 30 suites / 179 tests** (new:
+  `element_lock`, `lock_panel`); esbuild bundle rebuilt and **byte-reproducible**;
+  **204 `mod_vimipad`** + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd
+  clean. Visual rendering and `@javascript` Behat run in CI.
+
+With 0.6.8–0.6.10 the three frontend/canvas authoring features are complete:
+soft constraint hints, canvas containers, and template locks.
+
+## 0.6.9 (2026072723) — canvas: draw containers (frontend authoring 2/3)
+
+Second of the three 0.6 frontend/canvas authoring pieces. Authors can now draw
+background containers (sections/boxes) directly on the canvas. Container
+operations existed server-side since 0.6.1; this makes them usable and visible.
+
+- **Backend:** `get_workspace` now returns `containers` (stableid, type, label,
+  geometryjson, metadatajson), mapped from the state the service already loads.
+  Added to the return structure as `VALUE_OPTIONAL` so `get_revision_state`
+  (which shares the structure) stays valid. New test
+  `get_workspace_containers_test` (returned + soft-deleted excluded, validated
+  via `clean_returnvalue`).
+- **Frontend:** `VimiContainer` type + `containers` on the workspace state;
+  reducer actions add/update/deleteContainer; pure geometry codec
+  `container_geometry.ts` (parse/serialise/normalise/box-from-drag). `CanvasView`
+  renders containers behind the graph and hosts an isolated draw overlay (active
+  only while the tool is on, so it never interferes with node/connect gestures);
+  a toolbar toggle enters draw mode, a drag creates the container, a corner
+  button deletes it. Remote sync + undo/redo covered by new container cases in
+  `operationToAction`.
+- Lang: `editor:containers`, `editor:containerdelete`, `editor:drawcontainer`,
+  `editor:drawcontainerdone` (en/de, 424/424 parity) + init.js keys + mount fallbacks.
+- **Verification:** `tsc` clean; **Jest 28 suites / 169 tests** (new:
+  `container_geometry`, `container_reducer`, `container_apply_remote`); esbuild
+  bundle rebuilt and **byte-reproducible**; **202 `mod_vimipad`** + **97
+  `vimipadassess`** green; whole-plugin phpcs + phpcpd clean. Visual drawing and
+  `@javascript` Behat run in CI, not verifiable in the sandbox.
+- Next: the template lock editor (3/3) — set `locked`/`editable` metadata,
+  enforced since 0.6.4.
+
+## 0.6.8 (2026072722) — editor: soft constraint hints (frontend authoring 1/3)
+
+First of the three 0.6 frontend/canvas authoring pieces. The editor now surfaces
+the activity's map requirements as soft, non-blocking hints while editing, using
+the 0.6.5 `get_constraint_status` endpoint. This never blocks; the hard gate
+still runs only at submission.
+
+- New API client method `getConstraintStatus(workspaceid)` and a `ConstraintStatus`
+  type (`js/src/api/service.ts`, `js/src/types`).
+- New hook `useConstraintHints(api, workspaceid, revision, enabled)`
+  (`js/src/hooks/use_constraint_hints.ts`): debounced (600 ms), coalesces a burst
+  of edits into one request, latest-request-wins, failures swallowed (advisory).
+  Only active for the editing owner of an open map (not read-only, not submitted).
+- New presentational `ConstraintBanner` (`js/src/components/ConstraintBanner.tsx`):
+  renders nothing when no constraint is configured or the map is satisfied; else a
+  warning alert listing the (backend-localised) hint messages. Wired into
+  `EditorApp` above the canvas.
+- Lang `constraint:hintsheading` (en/de, 420/420 parity); added to the editor's
+  `core/str` key list (`amd/src/init.js`) and the mount fallbacks (`mount.tsx`).
+- **Verification:** `tsc --noEmit` clean; **Jest 25 suites / 155 tests** green
+  (new: `constraint_status_api`, `use_constraint_hints` with fake timers,
+  `constraint_banner`); esbuild bundle rebuilt and **byte-reproducible**; PHP
+  unchanged (**200 `mod_vimipad`** + **97 `vimipadassess`**), whole-plugin phpcs
+  clean. Note: visual rendering and `@javascript` Behat run in CI, not verifiable
+  in the sandbox.
+- Next: container drawing on the canvas (2/3), then the template lock editor (3/3).
+
+## 0.6.7 (2026072721) — CI: release workflow handles Moodle 5.2+ public/ layout
+
+CI-only fix (no plugin code change). Merging to `main` runs the release workflow,
+whose matrix includes MOODLE_502_STABLE. Moodle 5.2 introduced the separated
+public directory, installing the plugin under `moodle/public/mod/vimipad/`
+instead of `moodle/mod/vimipad/`. The bundle-verification and AMD-rebuild steps
+hardcoded the 4.x path, so the 5.2 job failed at "Verify editor bundle installed"
+(`test -f` on a non-existent path), turning the whole run red — even though the
+0.6.x dev CI was green (its AMD steps run in a 405-only job).
+
+- `moodle-release.yml`: added a "Resolve plugin path" step that detects the
+  `public/` layout and exports the real plugin dir. "Verify editor bundle
+  installed" now checks the resolved path (all Moodle versions). The
+  `npm install` + `npx grunt amd` rebuild + its follow-up verify are gated to the
+  non-public layout (4.x / 5.0), where the existing paths are correct; on 5.2 they
+  are skipped, since AMD/bundle reproducibility is already covered by the
+  version-agnostic "Bundle reproducibility" job.
+- `moodle-ci.yml` unchanged: its AMD steps already run in a 405-only job, so the
+  dev CI was unaffected.
+- No plugin files changed; PHPUnit still **200 `mod_vimipad`** + **97
+  `vimipadassess`** green, whole-plugin phpcs + phpcpd clean.
+
+## 0.6.6 (2026072720) — de-duplicate read access control (phpcpd)
+
+Small hardening: the access-control boilerplate shared by the read external
+functions is now in one place, so it cannot drift — the kind of duplication that
+matters because it is security-relevant.
+
+- **New `helper::validate_workspace_for_read()`** mirrors the existing
+  `validate_workspace_for_edit()`: it resolves cmid → context → instance →
+  workspace, validates the context, requires `mod/vimipad:view`, and enforces the
+  "own map, or grader for someone else's" rule in one spot. `get_revision_state`
+  and `get_constraint_status` now call it instead of each carrying their own copy
+  of the block.
+- **phpcpd (`--min-lines 5 --min-tokens 70`) reports no clones** (was 1 clone, 18
+  duplicated lines across the two external functions).
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **200 `mod_vimipad`**
+  **+ 97 `vimipadassess`** green (get_constraint_status and collaboration external
+  tests exercise the shared helper); whole-plugin phpcs clean.
+
+## 0.6.5 (2026072719) — non-blocking constraint status endpoint
+
+Backend half of the soft, edit-time constraint hints: the editor can now ask for
+the current map's constraint status without blocking anything. Same resolver as
+the hard gate, so hints and enforcement never diverge.
+
+- **New external function `mod_vimipad_get_constraint_status`** (read, ajax):
+  given a workspace, it evaluates the live map with `constraint_policy` and
+  returns `configured`, `satisfied`, localized `messages`, and the structured
+  `requiredmissing` / `forbiddenpresent` / `typeviolations` lists (for future
+  element highlighting). View capability required; inspecting another user's map
+  needs grade capability, as elsewhere. It never mutates and never blocks.
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **199 `mod_vimipad`**
+  (incl. new `get_constraint_status_test`, run in isolation, with the return value
+  validated against the declared structure via `clean_returnvalue`) **+ 97
+  `vimipadassess`** green; whole-plugin phpcs clean (`--ignore=tools/`).
+- Frontend consumption (a hint banner in the editor that calls this endpoint,
+  debounced) is the next slice.
+
+## 0.6.4 (2026072718) — template structural locks + lint fix
+
+Third 0.6 authoring-foundation piece: teacher-provided scaffolds can now be
+protected element by element, enforced server-side. No schema change.
+
+- **Element locks in the operation service.** An element whose metadata carries
+  `{"locked": true}` can no longer be deleted, and can only be updated in the
+  fields listed in its `editable` whitelist (e.g. `{"locked": true, "editable":
+  ["label"]}`) — otherwise `error:elementlocked` is raised. Enforced for
+  node/relation/container update and delete plus relation retarget, in
+  `operation_service` (which every edit path goes through). Unlocked elements
+  and element creation are unaffected, and import is unaffected (it only
+  creates). This is the enforcement half of the template policy from
+  `template_constraint_policy.md`.
+- New lang string `error:elementlocked` (en/de, 419/419 parity).
+- **Lint fix:** the `version.php` release-line inline comment now starts with a
+  capital (Squiz.Commenting.InlineComment). Whole-plugin phpcs (moodle standard,
+  `--ignore=tools/`) is clean.
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **197 `mod_vimipad`**
+  (incl. new `element_lock_test`: locked delete/update rejected, whitelist
+  honoured, unlocked elements free, locked relation protected) **+ 97
+  `vimipadassess`** green.
+
+## 0.6.3 (2026072717) — teacher map-constraint fields (submission gate goes live)
+
+Gives the 0.6.2 constraint engine its input: teachers can now define the map
+requirements, and the hard submission gate enforces them from real settings.
+
+- **Five new instance settings** on `mod_form` (own "Map requirements" section):
+  required concepts, forbidden concepts, allowed relation types (free-text,
+  one per line or comma-separated) and minimum concepts / minimum relations.
+  Added to `db/install.xml`, `db/upgrade.php` (savepoint 2026072717, guarded
+  `add_field`s) and the backup element list; restore is automatic. Since
+  `constraint_config::from_instance()` already read these fields, the 0.6.2
+  submission gate activates with no further wiring.
+- New lang strings for the section, labels and help (en/de, 418/418 parity).
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **193 `mod_vimipad`**
+  **+ 97 `vimipadassess`** green; `backup_restore_test` extended to assert the
+  five new fields survive a backup/restore roundtrip; a new gate test confirms
+  the block fires from settings saved through the form; phpcs clean; install.xml
+  well-formed and the upgrade savepoint matches version.php.
+
+## 0.6.2 (2026072716) — constraint-policy engine + hard submission gate
+
+Adds the map-constraint engine that the authoring/assessment workflow needs and
+wires the hard gate into submission. The teacher-facing input fields for the
+qualitative constraints follow in 0.6.3; the engine and gate are complete and
+fully tested now.
+
+- **`\mod_vimipad\local\policy` package.** `constraint_config` (value object,
+  `from_instance()` reads required/forbidden concepts, allowed relation types and
+  min node/relation counts — no-op today, active the moment the fields land),
+  `constraint_policy::evaluate()` (pure, deterministic; takes a normalized map,
+  returns findings) and `constraint_report` (structured findings +
+  `is_satisfied()` + localized `messages()`/`summary()`), so the same evaluation
+  can back both the hard gate and future soft edit-time hints.
+- **Hard submission gate.** `snapshot_service::create_submission` now evaluates
+  the frozen map under the workspace write lock and refuses submission with
+  `error:constraintsnotmet` (listing the violations) if it is not satisfied.
+  Constraint kinds: missing required concepts, present forbidden concepts,
+  disallowed relation types, too few concepts, too few relations
+  (case-insensitive term matching).
+- New lang strings: `error:constraintsnotmet` and `constraint:*` messages
+  (en/de, 407/407 parity).
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **192 `mod_vimipad`**
+  (incl. `constraint_policy_test`: all constraint kinds + an end-to-end gate test
+  that blocks an invalid submission and lets a fixed one through) **+ 97
+  `vimipadassess`** green; phpcs clean.
+
+*Versioning note: the previous release (integer 2026072715) is 0.6.1 — the 0.6.x
+line uses plain patch numbers without an -alpha suffix.*
+
+## 0.6.1 (2026072715) — 0.6 foundation: container/membership operations + import round-trip
+
+Opens the 0.6.x authoring line with the backend contract the authoring tools sit
+on. No new UI yet; this makes containers first-class in the operation log and
+closes the export/import asymmetry the 0.5.32 audit flagged.
+
+- **Container & membership operations.** New operation types `container_create`,
+  `container_update`, `container_delete`, `membership_add`, `membership_remove`
+  in `operation_type` (validated: itemtype enum node|relation|container,
+  int-like sortorder) and handled in `operation_service::mutate`
+  (create revives soft-deleted rows; membership_add is an upsert; container_delete
+  soft-deletes and drops its memberships). All go through the same shared write
+  lock and revision path as node/relation operations.
+- **Import now round-trips containers and memberships.** The export already
+  emitted them (stable-id based); `import_service` now consumes them, remapping
+  container stable ids and member references (nodes, relations and nested
+  containers) onto the freshly created elements. Relation stable ids are now also
+  tracked in the id map so memberships on relations remap correctly. XML parsing
+  gained `containers`/`memberships`; `import_map` returns their counts. No format
+  version bump was needed — the format already carried containers; only the
+  import consumer was missing.
+- New lang string `error:containernotfound` (en/de, 401/401 parity).
+- **Template/constraint policy specified** (`docs/design/template_constraint_policy.md`):
+  soft constraints at edit time via a shared `constraint_policy` resolver, hard
+  gate at submission; template structural locks enforced per-operation via element
+  `metadatajson` — implementation scheduled across 0.6.x.
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **186 `mod_vimipad`**
+  (incl. new `container_operations_test`: lifecycle + import round-trip) **+ 97
+  `vimipadassess`** green; phpcs clean on all changed/new files.
 
 ## 0.5.34 (2026072714) — 0.5.x closure part 2: due-date/late, map_updated event, peer scope
 

@@ -96,6 +96,66 @@ final class reconstruction_service_test extends \advanced_testcase {
     }
 
     /**
+     * Container operations are replayed so historical revisions show containers.
+     *
+     * @return void
+     */
+    public function test_reconstruct_containers(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module(
+            'vimipad',
+            ['course' => $course->id, 'collaborationmode' => 0]
+        );
+        $context = \context_module::instance($instance->cmid);
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $workspace = (new workspace_service())->get_or_create_for_user($instance, $context, (int) $user->id);
+        $wsid = (int) $workspace->id;
+        $ops = new operation_service();
+        $uid = (int) $user->id;
+
+        // Build: +C1, update C1 (label + geometry), +C2, delete C2.
+        $ops->apply($wsid, 0, 'container_create', [
+            'stableid' => 'cont_00000000000a', 'type' => 'group', 'label' => 'Sec',
+            'geometryjson' => '{"x":0,"y":0,"w":100,"h":80}',
+        ], $uid);
+        $ops->apply($wsid, 1, 'container_update', [
+            'stableid' => 'cont_00000000000a', 'label' => 'Section',
+            'geometryjson' => '{"x":10,"y":10,"w":200,"h":150}',
+        ], $uid);
+        $ops->apply($wsid, 2, 'container_create', [
+            'stableid' => 'cont_00000000000b', 'type' => 'group', 'label' => 'Temp',
+        ], $uid);
+        $ops->apply($wsid, 3, 'container_delete', ['stableid' => 'cont_00000000000b'], $uid);
+
+        $service = new reconstruction_service();
+
+        // At revision 1: C1 with its original label.
+        $state = $service->reconstruct($wsid, 1);
+        $this->assertCount(1, $state['containers']);
+        $this->assertSame('Sec', $state['containers'][0]->label);
+
+        // At revision 2: C1 carries the updated label and geometry.
+        $state = $service->reconstruct($wsid, 2);
+        $bykey = $this->keyed($state['containers']);
+        $this->assertSame('Section', $bykey['cont_00000000000a']->label);
+        $this->assertSame('{"x":10,"y":10,"w":200,"h":150}', $bykey['cont_00000000000a']->geometryjson);
+
+        // At revision 3: both containers exist.
+        $state = $service->reconstruct($wsid, 3);
+        $this->assertEqualsCanonicalizing(
+            ['cont_00000000000a', 'cont_00000000000b'],
+            $this->ids($state['containers'])
+        );
+
+        // At revision 4: the deleted container is gone.
+        $state = $service->reconstruct($wsid, 4);
+        $this->assertSame(['cont_00000000000a'], $this->ids($state['containers']));
+    }
+
+    /**
      * Stable ids of a list of reconstructed records.
      *
      * @param array $records The records.

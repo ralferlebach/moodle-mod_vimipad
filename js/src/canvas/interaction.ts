@@ -30,7 +30,8 @@
 /** An addressable element on the canvas. */
 export type Target =
     | {kind: 'node'; id: string}
-    | {kind: 'relation'; id: string};
+    | {kind: 'relation'; id: string}
+    | {kind: 'container'; id: string};
 
 /** The interaction state for the canvas. */
 export interface InteractionState {

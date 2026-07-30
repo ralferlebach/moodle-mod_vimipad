@@ -36,7 +36,7 @@ class reconstruction_service {
      *
      * @param int $workspaceid The workspace id.
      * @param int $revision The revision to rebuild (inclusive).
-     * @return array The reconstructed state: nodes and relations (stdClass[]).
+     * @return array The reconstructed state: nodes, relations and containers (stdClass[]).
      */
     public function reconstruct(int $workspaceid, int $revision): array {
         global $DB;
@@ -50,12 +50,13 @@ class reconstruction_service {
 
         $nodes = [];
         $relations = [];
+        $containers = [];
         foreach ($ops as $op) {
             $payload = json_decode($op->payloadjson, true);
             if (!is_array($payload)) {
                 continue;
             }
-            $this->apply($op->operationtype, $payload, $nodes, $relations);
+            $this->apply($op->operationtype, $payload, $nodes, $relations, $containers);
         }
 
         $survivingnodes = [];
@@ -78,7 +79,18 @@ class reconstruction_service {
             }
         }
 
-        return ['nodes' => $survivingnodes, 'relations' => $survivingrelations];
+        $survivingcontainers = [];
+        foreach ($containers as $container) {
+            if (empty($container->deleted)) {
+                $survivingcontainers[] = $container;
+            }
+        }
+
+        return [
+            'nodes' => $survivingnodes,
+            'relations' => $survivingrelations,
+            'containers' => $survivingcontainers,
+        ];
     }
 
     /**
@@ -88,9 +100,16 @@ class reconstruction_service {
      * @param array $payload The decoded operation payload (carries the stable id).
      * @param array $nodes In/out: nodes keyed by stable id.
      * @param array $relations In/out: relations keyed by stable id.
+     * @param array $containers In/out: containers keyed by stable id.
      * @return void
      */
-    private function apply(string $type, array $payload, array &$nodes, array &$relations): void {
+    private function apply(
+        string $type,
+        array $payload,
+        array &$nodes,
+        array &$relations,
+        array &$containers
+    ): void {
         $stableid = $payload['stableid'] ?? null;
         if ($stableid === null) {
             return;
@@ -167,6 +186,33 @@ class reconstruction_service {
                     if (array_key_exists('targetid', $payload)) {
                         $relations[$stableid]->targetid = $payload['targetid'];
                     }
+                }
+                break;
+
+            case operation_type::CONTAINER_CREATE:
+                $containers[$stableid] = (object) [
+                    'stableid' => $stableid,
+                    'type' => $payload['type'] ?? 'group',
+                    'label' => $payload['label'] ?? null,
+                    'geometryjson' => $payload['geometryjson'] ?? null,
+                    'metadatajson' => $payload['metadatajson'] ?? null,
+                    'deleted' => 0,
+                ];
+                break;
+
+            case operation_type::CONTAINER_UPDATE:
+                if (isset($containers[$stableid])) {
+                    foreach (['type', 'label', 'geometryjson', 'metadatajson'] as $field) {
+                        if (array_key_exists($field, $payload)) {
+                            $containers[$stableid]->$field = $payload[$field];
+                        }
+                    }
+                }
+                break;
+
+            case operation_type::CONTAINER_DELETE:
+                if (isset($containers[$stableid])) {
+                    $containers[$stableid]->deleted = 1;
                 }
                 break;
         }

@@ -71,8 +71,10 @@ class get_workspace extends external_api {
         $context = \context_module::instance($cm->id);
         self::validate_context($context);
         require_capability('mod/vimipad:view', $context);
+        $canmanage = has_capability('mod/vimipad:manageprofiles', $context);
 
         $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
+        $lockmodeforlearners = !empty($instance->lockmodeforlearners);
         $service = new workspace_service();
 
         $target = (int) $params['targetuserid'];
@@ -81,7 +83,7 @@ class get_workspace extends external_api {
             require_capability('mod/vimipad:grade', $context);
             $workspace = $service->find_for_user($instance, $target);
             if ($workspace === null) {
-                return self::empty_state($instance);
+                return self::empty_state($instance, $canmanage, $lockmodeforlearners);
             }
         } else {
             $workspace = $service->get_or_create_for_user(
@@ -106,6 +108,9 @@ class get_workspace extends external_api {
             'layoutjson' => $layoutjson,
             'nodes' => array_map([self::class, 'map_node'], $state['nodes']),
             'relations' => array_map([self::class, 'map_relation'], $state['relations']),
+            'containers' => array_map([self::class, 'map_container'], $state['containers']),
+            'canmanage' => $canmanage,
+            'lockmodeforlearners' => $lockmodeforlearners,
             'collab' => helper::collab_config(),
         ];
     }
@@ -114,9 +119,15 @@ class get_workspace extends external_api {
      * Empty state for a foreign user who has no workspace yet.
      *
      * @param \stdClass $instance The activity instance.
+     * @param bool $canmanage Whether the viewer may author/manage templates.
+     * @param bool $lockmodeforlearners Whether learners may also use lock mode.
      * @return array
      */
-    private static function empty_state(\stdClass $instance): array {
+    private static function empty_state(
+        \stdClass $instance,
+        bool $canmanage = false,
+        bool $lockmodeforlearners = false
+    ): array {
         return [
             'workspaceid' => 0,
             'revision' => 0,
@@ -126,6 +137,9 @@ class get_workspace extends external_api {
             'layoutjson' => '',
             'nodes' => [],
             'relations' => [],
+            'containers' => [],
+            'canmanage' => $canmanage,
+            'lockmodeforlearners' => $lockmodeforlearners,
             'collab' => helper::collab_config(),
         ];
     }
@@ -162,6 +176,22 @@ class get_workspace extends external_api {
             'label' => (string) $relation->label,
             'direction' => (int) $relation->direction,
             'metadatajson' => (string) ($relation->metadatajson ?? ''),
+        ];
+    }
+
+    /**
+     * Map a container record to the external structure.
+     *
+     * @param \stdClass $container The container record.
+     * @return array
+     */
+    public static function map_container(\stdClass $container): array {
+        return [
+            'stableid' => $container->stableid,
+            'type' => $container->type,
+            'label' => (string) ($container->label ?? ''),
+            'geometryjson' => (string) ($container->geometryjson ?? ''),
+            'metadatajson' => (string) ($container->metadatajson ?? ''),
         ];
     }
 
@@ -204,6 +234,23 @@ class get_workspace extends external_api {
                 'direction' => new external_value(PARAM_INT, 'Direction 0/1/2'),
                 'metadatajson' => new external_value(PARAM_RAW, 'Style/profile metadata JSON, empty if none'),
             ])),
+            'containers' => new external_multiple_structure(new external_single_structure([
+                'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable container id'),
+                'type' => new external_value(PARAM_ALPHANUMEXT, 'Container type'),
+                'label' => new external_value(PARAM_TEXT, 'Container label'),
+                'geometryjson' => new external_value(PARAM_RAW, 'Geometry JSON (x,y,w,h), empty if none'),
+                'metadatajson' => new external_value(PARAM_RAW, 'Style/lock metadata JSON, empty if none'),
+            ]), 'Containers drawn on the canvas', VALUE_OPTIONAL),
+            'canmanage' => new external_value(
+                PARAM_BOOL,
+                'Whether the viewer may author/manage templates (set element locks)',
+                VALUE_OPTIONAL
+            ),
+            'lockmodeforlearners' => new external_value(
+                PARAM_BOOL,
+                'Whether learners may also toggle lock mode in this activity',
+                VALUE_OPTIONAL
+            ),
             'collab' => new external_single_structure([
                 'pollinterval' => new external_value(PARAM_INT, 'Default poll interval (ms)'),
                 'polladaptive' => new external_value(PARAM_INT, '1 if adaptive polling is enabled'),

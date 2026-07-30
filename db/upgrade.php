@@ -279,5 +279,42 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072712, 'vimipad');
     }
 
+    if ($oldversion < 2026072717) {
+        $table = new xmldb_table('vimipad');
+        $fields = [
+            new xmldb_field('requiredconcepts', XMLDB_TYPE_TEXT, null, null, null, null, null, 'activescorers'),
+            new xmldb_field('forbiddenconcepts', XMLDB_TYPE_TEXT, null, null, null, null, null, 'requiredconcepts'),
+            new xmldb_field('allowedrelationtypes', XMLDB_TYPE_TEXT, null, null, null, null, null, 'forbiddenconcepts'),
+            new xmldb_field('minnodes', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'allowedrelationtypes'),
+            new xmldb_field('minrelations', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'minnodes'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+
+        upgrade_mod_savepoint(true, 2026072717, 'vimipad');
+    }
+
+    if ($oldversion < 2026072736) {
+        $table = new xmldb_table('vimipad');
+        $field = new xmldb_field(
+            'lockmodeforlearners',
+            XMLDB_TYPE_INTEGER,
+            '1',
+            null,
+            XMLDB_NOTNULL,
+            null,
+            '0',
+            'minrelations'
+        );
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026072736, 'vimipad');
+    }
+
     return true;
 }

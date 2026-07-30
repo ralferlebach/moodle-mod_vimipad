@@ -53,32 +53,19 @@ class get_revision_state extends external_api {
      * @return array
      */
     public static function execute(int $cmid, int $workspaceid, int $revision): array {
-        global $USER, $DB;
-
         $params = self::validate_parameters(
             self::execute_parameters(),
             ['cmid' => $cmid, 'workspaceid' => $workspaceid, 'revision' => $revision]
         );
 
-        [, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
-        $context = \context_module::instance($cm->id);
-        self::validate_context($context);
-        require_capability('mod/vimipad:view', $context);
-
-        $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
-        $workspace = $DB->get_record(
-            'vimipad_workspace',
-            ['id' => $params['workspaceid'], 'vimipadid' => $instance->id],
-            '*',
-            MUST_EXIST
+        $instance = null;
+        $workspace = null;
+        helper::validate_workspace_for_read(
+            (int) $params['cmid'],
+            (int) $params['workspaceid'],
+            $instance,
+            $workspace
         );
-
-        // A user may reconstruct their own map; inspecting another's needs grading.
-        $isown = ((int) $workspace->userid === (int) $USER->id)
-            || (!empty($workspace->groupid) && groups_is_member((int) $workspace->groupid, (int) $USER->id));
-        if (!$isown) {
-            require_capability('mod/vimipad:grade', $context);
-        }
 
         $state = (new reconstruction_service())->reconstruct((int) $workspace->id, (int) $params['revision']);
 
@@ -91,6 +78,7 @@ class get_revision_state extends external_api {
             'layoutjson' => '',
             'nodes' => array_map([get_workspace::class, 'map_node'], $state['nodes']),
             'relations' => array_map([get_workspace::class, 'map_relation'], $state['relations']),
+            'containers' => array_map([get_workspace::class, 'map_container'], $state['containers']),
             'collab' => helper::collab_config(),
         ];
     }

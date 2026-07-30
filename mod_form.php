@@ -134,6 +134,15 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->setDefault('matchmode', \mod_vimipad\local\assess\matcher_factory::MODE_EXACT);
         $mform->addHelpButton('matchmode', 'matchmode', 'mod_vimipad');
 
+        // Authoring: let learners toggle lock mode too (teachers always can).
+        $mform->addElement(
+            'advcheckbox',
+            'lockmodeforlearners',
+            get_string('lockmodeforlearners', 'mod_vimipad')
+        );
+        $mform->setDefault('lockmodeforlearners', 0);
+        $mform->addHelpButton('lockmodeforlearners', 'lockmodeforlearners', 'mod_vimipad');
+
         // Availability: optional due and cut-off dates.
         $mform->addElement('header', 'availability', get_string('availability', 'mod_vimipad'));
 
@@ -152,6 +161,48 @@ class mod_vimipad_mod_form extends moodleform_mod {
             ['optional' => true]
         );
         $mform->addHelpButton('cutoffdate', 'cutoffdate', 'mod_vimipad');
+
+        // Map requirements: enforced as a hard gate when the learner submits.
+        $mform->addElement('header', 'constraints', get_string('constraints', 'mod_vimipad'));
+
+        $mform->addElement(
+            'textarea',
+            'requiredconcepts',
+            get_string('requiredconcepts', 'mod_vimipad'),
+            ['rows' => 3, 'cols' => 40]
+        );
+        $mform->setType('requiredconcepts', PARAM_TEXT);
+        $mform->addHelpButton('requiredconcepts', 'requiredconcepts', 'mod_vimipad');
+
+        $mform->addElement(
+            'textarea',
+            'forbiddenconcepts',
+            get_string('forbiddenconcepts', 'mod_vimipad'),
+            ['rows' => 3, 'cols' => 40]
+        );
+        $mform->setType('forbiddenconcepts', PARAM_TEXT);
+        $mform->addHelpButton('forbiddenconcepts', 'forbiddenconcepts', 'mod_vimipad');
+
+        $mform->addElement(
+            'textarea',
+            'allowedrelationtypes',
+            get_string('allowedrelationtypes', 'mod_vimipad'),
+            ['rows' => 2, 'cols' => 40]
+        );
+        $mform->setType('allowedrelationtypes', PARAM_TEXT);
+        $mform->addHelpButton('allowedrelationtypes', 'allowedrelationtypes', 'mod_vimipad');
+
+        $mform->addElement('text', 'minnodes', get_string('minnodes', 'mod_vimipad'), ['size' => 3]);
+        $mform->setType('minnodes', PARAM_INT);
+        $mform->setDefault('minnodes', 0);
+        $mform->addHelpButton('minnodes', 'minnodes', 'mod_vimipad');
+
+        $mform->addElement('text', 'minrelations', get_string('minrelations', 'mod_vimipad'), ['size' => 3]);
+        $mform->setType('minrelations', PARAM_INT);
+        $mform->setDefault('minrelations', 0);
+        $mform->addHelpButton('minrelations', 'minrelations', 'mod_vimipad');
+
+        $mform->setExpanded('constraints', false);
 
         $this->standard_grading_coursemodule_elements();
 

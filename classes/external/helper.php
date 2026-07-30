@@ -183,6 +183,43 @@ class helper {
     }
 
     /**
+     * Resolve and validate a workspace for a read, enforcing view access and
+     * the "own map, or grader for someone else's" rule. Mirrors
+     * {@see validate_workspace_for_edit} for read-only external functions.
+     *
+     * @param int $cmid Course module id.
+     * @param int $workspaceid Workspace id.
+     * @param \stdClass|null $instance Out: the vimipad instance.
+     * @param \stdClass|null $workspace Out: the workspace record.
+     * @return \context_module The module context (already validated).
+     */
+    public static function validate_workspace_for_read(int $cmid, int $workspaceid, &$instance, &$workspace): \context_module {
+        global $USER, $DB;
+
+        [, $cm] = get_course_and_cm_from_cmid($cmid, 'vimipad');
+        $context = \context_module::instance($cm->id);
+        external_api::validate_context($context);
+        require_capability('mod/vimipad:view', $context);
+
+        $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
+        $workspace = $DB->get_record(
+            'vimipad_workspace',
+            ['id' => $workspaceid, 'vimipadid' => $instance->id],
+            '*',
+            MUST_EXIST
+        );
+
+        // A user may read their own map; inspecting another's needs grading.
+        $isown = ((int) $workspace->userid === (int) $USER->id)
+            || (!empty($workspace->groupid) && groups_is_member((int) $workspace->groupid, (int) $USER->id));
+        if (!$isown) {
+            require_capability('mod/vimipad:grade', $context);
+        }
+
+        return $context;
+    }
+
+    /**
      * The configured lease time-to-live, in seconds (with a sane floor).
      *
      * @return int

@@ -44,6 +44,16 @@ export interface VimiRelation {
     metadatajson?: string;
 }
 
+export interface VimiContainer {
+    stableid: string;
+    type: string;
+    label: string;
+    /** Geometry JSON with x, y, w, h in canvas units; empty if none. */
+    geometryjson?: string;
+    /** Raw style/lock metadata JSON, empty if none. */
+    metadatajson?: string;
+}
+
 /** Collaboration client configuration, sourced from plugin settings. */
 export interface CollabConfig {
     pollinterval: number;
@@ -65,6 +75,12 @@ export interface WorkspaceState {
     layoutjson: string;
     nodes: VimiNode[];
     relations: VimiRelation[];
+    /** Containers drawn on the canvas (optional; absent = none). */
+    containers?: VimiContainer[];
+    /** Whether the viewer may author/manage the template (set element locks). */
+    canmanage?: boolean;
+    /** Whether learners may also toggle lock mode in this activity. */
+    lockmodeforlearners?: boolean;
     collab?: CollabConfig;
 }
 
@@ -144,6 +160,22 @@ export interface JournalEntry {
     timecreated: number;
 }
 
+/** The non-blocking constraint status of the current map (edit-time hints). */
+export interface ConstraintStatus {
+    /** Whether any constraint is configured for the activity. */
+    configured: boolean;
+    /** Whether the current map satisfies every constraint. */
+    satisfied: boolean;
+    /** Localised hint messages for display. */
+    messages: string[];
+    /** Required concept labels still missing. */
+    requiredmissing: string[];
+    /** Forbidden concept labels currently present. */
+    forbiddenpresent: string[];
+    /** Relation types used but not allowed. */
+    typeviolations: string[];
+}
+
 /** A transport that dispatches a single Moodle external function call. */
 export type ServiceTransport = (methodname: string, args: Record<string, unknown>) => Promise<unknown>;
 
@@ -161,7 +193,7 @@ export interface MountConfig {
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */
-    getString?: (key: string) => string;
+    getString?: (key: string) => string | undefined;
 }
 
 /**
@@ -176,5 +208,5 @@ export interface RevisionConfig {
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */
-    getString?: (key: string) => string;
+    getString?: (key: string) => string | undefined;
 }

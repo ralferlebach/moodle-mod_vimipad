@@ -32,7 +32,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import React, {useCallback, useEffect, useReducer, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas} from '../graph/autolayout';
 import {EditorState} from '../store/reducer';
 import {LayoutMap, Point, Size, SizeMap, FormConfig} from '../types';
@@ -43,6 +43,11 @@ import {
 import {labelBox, shapeElement} from '../canvas/shapes';
 import {useDismiss} from '../hooks/use_dismiss';
 import {parseNodeStyle} from '../canvas/node_style';
+import {BoxCorner, boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBoxCorner, serializeGeometry} from '../canvas/container_geometry';
+import {isLocked, writeLock} from '../canvas/element_lock';
+import {screenToViewBox} from '../canvas/viewport';
+import {editableToText} from '../canvas/editable_text';
+import {freeConnectorPath, labelPoint, offsetAnchors, siblingOffsets} from '../canvas/connection_geometry';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {TextEditMenu} from './TextEditMenu';
 import {FA, Icon} from '../canvas/icons';
@@ -101,6 +106,32 @@ interface Props {
     onExportPdf?: () => void;
     exportJsonUrl?: string;
     exportXmlUrl?: string;
+    /** True while the "draw container" tool is active. */
+    drawingContainer?: boolean;
+    /** Create a container from a drawn box (geometry JSON). */
+    onCreateContainer?: (geometryjson: string) => void;
+    /** Delete a container by stable id. */
+    onDeleteContainer?: (stableid: string) => void;
+    /** Called when a draw gesture completes, so the host can exit draw mode. */
+    onFinishDrawContainer?: () => void;
+    /** Commit a container's new geometry (move/resize). */
+    onUpdateContainer?: (stableid: string, geometryjson: string) => void;
+    /** Persist a new style (metadatajson) for a container: shape, fill, text. */
+    onUpdateContainerStyle?: (stableid: string, metadatajson: string) => void;
+    /** Rename a container. */
+    onRenameContainer?: (stableid: string, label: string) => void;
+    /** Whether the viewer may author/manage the template (container drawing). */
+    canManage?: boolean;
+    /** Whether the viewer may use lock mode (teachers, or learners if enabled). */
+    canLock?: boolean;
+    /** Toggle container drawing mode (author tool, lives in the canvas toolbar). */
+    onToggleDrawContainer?: () => void;
+    /** Whether lock mode is armed (element docks then offer a lock toggle). */
+    lockMode?: boolean;
+    /** Toggle lock mode. */
+    onToggleLockMode?: () => void;
+    /** Persist a new metadata JSON (used by the dock's lock toggle). */
+    onSetElementLock?: (kind: 'node' | 'relation' | 'container', stableid: string, metadatajson: string) => void;
 }
 
 /** Size of a corner resize handle, in canvas units. */
@@ -108,6 +139,16 @@ const HANDLE = 9;
 /** Finger-friendly hit area around each corner handle (touch targets). */
 const HANDLE_HIT = 26;
 // Pan/zoom viewport limits: view width can shrink to a 4x zoom-in, grow to full canvas.
+/**
+ * Straight run at each connector end, in canvas units. Covers the arrow marker
+ * (markerWidth 7 scaled by the stroke width) so the head sits on a straight
+ * piece and therefore points the way the connection really goes.
+ */
+const ARROW_STUB = 12;
+
+/** Perpendicular spacing between parallel connections of the same node pair. */
+const SIBLING_SPACING = 16;
+
 const MIN_VIEW_W = CANVAS_WIDTH * 0.25;
 const MAX_VIEW_W = CANVAS_WIDTH;
 const VIEW_ASPECT = CANVAS_HEIGHT / CANVAS_WIDTH;
@@ -210,6 +251,14 @@ export function CanvasView(props: Props): React.ReactElement {
     const [moved, setMoved] = useState(false);
     const [resizeId, setResizeId] = useState<string | null>(null);
     const [resizeSize, setResizeSize] = useState<Size | null>(null);
+    // Refs mirror the drag state so the async lock callback and the
+    // lost-capture/cancel handlers read live values rather than a stale closure.
+    const dragIdRef = useRef<string | null>(null);
+    const movedRef = useRef(false);
+    const resizeIdRef = useRef<string | null>(null);
+    useEffect(() => { dragIdRef.current = dragId; }, [dragId]);
+    useEffect(() => { movedRef.current = moved; }, [moved]);
+    useEffect(() => { resizeIdRef.current = resizeId; }, [resizeId]);
     const [interaction, dispatchInteraction] = useReducer(interactionReduce, initialInteraction);
     const [editValue, setEditValue] = useState('');
     const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -282,13 +331,138 @@ export function CanvasView(props: Props): React.ReactElement {
         if (!svg) {
             return {x: 0, y: 0};
         }
+        // Prefer the browser's own matrix: it accounts for the viewBox, for
+        // preserveAspectRatio letterboxing and for any CSS transform on an
+        // ancestor (e.g. the full-view wrapper).
+        const ctm = typeof svg.getScreenCTM === 'function' ? svg.getScreenCTM() : null;
+        if (ctm) {
+            const pt = svg.createSVGPoint();
+            pt.x = clientX;
+            pt.y = clientY;
+            const local = pt.matrixTransform(ctm.inverse());
+            return {x: local.x, y: local.y};
+        }
+        // Fallback (no CTM available, e.g. in jsdom): replicate "xMidYMid meet".
         const rect = svg.getBoundingClientRect();
-        const v = viewRef.current;
-        return {
-            x: v.x + (clientX - rect.left) / rect.width * v.w,
-            y: v.y + (clientY - rect.top) / rect.height * v.h,
-        };
+        return screenToViewBox({x: clientX, y: clientY}, rect, viewRef.current);
     }, []);
+
+    // Relations sharing a node pair are drawn as parallel lines rather than on
+    // top of each other; this maps each relation to its slot in its group.
+    const siblingSlots = useMemo(() => {
+        const groups = new Map<string, string[]>();
+        for (const rel of state.relations) {
+            const key = [rel.sourceid, rel.targetid].slice().sort().join('|');
+            const list = groups.get(key) ?? [];
+            list.push(rel.stableid);
+            groups.set(key, list);
+        }
+        const slots = new Map<string, {index: number; count: number}>();
+        groups.forEach(ids => ids.forEach((id, index) => slots.set(id, {index, count: ids.length})));
+        return slots;
+    }, [state.relations]);
+
+    // Container drawing (isolated from the node/connect pointer state machine:
+    // a dedicated overlay captures these events only while the tool is active).
+    const [drawStart, setDrawStart] = useState<Point | null>(null);
+    const [drawBox, setDrawBox] = useState<ContainerBox | null>(null);
+
+    const onDrawDown = useCallback((event: React.PointerEvent) => {
+        if (!props.drawingContainer) {
+            return;
+        }
+        event.stopPropagation();
+        (event.target as Element).setPointerCapture?.(event.pointerId);
+        const p = toSvgPoint(event.clientX, event.clientY);
+        setDrawStart(p);
+        setDrawBox({x: p.x, y: p.y, w: 0, h: 0});
+    }, [props.drawingContainer, toSvgPoint]);
+
+    const onDrawMove = useCallback((event: React.PointerEvent) => {
+        if (!props.drawingContainer || !drawStart) {
+            return;
+        }
+        event.stopPropagation();
+        setDrawBox(boxFromDrag(drawStart, toSvgPoint(event.clientX, event.clientY)));
+    }, [props.drawingContainer, drawStart, toSvgPoint]);
+
+    const onDrawUp = useCallback((event: React.PointerEvent) => {
+        if (!props.drawingContainer || !drawStart) {
+            return;
+        }
+        event.stopPropagation();
+        const box = drawBox;
+        setDrawStart(null);
+        setDrawBox(null);
+        if (box && isDrawable(box) && props.onCreateContainer) {
+            props.onCreateContainer(serializeGeometry(box));
+        }
+        props.onFinishDrawContainer?.();
+    }, [props.drawingContainer, drawStart, drawBox, props.onCreateContainer, props.onFinishDrawContainer]);
+
+    // Container move/resize via title-bar and corner-handle drags (pointer
+    // capture keeps this out of the node/connect pointer state machine).
+    const [containerDrag, setContainerDrag] = useState<
+        {mode: 'move' | 'resize'; stableid: string; start: Point; startBox: ContainerBox; corner?: BoxCorner} | null
+    >(null);
+    const [containerPreview, setContainerPreview] = useState<ContainerBox | null>(null);
+    const [renamingContainer, setRenamingContainer] = useState<string | null>(null);
+    const [containerName, setContainerName] = useState('');
+
+    const beginContainerDrag = useCallback((
+        event: React.PointerEvent, mode: 'move' | 'resize', stableid: string, box: ContainerBox,
+        corner?: BoxCorner
+    ) => {
+        if (disabled) {
+            return;
+        }
+        event.stopPropagation();
+        (event.target as Element).setPointerCapture?.(event.pointerId);
+        setContainerDrag({
+            mode, stableid, start: toSvgPoint(event.clientX, event.clientY), startBox: box, corner,
+        });
+        setContainerPreview(box);
+    }, [disabled, toSvgPoint]);
+
+    const onContainerDragMove = useCallback((event: React.PointerEvent) => {
+        if (!containerDrag) {
+            return;
+        }
+        event.stopPropagation();
+        const p = toSvgPoint(event.clientX, event.clientY);
+        const dx = p.x - containerDrag.start.x;
+        const dy = p.y - containerDrag.start.y;
+        setContainerPreview(containerDrag.mode === 'move'
+            ? moveBox(containerDrag.startBox, dx, dy)
+            : resizeBoxCorner(containerDrag.startBox, containerDrag.corner ?? 'se', dx, dy));
+    }, [containerDrag, toSvgPoint]);
+
+    const onContainerDragUp = useCallback((event: React.PointerEvent) => {
+        if (!containerDrag) {
+            return;
+        }
+        event.stopPropagation();
+        const box = containerPreview;
+        const dragged = containerDrag.stableid;
+        setContainerDrag(null);
+        setContainerPreview(null);
+        if (box && props.onUpdateContainer) {
+            props.onUpdateContainer(dragged, serializeGeometry(box));
+        }
+    }, [containerDrag, containerPreview, props.onUpdateContainer]);
+
+    const startRenameContainer = useCallback((stableid: string, current: string) => {
+        if (disabled) {
+            return;
+        }
+        setContainerName(current);
+        setRenamingContainer(stableid);
+    }, [disabled]);
+
+    const commitRenameContainer = useCallback((stableid: string) => {
+        setRenamingContainer(null);
+        props.onRenameContainer?.(stableid, containerName.trim());
+    }, [containerName, props.onRenameContainer]);
 
     const onNodePointerDown = useCallback(async (event: React.PointerEvent, stableid: string, label: string) => {
         // Manual double-click: two quick clicks on the same node open the text editor.
@@ -317,18 +491,28 @@ export function CanvasView(props: Props): React.ReactElement {
         if (disabled || lockedByOther(stableid)) {
             return;
         }
-        // Lock on drag-start: only proceed if we secure the lease.
-        if (beginEdit) {
-            const granted = await beginEdit('node', stableid);
-            if (!granted) {
-                return;
-            }
-        }
+        // Start the drag synchronously: capture the pointer and arm the drag in
+        // the same event turn, BEFORE any await. Doing the collaboration lock
+        // first (an async round-trip) meant setDragId ran a tick later — if the
+        // pointer was already released in that gap, onPointerUp ran while dragId
+        // was still null and never cleared it, so the node stayed armed and then
+        // "moved" on a later bare pointermove. The lock is acquired optimistically
+        // in the background; if it is refused, we cancel the in-flight drag.
         event.preventDefault();
         (event.target as Element).setPointerCapture(event.pointerId);
         setDragId(stableid);
         setDragPos(clampToCanvas(positionOf(stableid)));
         setMoved(false);
+        if (beginEdit) {
+            const dragToken = stableid;
+            void beginEdit('node', stableid).then(granted => {
+                if (!granted) {
+                    // Lock refused: drop the drag if it is still the same one and
+                    // has not become an actual move.
+                    setDragId(cur => (cur === dragToken && !movedRef.current ? null : cur));
+                }
+            });
+        }
     }, [disabled, lockedByOther, beginEdit, positionOf]);
 
     const onHandlePointerDown = useCallback(async (
@@ -338,16 +522,20 @@ export function CanvasView(props: Props): React.ReactElement {
         if (disabled || lockedByOther(stableid) || !onNodeResized) {
             return;
         }
-        if (beginEdit) {
-            const granted = await beginEdit('node', stableid);
-            if (!granted) {
-                return;
-            }
-        }
+        // Arm the resize synchronously (same reasoning as onNodePointerDown): the
+        // lock is acquired in the background, never before capture/arming.
         event.preventDefault();
         (event.target as Element).setPointerCapture(event.pointerId);
         setResizeId(stableid);
         setResizeSize(sizeOf(stableid, label));
+        if (beginEdit) {
+            const token = stableid;
+            void beginEdit('node', stableid).then(granted => {
+                if (!granted) {
+                    setResizeId(cur => (cur === token ? null : cur));
+                }
+            });
+        }
     }, [disabled, lockedByOther, onNodeResized, beginEdit, sizeOf]);
 
     const onPointerMove = useCallback((event: React.PointerEvent) => {
@@ -448,6 +636,28 @@ export function CanvasView(props: Props): React.ReactElement {
         setMoved(false);
     }, [connectFrom, connectTo, nodeAt, onCreateRelation,
         resizeId, resizeSize, onNodeResized, dragId, dragPos, moved, onNodeMoved, endEdit]);
+
+    // Safety net: if the pointer capture is lost or the gesture is cancelled
+    // (pointercancel, e.g. a context menu or an interrupted touch), a drag that
+    // was armed but never received its pointerup would otherwise stay latched and
+    // the node would follow the bare cursor. Clear it and release any lock.
+    const abortDrag = useCallback(() => {
+        if (dragIdRef.current !== null) {
+            if (endEdit) {
+                void endEdit('node', dragIdRef.current);
+            }
+            setDragId(null);
+            setDragPos(null);
+            setMoved(false);
+        }
+        if (resizeIdRef.current !== null) {
+            if (endEdit) {
+                void endEdit('node', resizeIdRef.current);
+            }
+            setResizeId(null);
+            setResizeSize(null);
+        }
+    }, [endEdit]);
 
     // Begin dragging a new connection out of a node's connector dock.
     const startConnect = useCallback((event: React.PointerEvent, stableid: string) => {
@@ -669,6 +879,19 @@ export function CanvasView(props: Props): React.ReactElement {
                 >
                     <Icon name={FA.reArrange} />
                 </button>
+                {props.canManage && props.onToggleDrawContainer && (
+                    <button
+                        type="button"
+                        className={`btn btn-light vimipad-canvas-action${props.drawingContainer ? ' active' : ''}`}
+                        onClick={() => props.onToggleDrawContainer?.()}
+                        disabled={disabled}
+                        aria-pressed={props.drawingContainer === true}
+                        title={props.drawingContainer ? t('editor:drawcontainerdone') : t('editor:drawcontainer')}
+                        aria-label={props.drawingContainer ? t('editor:drawcontainerdone') : t('editor:drawcontainer')}
+                    >
+                        <Icon name={FA.container} />
+                    </button>
+                )}
                 {!expanded && (
                     <div className="vimipad-export" ref={exportRef}>
                         <button
@@ -725,16 +948,34 @@ export function CanvasView(props: Props): React.ReactElement {
                     </div>
                 )}
             </div>
-            <button
-                type="button"
-                className="btn btn-light vimipad-canvas-fullview vimipad-canvas-action"
-                onClick={() => { void toggleFullview(); }}
-                title={expanded ? t('editor:normalview') : t('editor:fullview')}
-                aria-label={expanded ? t('editor:normalview') : t('editor:fullview')}
-                aria-pressed={expanded}
+            <div
+                className="vimipad-canvas-actions vimipad-canvas-actions--right"
+                role="toolbar"
+                aria-label={t('editor:actions')}
             >
-                <Icon name={expanded ? FA.compress : FA.expand} />
-            </button>
+                {props.canLock && props.onToggleLockMode && (
+                    <button
+                        type="button"
+                        className={`btn btn-light vimipad-canvas-action${props.lockMode ? ' active' : ''}`}
+                        onClick={() => props.onToggleLockMode?.()}
+                        aria-pressed={props.lockMode === true}
+                        title={t('editor:lockmode')}
+                        aria-label={t('editor:lockmode')}
+                    >
+                        <Icon name={props.lockMode ? FA.lock : FA.unlock} />
+                    </button>
+                )}
+                <button
+                    type="button"
+                    className="btn btn-light vimipad-canvas-fullview vimipad-canvas-action"
+                    onClick={() => { void toggleFullview(); }}
+                    title={expanded ? t('editor:normalview') : t('editor:fullview')}
+                    aria-label={expanded ? t('editor:normalview') : t('editor:fullview')}
+                    aria-pressed={expanded}
+                >
+                    <Icon name={expanded ? FA.compress : FA.expand} />
+                </button>
+            </div>
             <svg
                 ref={svgRef}
                 className="vimipad-canvas border rounded"
@@ -747,6 +988,8 @@ export function CanvasView(props: Props): React.ReactElement {
             aria-describedby="vimipad-canvas-desc"
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
+            onPointerCancel={abortDrag}
+            onLostPointerCapture={abortDrag}
             onKeyDown={onKeyDown}
         >
             <title id="vimipad-canvas-title">{t('editor:canvasaria')}</title>
@@ -776,6 +1019,194 @@ export function CanvasView(props: Props): React.ReactElement {
                 onPointerDown={onBackgroundPointerDown}
             />
 
+            {/* Container layer (behind the graph): author/teacher background boxes. */}
+            {(state.containers ?? []).map(container => {
+                const stored = parseGeometry(container.geometryjson);
+                if (!stored) {
+                    return null;
+                }
+                const box = (containerDrag?.stableid === container.stableid && containerPreview)
+                    ? containerPreview
+                    : stored;
+                const titleH = 24;
+                const renaming = renamingContainer === container.stableid;
+                // A locked container is only editable by an author/manager.
+                const editable = !disabled && (state.canmanage === true || !isLocked(container.metadatajson));
+                // T4: containers carry the same style model as nodes (shape, fill,
+                // text) in their metadatajson. With no style set they keep the
+                // default dashed look; otherwise they render like a shaped node.
+                const cstyle = parseNodeStyle(container.metadatajson);
+                const cselected = isSelected(interaction, 'container', container.stableid);
+                const hasShape = cstyle.shape !== undefined && cstyle.shape !== null;
+                const bodyFill = cstyle.fill ?? 'rgba(120, 144, 156, 0.08)';
+                const bodyStroke = cselected ? selColor : 'rgba(84, 110, 122, 0.55)';
+                const labelColor = cstyle.text?.color ?? 'rgba(55, 71, 79, 0.95)';
+                return (
+                    <g key={`container-${container.stableid}`} className="vimipad-canvas-container">
+                        {/* Body: non-interactive so nodes underneath stay clickable. */}
+                        {hasShape ? (
+                            <g transform={`translate(${box.x + box.w / 2}, ${box.y + box.h / 2})`} pointerEvents="none">
+                                {shapeElement(cstyle.shape ?? 'roundrect', box.w, box.h, {
+                                    fill: bodyFill,
+                                    stroke: bodyStroke,
+                                    strokeWidth: cselected ? 2 : 1,
+                                })}
+                            </g>
+                        ) : (
+                            <rect
+                                x={box.x}
+                                y={box.y}
+                                width={box.w}
+                                height={box.h}
+                                rx={8}
+                                fill={bodyFill}
+                                stroke={bodyStroke}
+                                strokeDasharray="6 4"
+                                strokeWidth={cselected ? 2 : 1}
+                                pointerEvents="none"
+                            />
+                        )}
+                        {/* Title bar: move handle, select and rename target. */}
+                        <rect
+                            className="vimipad-container-title"
+                            x={box.x}
+                            y={box.y}
+                            width={box.w}
+                            height={titleH}
+                            rx={8}
+                            fill="rgba(84, 110, 122, 0.14)"
+                            style={{cursor: editable ? 'move' : 'default', touchAction: 'none'}}
+                            onPointerDown={editable
+                                ? (e => {
+                                    dispatchInteraction({
+                                        kind: 'select', target: {kind: 'container', id: container.stableid},
+                                    });
+                                    beginContainerDrag(e, 'move', container.stableid, stored);
+                                })
+                                : undefined}
+                            onPointerMove={onContainerDragMove}
+                            onPointerUp={onContainerDragUp}
+                            onDoubleClick={editable
+                                ? (() => startRenameContainer(container.stableid, container.label))
+                                : undefined}
+                        />
+                        {renaming ? (
+                            <foreignObject
+                                x={box.x + 4}
+                                y={box.y + 2}
+                                width={Math.max(40, box.w - 30)}
+                                height={titleH - 2}
+                            >
+                                <input
+                                    className="form-control form-control-sm vimipad-container-rename"
+                                    autoFocus
+                                    value={containerName}
+                                    onChange={e => setContainerName(e.target.value)}
+                                    onBlur={() => commitRenameContainer(container.stableid)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            commitRenameContainer(container.stableid);
+                                        }
+                                        if (e.key === 'Escape') {
+                                            setRenamingContainer(null);
+                                        }
+                                    }}
+                                    onPointerDown={e => e.stopPropagation()}
+                                />
+                            </foreignObject>
+                        ) : (
+                            <text
+                                x={box.x + 10}
+                                y={box.y + 17}
+                                className="vimipad-container-label"
+                                style={{
+                                    fontSize: 13,
+                                    fill: labelColor,
+                                    fontWeight: cstyle.text?.bold ? 700 : undefined,
+                                    fontStyle: cstyle.text?.italic ? 'italic' : undefined,
+                                }}
+                                pointerEvents="none"
+                            >
+                                {container.label || t('editor:containers')}
+                            </text>
+                        )}
+                        {editable && !renaming && props.onDeleteContainer && (
+                            <g
+                                className="vimipad-container-delete"
+                                role="button"
+                                aria-label={t('editor:containerdelete')}
+                                style={{cursor: 'pointer'}}
+                                onPointerDown={e => {
+                                    e.stopPropagation();
+                                    props.onDeleteContainer?.(container.stableid);
+                                }}
+                            >
+                                <rect
+                                    x={box.x + box.w - 22}
+                                    y={box.y + 4}
+                                    width={16}
+                                    height={16}
+                                    rx={3}
+                                    fill="rgba(84, 110, 122, 0.22)"
+                                />
+                                <text
+                                    x={box.x + box.w - 14}
+                                    y={box.y + 16}
+                                    textAnchor="middle"
+                                    style={{fontSize: 12, fill: 'rgba(55, 71, 79, 0.95)'}}
+                                >&#215;</text>
+                            </g>
+                        )}
+                        {editable && !renaming && props.onUpdateContainer && ([
+                            {c: 'nw' as BoxCorner, x: box.x, y: box.y, cursor: 'nwse-resize'},
+                            {c: 'ne' as BoxCorner, x: box.x + box.w, y: box.y, cursor: 'nesw-resize'},
+                            {c: 'sw' as BoxCorner, x: box.x, y: box.y + box.h, cursor: 'nesw-resize'},
+                            {c: 'se' as BoxCorner, x: box.x + box.w, y: box.y + box.h, cursor: 'nwse-resize'},
+                        ].map(h => (
+                            <rect
+                                key={`cresize-${container.stableid}-${h.c}`}
+                                className="vimipad-container-resize"
+                                x={h.x - 6}
+                                y={h.y - 6}
+                                width={12}
+                                height={12}
+                                rx={2}
+                                fill="rgba(84, 110, 122, 0.5)"
+                                style={{cursor: h.cursor, touchAction: 'none'}}
+                                onPointerDown={e => beginContainerDrag(e, 'resize', container.stableid, stored, h.c)}
+                                onPointerMove={onContainerDragMove}
+                                onPointerUp={onContainerDragUp}
+                            />
+                        )))}
+                        {/* T4: format toolbar for a selected container — same shape,
+                          * fill, text and delete controls as a node. */}
+                        {cselected && editable && !renaming && props.onUpdateContainerStyle && (
+                            <foreignObject
+                                x={box.x}
+                                y={box.y - 52}
+                                width={320}
+                                height={48}
+                                style={{overflow: 'visible', pointerEvents: 'none'}}
+                            >
+                                <div style={{pointerEvents: 'auto', display: 'inline-block'}}>
+                                    <NodeFormatToolbar
+                                        kind="node"
+                                        target={{metadatajson: container.metadatajson}}
+                                        profile={profile}
+                                        formconfig={formconfig}
+                                        disabled={disabled}
+                                        onChangeStyle={m => props.onUpdateContainerStyle?.(container.stableid, m)}
+                                        onDelete={() => props.onDeleteContainer?.(container.stableid)}
+                                        onEditText={() => startRenameContainer(container.stableid, container.label)}
+                                        t={t}
+                                    />
+                                </div>
+                            </foreignObject>
+                        )}
+                    </g>
+                );
+            })}
+
             {/* Layer 1 (bottom): connector lines and their hit targets. */}
             {state.relations.map(rel => {
                 const srcNode = state.nodes.find(n => n.stableid === rel.sourceid);
@@ -785,13 +1216,26 @@ export function CanvasView(props: Props): React.ReactElement {
                 const fromSize = srcNode ? sizeOf(srcNode.stableid, srcNode.label) : {w: 70, h: 40};
                 const toSize = tgtNode ? sizeOf(tgtNode.stableid, tgtNode.label) : {w: 70, h: 40};
                 const isTree = sharedBifurcation;
-                const from = isTree ? {x: fromC.x, y: fromC.y + fromSize.h / 2} : edgePoint(fromC, fromSize, toC);
-                const to = isTree ? {x: toC.x, y: toC.y - toSize.h / 2} : edgePoint(toC, toSize, fromC);
+                const slot = siblingSlots.get(rel.stableid) ?? {index: 0, count: 1};
+                const slotOffset = siblingOffsets(slot.count, SIBLING_SPACING)[slot.index] ?? 0;
+                const baseFrom = isTree
+                    ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
+                    : edgePoint(fromC, fromSize, toC);
+                const baseTo = isTree
+                    ? {x: toC.x, y: toC.y - toSize.h / 2}
+                    : edgePoint(toC, toSize, fromC);
+                // Multiple relations between the same pair are shifted symmetrically
+                // perpendicular to the direct line, so they run parallel.
+                const shifted = isTree ? {from: baseFrom, to: baseTo} : offsetAnchors(baseFrom, baseTo, slotOffset);
+                const from = shifted.from;
+                const to = shifted.to;
                 const selected = isSelected(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
                 const path = isTree
                     ? treeBusPath(fromC, fromSize, toC, toSize)
-                    : relLinePath(from, to, relLine);
+                    : (relLine === 'curved'
+                        ? freeConnectorPath(from, to, ARROW_STUB)
+                        : relLinePath(from, to, relLine));
                 const stroke = selected ? selColor : 'currentColor';
                 const strokeWidth = selected ? 2.5 : 1.5;
                 const markerStart = d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
@@ -846,10 +1290,30 @@ export function CanvasView(props: Props): React.ReactElement {
 
             {/* Layer 2 (middle): connector labels, inline editors and the direction dock. */}
             {state.relations.map(rel => {
-                const from = positionOf(rel.sourceid);
-                const to = positionOf(rel.targetid);
-                const midX = (from.x + to.x) / 2;
-                const midY = (from.y + to.y) / 2;
+                // Anchor the label on the same routed connection as the line layer,
+                // including the parallel-sibling offset, so multi-relation labels
+                // follow their own connector instead of piling on the centre line.
+                const srcNode = state.nodes.find(n => n.stableid === rel.sourceid);
+                const tgtNode = state.nodes.find(n => n.stableid === rel.targetid);
+                const fromC = positionOf(rel.sourceid);
+                const toC = positionOf(rel.targetid);
+                const fromSize = srcNode ? sizeOf(srcNode.stableid, srcNode.label) : {w: 70, h: 40};
+                const toSize = tgtNode ? sizeOf(tgtNode.stableid, tgtNode.label) : {w: 70, h: 40};
+                const isTree = sharedBifurcation;
+                const slot = siblingSlots.get(rel.stableid) ?? {index: 0, count: 1};
+                const slotOffset = siblingOffsets(slot.count, SIBLING_SPACING)[slot.index] ?? 0;
+                const baseFrom = isTree
+                    ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
+                    : edgePoint(fromC, fromSize, toC);
+                const baseTo = isTree
+                    ? {x: toC.x, y: toC.y - toSize.h / 2}
+                    : edgePoint(toC, toSize, fromC);
+                const anchors = isTree ? {from: baseFrom, to: baseTo} : offsetAnchors(baseFrom, baseTo, slotOffset);
+                // The label sits at the curve peak: the midpoint lifted perpendicular
+                // by the sibling offset, matching freeConnectorPath's own bulge.
+                const peak = labelPoint(anchors.from, anchors.to, slotOffset);
+                const midX = peak.x;
+                const midY = peak.y;
                 const editing = isEditing(interaction, 'relation', rel.stableid);
                 return (
                     <g key={`lbl-${rel.stableid}`} className="vimipad-canvas-relation">
@@ -930,29 +1394,53 @@ export function CanvasView(props: Props): React.ReactElement {
                             strokeWidth: 1.5,
                             strokeDasharray: '6 4',
                         })}
+                        {isLocked(node.metadatajson) && (
+                            <text
+                                x={-w / 2 + 8}
+                                y={-h / 2 + 15}
+                                className="vimipad-node-lock"
+                                style={{fontSize: 12, fill: 'rgba(84, 110, 122, 0.85)'}}
+                                pointerEvents="none"
+                                aria-hidden="true"
+                            >&#128274;</text>
+                        )}
                         {editing ? (
                             <foreignObject key={`edit-${node.stableid}`} x={-w / 2} y={-h / 2} width={w} height={h}>
-                                <div
-                                    ref={setEditRef}
-                                    className="vimipad-canvas-edit"
-                                    contentEditable
-                                    suppressContentEditableWarning
-                                    onInput={e => {
-                                        const text = e.currentTarget.textContent ?? '';
-                                        editValueRef.current = text;
-                                        setEditValue(text);
-                                    }}
-                                    onKeyDown={onEditKeyDown}
-                                    onFocus={() => vdbg('node-editor focus', node.stableid)}
-                                    onBlur={() => vdbg('node-editor blur', node.stableid)}
-                                    onPointerDown={e => e.stopPropagation()}
-                                    style={{
-                                        ...labelBox(style.text),
-                                        background: style.text?.background ?? 'transparent',
-                                        outline: 'none',
-                                        cursor: 'text',
-                                    }}
-                                />
+                                {/*
+                                  * The centring wrapper carries the flex layout; the editable
+                                  * element itself must stay a block. As a flex container it
+                                  * would turn each line block the browser inserts on Enter
+                                  * into a flex item, laying the lines out side by side as
+                                  * columns instead of stacking them.
+                                  */}
+                                <div style={labelBox(style.text)}>
+                                    <div
+                                        ref={setEditRef}
+                                        className="vimipad-canvas-edit"
+                                        contentEditable
+                                        suppressContentEditableWarning
+                                        onInput={e => {
+                                            const text = editableToText(e.currentTarget);
+                                            editValueRef.current = text;
+                                            setEditValue(text);
+                                        }}
+                                        onKeyDown={onEditKeyDown}
+                                        onFocus={() => vdbg('node-editor focus', node.stableid)}
+                                        onBlur={() => vdbg('node-editor blur', node.stableid)}
+                                        onPointerDown={e => e.stopPropagation()}
+                                        style={{
+                                            display: 'block',
+                                            width: '100%',
+                                            textAlign: 'center',
+                                            whiteSpace: 'pre-wrap',
+                                            overflowWrap: 'anywhere',
+                                            wordBreak: 'break-word',
+                                            background: style.text?.background ?? 'transparent',
+                                            outline: 'none',
+                                            cursor: 'text',
+                                        }}
+                                    />
+                                </div>
                             </foreignObject>
                         ) : (
                             <foreignObject
@@ -1071,6 +1559,7 @@ export function CanvasView(props: Props): React.ReactElement {
                             width={300}
                             height={editing ? 300 : 320}
                             style={{overflow: 'visible'}}
+                            pointerEvents="none"
                         >
                             <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
                                 {editing ? (
@@ -1091,6 +1580,18 @@ export function CanvasView(props: Props): React.ReactElement {
                                         onDuplicate={() => onDuplicateNode && onDuplicateNode(node.stableid)}
                                         onDelete={() => onDeleteNode && onDeleteNode(node.stableid)}
                                         onEditText={() => startNodeEdit(node.stableid, node.label)}
+                                        lockMode={props.lockMode}
+                                        locked={isLocked(node.metadatajson)}
+                                        onToggleLock={props.onSetElementLock && props.canLock
+                                            ? () => props.onSetElementLock?.(
+                                                'node',
+                                                node.stableid,
+                                                writeLock(node.metadatajson, {
+                                                    locked: !isLocked(node.metadatajson),
+                                                    editable: [],
+                                                })
+                                            )
+                                            : undefined}
                                         t={t}
                                     />
                                 )}
@@ -1115,6 +1616,7 @@ export function CanvasView(props: Props): React.ReactElement {
                         width={300}
                         height={70}
                         style={{overflow: 'visible'}}
+                        pointerEvents="none"
                     >
                         <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
                             {editing ? (
@@ -1177,6 +1679,36 @@ export function CanvasView(props: Props): React.ReactElement {
                     </foreignObject>
                 );
             })()}
+
+            {/* Container draw overlay (topmost): active only while the tool is on. */}
+            {props.drawingContainer && (
+                <g className="vimipad-container-draw">
+                    <rect
+                        x={0}
+                        y={0}
+                        width={CANVAS_WIDTH}
+                        height={CANVAS_HEIGHT}
+                        fill="rgba(38, 50, 56, 0.04)"
+                        style={{touchAction: 'none', cursor: 'crosshair'}}
+                        onPointerDown={onDrawDown}
+                        onPointerMove={onDrawMove}
+                        onPointerUp={onDrawUp}
+                    />
+                    {drawBox && (
+                        <rect
+                            x={drawBox.x}
+                            y={drawBox.y}
+                            width={drawBox.w}
+                            height={drawBox.h}
+                            rx={8}
+                            fill="rgba(120, 144, 156, 0.12)"
+                            stroke="rgba(84, 110, 122, 0.9)"
+                            strokeDasharray="6 4"
+                            pointerEvents="none"
+                        />
+                    )}
+                </g>
+            )}
         </svg>
         </div>
     );

@@ -98,3 +98,21 @@ describe('interaction state machine', () => {
         expect(deletableTarget(initialInteraction)).toBeNull();
     });
 });
+
+describe('container as a selectable target', () => {
+    test('a container can be selected and cleared like any element', () => {
+        let st = initialInteraction;
+        st = interactionReduce(st, {kind: 'select', target: {kind: 'container', id: 'container_a'}});
+        expect(isSelected(st, 'container', 'container_a')).toBe(true);
+        expect(isSelected(st, 'node', 'container_a')).toBe(false);
+        st = interactionReduce(st, {kind: 'clear'});
+        expect(st.selected).toBeNull();
+    });
+
+    test('a container is deletable when selected and not editing', () => {
+        let st = interactionReduce(initialInteraction, {
+            kind: 'select', target: {kind: 'container', id: 'container_a'},
+        });
+        expect(deletableTarget(st)).toEqual({kind: 'container', id: 'container_a'});
+    });
+});

@@ -83,6 +83,22 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:line_straight': 'Straight line',
     'editor:listview': 'List',
     'editor:loading': 'Loading…',
+    'constraint:hintsheading': 'This map does not yet meet the requirements:',
+    'editor:containers': 'Containers',
+    'editor:containerdelete': 'Delete container',
+    'editor:drawcontainer': 'Draw container',
+    'editor:drawcontainerdone': 'Done drawing',
+    'editor:node': 'Node',
+    'editor:templatelocks': 'Template locks',
+    'editor:templatelockshint': 'Lock elements so learners cannot restructure or delete them.',
+    'editor:lockallowlabel': 'Allow renaming',
+    'editor:importnovimidata': 'This SVG does not contain an embedded ViMi map.',
+    'editor:authortools': 'Author tools',
+    'editor:lockmode': 'Lock mode',
+    'editor:lockelement': 'Lock this element',
+    'editor:unlockelement': 'Unlock this element',
+
+
     'editor:locked': 'This map is locked and can no longer be edited.',
     'editor:nodelabel': 'Concept label',
     'editor:norelations': 'No relations yet. Add concepts, then connect them.',
@@ -133,7 +149,10 @@ function resolveString(key: string): string {
 export function mount(element: HTMLElement, config: MountConfig): void {
     const transport = config.callService ?? createFetchTransport();
     const api = new ApiClient(transport, config.cmid, config.readonly ?? false);
-    const t = config.getString ?? resolveString;
+    // Fall back to resolveString (M.str, then bundled English) whenever the host
+    // has no translation for a key, instead of rendering the raw key.
+    const provided = config.getString;
+    const t = provided ? (key: string): string => provided(key) ?? resolveString(key) : resolveString;
 
     const root = createRoot(element);
     root.render(<EditorApp
@@ -159,7 +178,10 @@ export default {mount, mountRevision};
 export function mountRevision(element: HTMLElement, config: RevisionConfig): void {
     const transport = config.callService ?? createFetchTransport();
     const api = new ApiClient(transport, config.cmid, true);
-    const t = config.getString ?? resolveString;
+    // Fall back to resolveString (M.str, then bundled English) whenever the host
+    // has no translation for a key, instead of rendering the raw key.
+    const provided = config.getString;
+    const t = provided ? (key: string): string => provided(key) ?? resolveString(key) : resolveString;
 
     const root = createRoot(element);
     root.render(<RevisionViewer

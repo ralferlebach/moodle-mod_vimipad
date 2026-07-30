@@ -132,6 +132,21 @@ jobs:
           DB:            ${{ matrix.db.type }}
           MOODLE_BRANCH: ${{ matrix.moodle-branch }}
 
+      # Moodle 5.2+ installs plugins under moodle/public/mod/... (separated
+      # public directory); 4.x and 5.0/5.1 keep moodle/mod/... . Resolve the
+      # real plugin dir so the bundle checks use the right path and the AMD
+      # rebuild (which assumes the 4.x layout) is skipped on the public layout.
+      - name: Resolve plugin path
+        id: paths
+        run: |
+          if [ -d moodle/public/mod/vimipad ]; then
+            echo "plugin=moodle/public/mod/vimipad" >> "$GITHUB_OUTPUT"
+            echo "public=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "plugin=moodle/mod/vimipad" >> "$GITHUB_OUTPUT"
+            echo "public=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: PHP Lint
         run: moodle-plugin-ci phplint
 
@@ -155,10 +170,11 @@ jobs:
 
       - name: Verify editor bundle installed
         run: |
-          test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js
-          test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js.map
+          test -f "${{ steps.paths.outputs.plugin }}/amd/build/editor_lazy.min.js"
+          test -f "${{ steps.paths.outputs.plugin }}/amd/build/editor_lazy.min.js.map"
 
       - name: Install Node dependencies (Moodle)
+        if: steps.paths.outputs.public != 'true'
         run: npm install
         working-directory: ${{ github.workspace }}/moodle
 
@@ -166,7 +182,11 @@ jobs:
       # amd/build/ before invoking Grunt, removing the prebuilt esbuild bundle
       # editor_lazy.min.js. Running "npx grunt amd --files" directly builds only
       # the real Moodle AMD source (init.js) and leaves the bundle intact.
+      # Skipped on the Moodle 5.2+ public layout (paths differ); AMD/bundle
+      # reproducibility is already covered by the version-agnostic
+      # "Bundle reproducibility" job.
       - name: Grunt – Moodle AMD module (init.js only)
+        if: steps.paths.outputs.public != 'true'
         working-directory: ${{ github.workspace }}/moodle/mod/vimipad/amd
         run: |
           npx grunt amd \
@@ -174,6 +194,7 @@ jobs:
             --max-lint-warnings=0
 
       - name: Verify editor bundle survived Moodle Grunt
+        if: steps.paths.outputs.public != 'true'
         run: |
           test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js
           test -f moodle/mod/vimipad/amd/build/editor_lazy.min.js.map

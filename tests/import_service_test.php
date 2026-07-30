@@ -120,6 +120,42 @@ final class import_service_test extends \advanced_testcase {
     }
 
     /**
+     * Containers survive a JSON export/import round-trip (the basis for the
+     * SVG round-trip, which embeds this same export JSON).
+     *
+     * @return void
+     */
+    public function test_container_roundtrip(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        [$instance, $user, $source] = $this->make_source_map();
+        $DB->insert_record('vimipad_container', (object) [
+            'workspaceid' => $source->id,
+            'stableid' => 'container_rrrrrr',
+            'type' => 'group',
+            'label' => 'Forces',
+            'geometryjson' => '{"x":10,"y":20,"w":300,"h":200}',
+            'metadatajson' => null,
+            'deleted' => 0,
+        ]);
+
+        $json = (new export_service())->export_json($instance, $source, 'conceptmap');
+
+        $target = $this->make_workspace((int) $instance->id, (int) $user->id);
+        (new import_service())->import_json($json, $target, (int) $user->id);
+
+        $containers = $DB->get_records('vimipad_container', ['workspaceid' => $target->id, 'deleted' => 0]);
+        $this->assertCount(1, $containers);
+        $container = reset($containers);
+        $this->assertSame('Forces', $container->label);
+        $this->assertSame('group', $container->type);
+        $this->assertNotEmpty($container->geometryjson);
+        $geometry = json_decode($container->geometryjson, true);
+        $this->assertSame(300, (int) $geometry['w']);
+    }
+
+    /**
      * A document that is not a ViMi Pad export is rejected.
      *
      * @return void

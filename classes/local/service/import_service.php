@@ -39,7 +39,7 @@ class import_service {
      * @param stdClass $workspace The target workspace record.
      * @param int $userid The acting user id.
      * @param string $mode 'append' (default) or 'replace'.
-     * @return array{nodes: int, relations: int} Counts of imported elements.
+     * @return array{nodes: int, relations: int, containers: int, memberships: int} Counts of imported elements.
      * @throws \moodle_exception If the document is not a valid ViMi Pad export.
      */
     public function import_json(string $json, stdClass $workspace, int $userid, string $mode = 'append'): array {
@@ -62,7 +62,7 @@ class import_service {
      * @param stdClass $workspace The target workspace record.
      * @param int $userid The acting user id.
      * @param string $mode 'append' (default) or 'replace'.
-     * @return array{nodes: int, relations: int} Counts of imported elements.
+     * @return array{nodes: int, relations: int, containers: int, memberships: int} Counts of imported elements.
      * @throws \moodle_exception If the document is not a valid ViMi Pad export.
      */
     public function import_xml(string $xml, stdClass $workspace, int $userid, string $mode = 'append'): array {
@@ -73,7 +73,7 @@ class import_service {
      * Parse a ViMi Pad XML export into the normalized node/relation structure.
      *
      * @param string $xml The XML document.
-     * @return array{nodes: array, relations: array, layout: array|null}
+     * @return array{nodes: array, relations: array, containers: array, memberships: array, layout: array|null}
      * @throws \moodle_exception If the document is not a valid ViMi Pad export.
      */
     private function parse_xml(string $xml): array {
@@ -102,6 +102,18 @@ class import_service {
                 $relations[] = self::element_to_array($relation);
             }
         }
+        $containers = [];
+        if (isset($doc->containers)) {
+            foreach ($doc->containers->container as $container) {
+                $containers[] = self::element_to_array($container);
+            }
+        }
+        $memberships = [];
+        if (isset($doc->memberships)) {
+            foreach ($doc->memberships->membership as $membership) {
+                $memberships[] = self::element_to_array($membership);
+            }
+        }
 
         $layout = null;
         if (isset($doc->layout)) {
@@ -111,7 +123,13 @@ class import_service {
             }
         }
 
-        return ['nodes' => $nodes, 'relations' => $relations, 'layout' => $layout];
+        return [
+            'nodes' => $nodes,
+            'relations' => $relations,
+            'containers' => $containers,
+            'memberships' => $memberships,
+            'layout' => $layout,
+        ];
     }
 
     /**
@@ -142,7 +160,7 @@ class import_service {
      * @param stdClass $workspace The target workspace record.
      * @param int $userid The acting user id.
      * @param string $mode 'append' (default) or 'replace'.
-     * @return array{nodes: int, relations: int} Counts of imported elements.
+     * @return array{nodes: int, relations: int, containers: int, memberships: int} Counts of imported elements.
      * @throws \moodle_exception On concurrency (lock contention).
      */
     private function apply_data(array $data, stdClass $workspace, int $userid, string $mode = 'append'): array {
@@ -163,7 +181,7 @@ class import_service {
      * @param stdClass $workspace The target workspace record.
      * @param int $userid The acting user id.
      * @param string $mode 'append' (default) or 'replace'.
-     * @return array{nodes: int, relations: int} Counts of imported elements.
+     * @return array{nodes: int, relations: int, containers: int, memberships: int} Counts of imported elements.
      */
     private function apply_data_locked(array $data, stdClass $workspace, int $userid, string $mode = 'append'): array {
         global $DB;
@@ -247,7 +265,69 @@ class import_service {
 
             $result = $operationservice->apply_locked($wsid, $revision, 'relation_create', $payload, $userid);
             $revision = (int) $result['revision'];
+            // Map the relation's old stable id to its new one, so memberships
+            // referencing a relation can be remapped (node and relation stable
+            // ids share one namespace, so a single idmap is sufficient).
+            if (isset($relation['stableid']) && is_string($relation['stableid'])) {
+                $idmap[$relation['stableid']] = $result['stableid'];
+            }
             $relationcount++;
+        }
+
+        // Containers: create each (fresh stable ids), tracking old => new so
+        // memberships can be remapped.
+        $containeridmap = [];
+        $containercount = 0;
+        $containers = is_array($data['containers'] ?? null) ? $data['containers'] : [];
+        foreach ($containers as $container) {
+            if (!is_array($container)) {
+                continue;
+            }
+            $payload = ['type' => (string) ($container['type'] ?? 'group')];
+            foreach (['label', 'geometryjson', 'metadatajson'] as $field) {
+                if (isset($container[$field]) && is_string($container[$field]) && $container[$field] !== '') {
+                    $payload[$field] = $container[$field];
+                }
+            }
+            $result = $operationservice->apply_locked($wsid, $revision, 'container_create', $payload, $userid);
+            $revision = (int) $result['revision'];
+            if (isset($container['stableid']) && is_string($container['stableid'])) {
+                $containeridmap[$container['stableid']] = $result['stableid'];
+            }
+            $containercount++;
+        }
+
+        // Memberships: remap the container and the member item onto the new
+        // stable ids; drop any whose referent was not imported.
+        $membershipcount = 0;
+        $memberships = is_array($data['memberships'] ?? null) ? $data['memberships'] : [];
+        foreach ($memberships as $membership) {
+            if (!is_array($membership)) {
+                continue;
+            }
+            $newcontainer = $containeridmap[$membership['containerstableid'] ?? ''] ?? null;
+            $itemtype = (string) ($membership['itemtype'] ?? '');
+            $olditem = $membership['itemstableid'] ?? '';
+            $newitem = $itemtype === 'container'
+                ? ($containeridmap[$olditem] ?? null)
+                : ($idmap[$olditem] ?? null);
+            if ($newcontainer === null || $newitem === null || !in_array($itemtype, ['node', 'relation', 'container'], true)) {
+                continue;
+            }
+            $payload = [
+                'containerstableid' => $newcontainer,
+                'itemtype' => $itemtype,
+                'itemstableid' => $newitem,
+            ];
+            if (isset($membership['role']) && is_string($membership['role']) && $membership['role'] !== '') {
+                $payload['role'] = $membership['role'];
+            }
+            if (isset($membership['sortorder']) && is_numeric($membership['sortorder'])) {
+                $payload['sortorder'] = (int) $membership['sortorder'];
+            }
+            $result = $operationservice->apply_locked($wsid, $revision, 'membership_add', $payload, $userid);
+            $revision = (int) $result['revision'];
+            $membershipcount++;
         }
 
         $transaction->allow_commit();
@@ -257,7 +337,12 @@ class import_service {
         // non-critical: a failure here does not undo the imported elements.
         $this->apply_layout($data, $workspace, $idmap, $userid);
 
-        return ['nodes' => $nodecount, 'relations' => $relationcount];
+        return [
+            'nodes' => $nodecount,
+            'relations' => $relationcount,
+            'containers' => $containercount,
+            'memberships' => $membershipcount,
+        ];
     }
 
     /**

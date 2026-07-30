@@ -29,7 +29,9 @@
 import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
-import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg} from '../canvas/svg_export';
+import {nodeHeight, nodeWidth} from '../canvas/node_geometry';
+import {boundingBox, centerInBox, ContainerBox, parseGeometry, serializeGeometry} from '../canvas/container_geometry';
+import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg, extractMapData} from '../canvas/svg_export';
 import {EditorState, reduce} from '../store/reducer';
 import {History, HistoryEntry, OpSpec} from '../store/history';
 import {CanvasView} from './CanvasView';
@@ -39,6 +41,9 @@ import {FA, Icon} from '../canvas/icons';
 import {LayoutMap, Point, PolledOperation, Size, SizeMap, VimiNode, VimiRelation} from '../types';
 import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
 import {useCollaboration} from '../collab/use_collaboration';
+import {useConstraintHints} from '../hooks/use_constraint_hints';
+import {ConstraintBanner} from './ConstraintBanner';
+import {LockKind} from './LockPanel';
 import {operationToAction} from '../collab/apply_remote';
 
 /**
@@ -114,6 +119,8 @@ export function EditorApp(props: Props): React.ReactElement {
     const [relSource, setRelSource] = useState('');
     const [relTarget, setRelTarget] = useState('');
     const [relLabel, setRelLabel] = useState('');
+    const [drawingContainer, setDrawingContainer] = useState(false);
+    const [lockMode, setLockMode] = useState(false);
 
     // Undo/redo. In a server-authoritative editor an undo is the inverse
     // operation sent to the server, not a local rollback (see store/history).
@@ -177,13 +184,22 @@ export function EditorApp(props: Props): React.ReactElement {
             return;
         }
         try {
-            const text = await file.text();
+            let text = await file.text();
+            // An exported SVG carries the map JSON in its metadata; extract it.
+            if (file.name.toLowerCase().endsWith('.svg')) {
+                const embedded = extractMapData(text);
+                if (!embedded) {
+                    setError(t('editor:importnovimidata'));
+                    return;
+                }
+                text = embedded;
+            }
             await api.importMap(stateRef.current.workspaceid, text, importReplace ? 'replace' : 'append');
             await load();
         } catch (e) {
             setError((e as Error).message);
         }
-    }, [api, load, importReplace]);
+    }, [api, load, importReplace, t]);
 
     // Feed operations polled from collaborators into the local state. Layout
     // changes travel on the separate layout channel and are reconciled below.
@@ -241,6 +257,15 @@ export function EditorApp(props: Props): React.ReactElement {
     );
     const readonly = api.isReadonly();
     const disabled = busy || loading || state.locked === 1 || readonly;
+
+    // Soft, non-blocking constraint hints, refreshed (debounced) as the map
+    // changes. Only for the editing owner of an open map.
+    const constraintStatus = useConstraintHints(
+        api,
+        state.workspaceid,
+        state.revision,
+        !readonly && state.locked !== 1
+    );
 
     const runOperation = useCallback(async (
         type: string,
@@ -361,16 +386,27 @@ export function EditorApp(props: Props): React.ReactElement {
     }, [undo, redo]);
 
     // Export the current map as a standalone SVG file (client-side).
-    const exportSvg = useCallback(() => {
+    const exportSvg = useCallback(async () => {
         const svg = rootRef.current?.querySelector('svg.vimipad-canvas') as SVGSVGElement | null;
         if (!svg) {
             return;
         }
         const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
             x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
-        });
-        downloadCanvasSvg(svg, bounds, `vimipad-${state.profile}.svg`);
-    }, [state.nodes, state.profile, stored, sizes]);
+        }, state.containers ?? []);
+        // Embed the semantic map JSON so the SVG can be re-imported later.
+        let embedJson: string | undefined;
+        try {
+            const url = `${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`;
+            const response = await fetch(url, {credentials: 'same-origin'});
+            if (response.ok) {
+                embedJson = await response.text();
+            }
+        } catch {
+            embedJson = undefined;
+        }
+        downloadCanvasSvg(svg, bounds, `vimipad-${state.profile}.svg`, embedJson);
+    }, [state.nodes, state.profile, state.containers, state.workspaceid, stored, sizes, exportBase, api]);
 
     // Export the current map as a rasterized PNG file (client-side).
     const exportPng = useCallback(() => {
@@ -380,9 +416,9 @@ export function EditorApp(props: Props): React.ReactElement {
         }
         const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
             x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
-        });
+        }, state.containers ?? []);
         downloadCanvasPng(svg, bounds, `vimipad-${state.profile}.png`);
-    }, [state.nodes, state.profile, stored, sizes]);
+    }, [state.nodes, state.profile, state.containers, stored, sizes]);
 
     // Export the current map as a single-page PDF (client-side).
     const exportPdf = useCallback(() => {
@@ -392,9 +428,9 @@ export function EditorApp(props: Props): React.ReactElement {
         }
         const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
             x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
-        });
+        }, state.containers ?? []);
         downloadCanvasPdf(svg, bounds, `vimipad-${state.profile}.pdf`);
-    }, [state.nodes, state.profile, stored, sizes]);
+    }, [state.nodes, state.profile, state.containers, stored, sizes]);
 
     const addNode = useCallback(async () => {
         const label = nodeLabel.trim();
@@ -485,6 +521,107 @@ export function EditorApp(props: Props): React.ReactElement {
             pushHistory({
                 undo: [nodeCreateSpec(node), ...attached.map(relationCreateSpec)],
                 redo: [{type: 'node_delete', payload: {stableid}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const createContainer = useCallback(async (geometryjson: string) => {
+        const res = await runOperation('container_create', {type: 'group', geometryjson}, () => undefined);
+        if (res) {
+            dispatch({kind: 'addContainer', container: {
+                stableid: res.stableid, type: 'group', label: '', geometryjson,
+            }});
+            pushHistory({
+                undo: [{type: 'container_delete', payload: {stableid: res.stableid}}],
+                redo: [{type: 'container_create', payload: {stableid: res.stableid, type: 'group', geometryjson}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const deleteContainer = useCallback(async (stableid: string) => {
+        const existing = (stateRef.current.containers ?? []).find(c => c.stableid === stableid);
+        const res = await runOperation('container_delete', {stableid},
+            () => dispatch({kind: 'deleteContainer', stableid}));
+        if (res && existing) {
+            pushHistory({
+                undo: [{type: 'container_create', payload: {
+                    stableid, type: existing.type, geometryjson: existing.geometryjson ?? '',
+                }}],
+                redo: [{type: 'container_delete', payload: {stableid}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const updateContainerGeometry = useCallback(async (stableid: string, geometryjson: string) => {
+        const prev = (stateRef.current.containers ?? []).find(c => c.stableid === stableid)?.geometryjson;
+        const res = await runOperation('container_update', {stableid, geometryjson}, () => {
+            dispatch({kind: 'updateContainer', stableid, geometryjson});
+        });
+        if (res) {
+            pushHistory({
+                undo: [{type: 'container_update', payload: {stableid, geometryjson: prev ?? ''}}],
+                redo: [{type: 'container_update', payload: {stableid, geometryjson}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const renameContainer = useCallback(async (stableid: string, label: string) => {
+        const prev = (stateRef.current.containers ?? []).find(c => c.stableid === stableid)?.label ?? '';
+        if (label === prev) {
+            return;
+        }
+        const res = await runOperation('container_update', {stableid, label}, () => {
+            dispatch({kind: 'updateContainer', stableid, label});
+        });
+        if (res) {
+            pushHistory({
+                undo: [{type: 'container_update', payload: {stableid, label: prev}}],
+                redo: [{type: 'container_update', payload: {stableid, label}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const updateContainerStyle = useCallback(async (stableid: string, metadatajson: string) => {
+        const prev = (stateRef.current.containers ?? []).find(c => c.stableid === stableid)?.metadatajson ?? '';
+        if (metadatajson === prev) {
+            return;
+        }
+        const res = await runOperation('container_update', {stableid, metadatajson}, () => {
+            dispatch({kind: 'updateContainer', stableid, metadatajson});
+        });
+        if (res) {
+            pushHistory({
+                undo: [{type: 'container_update', payload: {stableid, metadatajson: prev}}],
+                redo: [{type: 'container_update', payload: {stableid, metadatajson}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const setElementLock = useCallback(async (kind: LockKind, stableid: string, metadatajson: string) => {
+        const type = kind === 'node' ? 'node_update' : (kind === 'relation' ? 'relation_update' : 'container_update');
+        const findPrev = (): string | undefined => {
+            if (kind === 'node') {
+                return stateRef.current.nodes.find(n => n.stableid === stableid)?.metadatajson;
+            }
+            if (kind === 'relation') {
+                return stateRef.current.relations.find(r => r.stableid === stableid)?.metadatajson;
+            }
+            return (stateRef.current.containers ?? []).find(c => c.stableid === stableid)?.metadatajson;
+        };
+        const prev = findPrev();
+        const res = await runOperation(type, {stableid, metadatajson}, () => {
+            if (kind === 'node') {
+                dispatch({kind: 'updateNode', stableid, metadatajson});
+            } else if (kind === 'relation') {
+                dispatch({kind: 'updateRelation', stableid, metadatajson});
+            } else {
+                dispatch({kind: 'updateContainer', stableid, metadatajson});
+            }
+        });
+        if (res) {
+            pushHistory({
+                undo: [{type, payload: {stableid, metadatajson: prev ?? ''}}],
+                redo: [{type, payload: {stableid, metadatajson}}],
             });
         }
     }, [runOperation, pushHistory]);
@@ -591,18 +728,80 @@ export function EditorApp(props: Props): React.ReactElement {
     const reArrangeLayout = useCallback(async () => {
         const prevPos = stored;
         const auto = computeLayout(state.nodes, {}, state.relations, state.profile);
+
+        // T5: keep container membership across re-arrange. Snapshot which nodes
+        // sit inside each container now, then, after the new layout, refit each
+        // container around its members' new positions so a node that was inside
+        // stays inside (and the container follows its members).
+        const containers = state.containers ?? [];
+        const CONTAINER_REFIT_PAD = 24;
+        const boxOf = (id: string, at: LayoutMap): ContainerBox => {
+            const pos = at[id] ?? {x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2};
+            const node = state.nodes.find(n => n.stableid === id);
+            const w0 = node ? nodeWidth(node.label) : 70;
+            const size = sizes[id] ?? {w: w0, h: node ? nodeHeight(node.label, w0) : 40};
+            return {x: pos.x - size.w / 2, y: pos.y - size.h / 2, w: size.w, h: size.h};
+        };
+        const refits: Array<{stableid: string; oldgeom: string; newgeom: string}> = [];
+        for (const c of containers) {
+            const box = parseGeometry(c.geometryjson);
+            if (!box) {
+                continue;
+            }
+            const members = state.nodes
+                .filter(n => stored[n.stableid] && centerInBox(stored[n.stableid], box))
+                .map(n => n.stableid);
+            if (members.length === 0) {
+                continue; // Empty container: leave it where it is.
+            }
+            const fit = boundingBox(members.map(id => boxOf(id, auto)), CONTAINER_REFIT_PAD);
+            if (!fit) {
+                continue;
+            }
+            const newgeom = serializeGeometry(fit);
+            const oldgeom = c.geometryjson ?? serializeGeometry(box);
+            if (newgeom !== oldgeom) {
+                refits.push({stableid: c.stableid, oldgeom, newgeom});
+            }
+        }
+
         setStored(auto);
+        refits.forEach(u => dispatch({kind: 'updateContainer', stableid: u.stableid, geometryjson: u.newgeom}));
         try {
             await api.saveLayout(state.workspaceid, encodeLayout(auto, sizes));
+            let revision = revisionRef.current;
+            for (const u of refits) {
+                const res = await api.applyOperation(
+                    stateRef.current.workspaceid, revision, 'container_update',
+                    {stableid: u.stableid, geometryjson: u.newgeom}
+                );
+                revision = res.revision;
+            }
+            if (refits.length > 0) {
+                revisionRef.current = revision;
+                dispatch({kind: 'setRevision', revision});
+            }
             pushHistory({
-                undo: [{type: '__layout', payload: {positions: prevPos, sizes}}],
-                redo: [{type: '__layout', payload: {positions: auto, sizes}}],
+                undo: [
+                    {type: '__layout', payload: {positions: prevPos, sizes}},
+                    ...refits.map(u => ({
+                        type: 'container_update', payload: {stableid: u.stableid, geometryjson: u.oldgeom},
+                    })),
+                ],
+                redo: [
+                    {type: '__layout', payload: {positions: auto, sizes}},
+                    ...refits.map(u => ({
+                        type: 'container_update', payload: {stableid: u.stableid, geometryjson: u.newgeom},
+                    })),
+                ],
             });
             announce(t('editor:rearrange'));
         } catch (e) {
             setError((e as Error).message);
+            await load();
         }
-    }, [api, state.workspaceid, state.nodes, state.relations, state.profile, stored, sizes, pushHistory, announce, t]);
+    }, [api, state.workspaceid, state.nodes, state.relations, state.profile, state.containers,
+        stored, sizes, pushHistory, announce, t, load]);
 
     const onNodeResized = useCallback(async (stableid: string, size: Size) => {
         const prevSizes = sizes;
@@ -657,12 +856,12 @@ export function EditorApp(props: Props): React.ReactElement {
     const addNodeControls = (
         <fieldset disabled={disabled} className="vimipad-control">
             <legend className="h6">{t('editor:addnode')}</legend>
-            <div className="form-inline">
+            <div className="vimipad-control-line">
                 <label className="sr-only" htmlFor="vimipad-node-label">{t('editor:nodelabel')}</label>
                 <input
                     id="vimipad-node-label"
                     type="text"
-                    className="form-control mr-2"
+                    className="form-control"
                     value={nodeLabel}
                     placeholder={t('editor:nodelabel')}
                     onChange={e => setNodeLabel(e.target.value)}
@@ -677,11 +876,11 @@ export function EditorApp(props: Props): React.ReactElement {
     const addRelationControls = (
         <fieldset disabled={disabled || state.nodes.length < 2} className="vimipad-control">
             <legend className="h6">{t('editor:addrelation')}</legend>
-            <div className="form-inline">
+            <div className="vimipad-control-line">
                 <label className="sr-only" htmlFor="vimipad-rel-source">{t('editor:subject')}</label>
                 <select
                     id="vimipad-rel-source"
-                    className="form-control mr-2"
+                    className="form-control"
                     value={relSource}
                     onChange={e => setRelSource(e.target.value)}
                 >
@@ -690,7 +889,7 @@ export function EditorApp(props: Props): React.ReactElement {
                 </select>
                 <input
                     type="text"
-                    className="form-control mr-2"
+                    className="form-control"
                     value={relLabel}
                     placeholder={t('editor:relation')}
                     onChange={e => setRelLabel(e.target.value)}
@@ -698,7 +897,7 @@ export function EditorApp(props: Props): React.ReactElement {
                 <label className="sr-only" htmlFor="vimipad-rel-target">{t('editor:object')}</label>
                 <select
                     id="vimipad-rel-target"
-                    className="form-control mr-2"
+                    className="form-control"
                     value={relTarget}
                     onChange={e => setRelTarget(e.target.value)}
                 >
@@ -712,6 +911,7 @@ export function EditorApp(props: Props): React.ReactElement {
         </fieldset>
     );
 
+
     return (
         <div className="vimipad-editor" ref={rootRef}>
             <div className="vimipad-sr-only" role="status" aria-live="polite">{status}</div>
@@ -722,6 +922,7 @@ export function EditorApp(props: Props): React.ReactElement {
             {state.locked === 1 && (
                 <div className="alert alert-warning" role="status">{t('editor:locked')}</div>
             )}
+            <ConstraintBanner status={constraintStatus} t={t} />
 
             <div className="vimipad-viewpanel">
             {view === 'canvas' ? (
@@ -757,6 +958,19 @@ export function EditorApp(props: Props): React.ReactElement {
                         isLockedByOther={collab.isLockedByOther}
                         beginEdit={collab.beginEdit}
                         endEdit={collab.endEdit}
+                        drawingContainer={drawingContainer}
+                        onCreateContainer={createContainer}
+                        onDeleteContainer={deleteContainer}
+                        onFinishDrawContainer={() => setDrawingContainer(false)}
+                        onUpdateContainer={updateContainerGeometry}
+                        onRenameContainer={renameContainer}
+                        onUpdateContainerStyle={updateContainerStyle}
+                        canManage={state.canmanage === true}
+                        canLock={state.canmanage === true || state.lockmodeforlearners === true}
+                        onToggleDrawContainer={() => setDrawingContainer(v => !v)}
+                        lockMode={lockMode}
+                        onToggleLockMode={() => setLockMode(v => !v)}
+                        onSetElementLock={setElementLock}
                     />
                     <div className="vimipad-controls-row">
                         {addNodeControls}
@@ -785,7 +999,7 @@ export function EditorApp(props: Props): React.ReactElement {
                 <input
                     ref={importInputRef}
                     type="file"
-                    accept="application/json,application/xml,text/xml,.json,.xml"
+                    accept="application/json,application/xml,text/xml,image/svg+xml,.json,.xml,.svg"
                     className="vimipad-hidden-input"
                     onChange={(e) => void onImportFile(e)}
                 />

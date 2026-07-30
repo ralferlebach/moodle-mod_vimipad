@@ -157,13 +157,24 @@ jobs:
       # path -> ENOENT; the subsequent Vendors check throws, mpc never restores
       # the plugin backup, and every later step (phpdoc, ...) fails on the
       # missing file. Running "npx grunt amd" directly performs no pre-deletion,
-      # and --files restricts the build to the real Moodle AMD source (init.js).
-      - name: Grunt – Moodle AMD module (init.js only)
+      # and --files restricts the build to the real Moodle AMD sources.
+      - name: Grunt – Moodle AMD modules (init.js, revision.js)
         working-directory: ${{ github.workspace }}/moodle/mod/vimipad/amd
         run: |
           npx grunt amd \
-            --files=mod/vimipad/amd/src/init.js \
+            --files=mod/vimipad/amd/src/init.js,mod/vimipad/amd/src/revision.js \
             --max-lint-warnings=0
+
+      # The AMD build artefacts are committed, so a rebuild must reproduce them
+      # exactly. Without this gate a stale amd/build/init.min.js ships silently:
+      # the browser then requests an outdated STRING_KEYS list and the editor
+      # renders raw keys ("editor:authortools") instead of translated strings.
+      - name: Verify committed AMD build matches the rebuild
+        working-directory: ${{ github.workspace }}/moodle/mod/vimipad
+        run: |
+          git diff --exit-code -- \
+            amd/build/init.min.js amd/build/init.min.js.map \
+            amd/build/revision.min.js amd/build/revision.min.js.map
 
       - name: Verify editor bundle survived Moodle Grunt
         run: |
