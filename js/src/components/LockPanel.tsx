@@ -28,15 +28,16 @@
  */
 
 import React from 'react';
-import {VimiNode, VimiRelation} from '../types';
+import {VimiContainer, VimiNode, VimiRelation} from '../types';
 import {readLock, writeLock} from '../canvas/element_lock';
 
 /** The kind of element a lock is applied to. */
-export type LockKind = 'node' | 'relation';
+export type LockKind = 'node' | 'relation' | 'container';
 
 interface Props {
     nodes: VimiNode[];
     relations: VimiRelation[];
+    containers: VimiContainer[];
     disabled: boolean;
     t: (key: string) => string;
     /** Persist new metadata JSON for an element. */
@@ -110,8 +111,8 @@ function LockRow(props: RowProps): React.ReactElement {
  * @returns The lock panel, or null when there is nothing to lock.
  */
 export function LockPanel(props: Props): React.ReactElement | null {
-    const {nodes, relations, disabled, t, onSetLock} = props;
-    if (nodes.length === 0 && relations.length === 0) {
+    const {nodes, relations, containers, disabled, t, onSetLock} = props;
+    if (nodes.length === 0 && relations.length === 0 && containers.length === 0) {
         return null;
     }
     return (
@@ -138,6 +139,18 @@ export function LockPanel(props: Props): React.ReactElement | null {
                         stableid={relation.stableid}
                         label={relation.label}
                         metadatajson={relation.metadatajson}
+                        disabled={disabled}
+                        t={t}
+                        onSetLock={onSetLock}
+                    />
+                ))}
+                {containers.map(container => (
+                    <LockRow
+                        key={`lock-container-${container.stableid}`}
+                        kind="container"
+                        stableid={container.stableid}
+                        label={container.label || t('editor:containers')}
+                        metadatajson={container.metadatajson}
                         disabled={disabled}
                         t={t}
                         onSetLock={onSetLock}

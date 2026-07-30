@@ -43,7 +43,7 @@ import {
 import {labelBox, shapeElement} from '../canvas/shapes';
 import {useDismiss} from '../hooks/use_dismiss';
 import {parseNodeStyle} from '../canvas/node_style';
-import {boxFromDrag, ContainerBox, isDrawable, parseGeometry, serializeGeometry} from '../canvas/container_geometry';
+import {boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBox, serializeGeometry} from '../canvas/container_geometry';
 import {isLocked} from '../canvas/element_lock';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
 import {TextEditMenu} from './TextEditMenu';
@@ -111,6 +111,10 @@ interface Props {
     onDeleteContainer?: (stableid: string) => void;
     /** Called when a draw gesture completes, so the host can exit draw mode. */
     onFinishDrawContainer?: () => void;
+    /** Commit a container's new geometry (move/resize). */
+    onUpdateContainer?: (stableid: string, geometryjson: string) => void;
+    /** Rename a container. */
+    onRenameContainer?: (stableid: string, label: string) => void;
 }
 
 /** Size of a corner resize handle, in canvas units. */
@@ -337,6 +341,67 @@ export function CanvasView(props: Props): React.ReactElement {
         }
         props.onFinishDrawContainer?.();
     }, [props.drawingContainer, drawStart, drawBox, props.onCreateContainer, props.onFinishDrawContainer]);
+
+    // Container move/resize via title-bar and corner-handle drags (pointer
+    // capture keeps this out of the node/connect pointer state machine).
+    const [containerDrag, setContainerDrag] = useState<
+        {mode: 'move' | 'resize'; stableid: string; start: Point; startBox: ContainerBox} | null
+    >(null);
+    const [containerPreview, setContainerPreview] = useState<ContainerBox | null>(null);
+    const [renamingContainer, setRenamingContainer] = useState<string | null>(null);
+    const [containerName, setContainerName] = useState('');
+
+    const beginContainerDrag = useCallback((
+        event: React.PointerEvent, mode: 'move' | 'resize', stableid: string, box: ContainerBox
+    ) => {
+        if (disabled) {
+            return;
+        }
+        event.stopPropagation();
+        (event.target as Element).setPointerCapture?.(event.pointerId);
+        setContainerDrag({mode, stableid, start: toSvgPoint(event.clientX, event.clientY), startBox: box});
+        setContainerPreview(box);
+    }, [disabled, toSvgPoint]);
+
+    const onContainerDragMove = useCallback((event: React.PointerEvent) => {
+        if (!containerDrag) {
+            return;
+        }
+        event.stopPropagation();
+        const p = toSvgPoint(event.clientX, event.clientY);
+        const dx = p.x - containerDrag.start.x;
+        const dy = p.y - containerDrag.start.y;
+        setContainerPreview(containerDrag.mode === 'move'
+            ? moveBox(containerDrag.startBox, dx, dy)
+            : resizeBox(containerDrag.startBox, dx, dy));
+    }, [containerDrag, toSvgPoint]);
+
+    const onContainerDragUp = useCallback((event: React.PointerEvent) => {
+        if (!containerDrag) {
+            return;
+        }
+        event.stopPropagation();
+        const box = containerPreview;
+        const dragged = containerDrag.stableid;
+        setContainerDrag(null);
+        setContainerPreview(null);
+        if (box && props.onUpdateContainer) {
+            props.onUpdateContainer(dragged, serializeGeometry(box));
+        }
+    }, [containerDrag, containerPreview, props.onUpdateContainer]);
+
+    const startRenameContainer = useCallback((stableid: string, current: string) => {
+        if (disabled) {
+            return;
+        }
+        setContainerName(current);
+        setRenamingContainer(stableid);
+    }, [disabled]);
+
+    const commitRenameContainer = useCallback((stableid: string) => {
+        setRenamingContainer(null);
+        props.onRenameContainer?.(stableid, containerName.trim());
+    }, [containerName, props.onRenameContainer]);
 
     const onNodePointerDown = useCallback(async (event: React.PointerEvent, stableid: string, label: string) => {
         // Manual double-click: two quick clicks on the same node open the text editor.
@@ -826,12 +891,20 @@ export function CanvasView(props: Props): React.ReactElement {
 
             {/* Container layer (behind the graph): author/teacher background boxes. */}
             {(state.containers ?? []).map(container => {
-                const box = parseGeometry(container.geometryjson);
-                if (!box) {
+                const stored = parseGeometry(container.geometryjson);
+                if (!stored) {
                     return null;
                 }
+                const box = (containerDrag?.stableid === container.stableid && containerPreview)
+                    ? containerPreview
+                    : stored;
+                const titleH = 24;
+                const renaming = renamingContainer === container.stableid;
+                // A locked container is only editable by an author/manager.
+                const editable = !disabled && (state.canmanage === true || !isLocked(container.metadatajson));
                 return (
                     <g key={`container-${container.stableid}`} className="vimipad-canvas-container">
+                        {/* Body: non-interactive so nodes underneath stay clickable. */}
                         <rect
                             x={box.x}
                             y={box.y}
@@ -843,18 +916,61 @@ export function CanvasView(props: Props): React.ReactElement {
                             strokeDasharray="6 4"
                             pointerEvents="none"
                         />
-                        {container.label && (
+                        {/* Title bar: move handle and rename target. */}
+                        <rect
+                            className="vimipad-container-title"
+                            x={box.x}
+                            y={box.y}
+                            width={box.w}
+                            height={titleH}
+                            rx={8}
+                            fill="rgba(84, 110, 122, 0.14)"
+                            style={{cursor: editable ? 'move' : 'default', touchAction: 'none'}}
+                            onPointerDown={editable
+                                ? (e => beginContainerDrag(e, 'move', container.stableid, stored))
+                                : undefined}
+                            onPointerMove={onContainerDragMove}
+                            onPointerUp={onContainerDragUp}
+                            onDoubleClick={editable
+                                ? (() => startRenameContainer(container.stableid, container.label))
+                                : undefined}
+                        />
+                        {renaming ? (
+                            <foreignObject
+                                x={box.x + 4}
+                                y={box.y + 2}
+                                width={Math.max(40, box.w - 30)}
+                                height={titleH - 2}
+                            >
+                                <input
+                                    className="form-control form-control-sm vimipad-container-rename"
+                                    autoFocus
+                                    value={containerName}
+                                    onChange={e => setContainerName(e.target.value)}
+                                    onBlur={() => commitRenameContainer(container.stableid)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            commitRenameContainer(container.stableid);
+                                        }
+                                        if (e.key === 'Escape') {
+                                            setRenamingContainer(null);
+                                        }
+                                    }}
+                                    onPointerDown={e => e.stopPropagation()}
+                                />
+                            </foreignObject>
+                        ) : (
                             <text
                                 x={box.x + 10}
-                                y={box.y + 20}
+                                y={box.y + 17}
                                 className="vimipad-container-label"
-                                style={{fontSize: 14, fill: 'rgba(55, 71, 79, 0.9)'}}
+                                style={{fontSize: 13, fill: 'rgba(55, 71, 79, 0.95)'}}
                                 pointerEvents="none"
                             >
-                                {container.label}
+                                {container.label || t('editor:containers')}
                             </text>
                         )}
-                        {!disabled && props.onDeleteContainer && (
+                        {editable && !renaming && props.onDeleteContainer && (
                             <g
                                 className="vimipad-container-delete"
                                 role="button"
@@ -866,20 +982,35 @@ export function CanvasView(props: Props): React.ReactElement {
                                 }}
                             >
                                 <rect
-                                    x={box.x + box.w - 24}
-                                    y={box.y + 6}
-                                    width={18}
-                                    height={18}
+                                    x={box.x + box.w - 22}
+                                    y={box.y + 4}
+                                    width={16}
+                                    height={16}
                                     rx={3}
-                                    fill="rgba(84, 110, 122, 0.18)"
+                                    fill="rgba(84, 110, 122, 0.22)"
                                 />
                                 <text
-                                    x={box.x + box.w - 15}
-                                    y={box.y + 19}
+                                    x={box.x + box.w - 14}
+                                    y={box.y + 16}
                                     textAnchor="middle"
-                                    style={{fontSize: 13, fill: 'rgba(55, 71, 79, 0.95)'}}
+                                    style={{fontSize: 12, fill: 'rgba(55, 71, 79, 0.95)'}}
                                 >&#215;</text>
                             </g>
+                        )}
+                        {editable && !renaming && props.onUpdateContainer && (
+                            <rect
+                                className="vimipad-container-resize"
+                                x={box.x + box.w - 12}
+                                y={box.y + box.h - 12}
+                                width={12}
+                                height={12}
+                                rx={2}
+                                fill="rgba(84, 110, 122, 0.5)"
+                                style={{cursor: 'nwse-resize', touchAction: 'none'}}
+                                onPointerDown={e => beginContainerDrag(e, 'resize', container.stableid, stored)}
+                                onPointerMove={onContainerDragMove}
+                                onPointerUp={onContainerDragUp}
+                            />
                         )}
                     </g>
                 );

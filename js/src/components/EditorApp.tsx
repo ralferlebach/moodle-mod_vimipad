@@ -29,7 +29,7 @@
 import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
-import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg} from '../canvas/svg_export';
+import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg, extractMapData} from '../canvas/svg_export';
 import {EditorState, reduce} from '../store/reducer';
 import {History, HistoryEntry, OpSpec} from '../store/history';
 import {CanvasView} from './CanvasView';
@@ -181,13 +181,22 @@ export function EditorApp(props: Props): React.ReactElement {
             return;
         }
         try {
-            const text = await file.text();
+            let text = await file.text();
+            // An exported SVG carries the map JSON in its metadata; extract it.
+            if (file.name.toLowerCase().endsWith('.svg')) {
+                const embedded = extractMapData(text);
+                if (!embedded) {
+                    setError(t('editor:importnovimidata'));
+                    return;
+                }
+                text = embedded;
+            }
             await api.importMap(stateRef.current.workspaceid, text, importReplace ? 'replace' : 'append');
             await load();
         } catch (e) {
             setError((e as Error).message);
         }
-    }, [api, load, importReplace]);
+    }, [api, load, importReplace, t]);
 
     // Feed operations polled from collaborators into the local state. Layout
     // changes travel on the separate layout channel and are reconciled below.
@@ -374,16 +383,27 @@ export function EditorApp(props: Props): React.ReactElement {
     }, [undo, redo]);
 
     // Export the current map as a standalone SVG file (client-side).
-    const exportSvg = useCallback(() => {
+    const exportSvg = useCallback(async () => {
         const svg = rootRef.current?.querySelector('svg.vimipad-canvas') as SVGSVGElement | null;
         if (!svg) {
             return;
         }
         const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
             x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
-        });
-        downloadCanvasSvg(svg, bounds, `vimipad-${state.profile}.svg`);
-    }, [state.nodes, state.profile, stored, sizes]);
+        }, state.containers ?? []);
+        // Embed the semantic map JSON so the SVG can be re-imported later.
+        let embedJson: string | undefined;
+        try {
+            const url = `${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`;
+            const response = await fetch(url, {credentials: 'same-origin'});
+            if (response.ok) {
+                embedJson = await response.text();
+            }
+        } catch {
+            embedJson = undefined;
+        }
+        downloadCanvasSvg(svg, bounds, `vimipad-${state.profile}.svg`, embedJson);
+    }, [state.nodes, state.profile, state.containers, state.workspaceid, stored, sizes, exportBase, api]);
 
     // Export the current map as a rasterized PNG file (client-side).
     const exportPng = useCallback(() => {
@@ -393,9 +413,9 @@ export function EditorApp(props: Props): React.ReactElement {
         }
         const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
             x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
-        });
+        }, state.containers ?? []);
         downloadCanvasPng(svg, bounds, `vimipad-${state.profile}.png`);
-    }, [state.nodes, state.profile, stored, sizes]);
+    }, [state.nodes, state.profile, state.containers, stored, sizes]);
 
     // Export the current map as a single-page PDF (client-side).
     const exportPdf = useCallback(() => {
@@ -405,9 +425,9 @@ export function EditorApp(props: Props): React.ReactElement {
         }
         const bounds = computeContentBounds(state.nodes, stored, sizes, 60, {
             x: 0, y: 0, w: CANVAS_WIDTH, h: CANVAS_HEIGHT,
-        });
+        }, state.containers ?? []);
         downloadCanvasPdf(svg, bounds, `vimipad-${state.profile}.pdf`);
-    }, [state.nodes, state.profile, stored, sizes]);
+    }, [state.nodes, state.profile, state.containers, stored, sizes]);
 
     const addNode = useCallback(async () => {
         const label = nodeLabel.trim();
@@ -529,15 +549,55 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [runOperation, pushHistory]);
 
+    const updateContainerGeometry = useCallback(async (stableid: string, geometryjson: string) => {
+        const prev = (stateRef.current.containers ?? []).find(c => c.stableid === stableid)?.geometryjson;
+        const res = await runOperation('container_update', {stableid, geometryjson}, () => {
+            dispatch({kind: 'updateContainer', stableid, geometryjson});
+        });
+        if (res) {
+            pushHistory({
+                undo: [{type: 'container_update', payload: {stableid, geometryjson: prev ?? ''}}],
+                redo: [{type: 'container_update', payload: {stableid, geometryjson}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
+    const renameContainer = useCallback(async (stableid: string, label: string) => {
+        const prev = (stateRef.current.containers ?? []).find(c => c.stableid === stableid)?.label ?? '';
+        if (label === prev) {
+            return;
+        }
+        const res = await runOperation('container_update', {stableid, label}, () => {
+            dispatch({kind: 'updateContainer', stableid, label});
+        });
+        if (res) {
+            pushHistory({
+                undo: [{type: 'container_update', payload: {stableid, label: prev}}],
+                redo: [{type: 'container_update', payload: {stableid, label}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
     const setElementLock = useCallback(async (kind: LockKind, stableid: string, metadatajson: string) => {
-        const type = kind === 'node' ? 'node_update' : 'relation_update';
-        const prev = kind === 'node'
-            ? stateRef.current.nodes.find(n => n.stableid === stableid)?.metadatajson
-            : stateRef.current.relations.find(r => r.stableid === stableid)?.metadatajson;
+        const type = kind === 'node' ? 'node_update' : (kind === 'relation' ? 'relation_update' : 'container_update');
+        const findPrev = (): string | undefined => {
+            if (kind === 'node') {
+                return stateRef.current.nodes.find(n => n.stableid === stableid)?.metadatajson;
+            }
+            if (kind === 'relation') {
+                return stateRef.current.relations.find(r => r.stableid === stableid)?.metadatajson;
+            }
+            return (stateRef.current.containers ?? []).find(c => c.stableid === stableid)?.metadatajson;
+        };
+        const prev = findPrev();
         const res = await runOperation(type, {stableid, metadatajson}, () => {
-            dispatch(kind === 'node'
-                ? {kind: 'updateNode', stableid, metadatajson}
-                : {kind: 'updateRelation', stableid, metadatajson});
+            if (kind === 'node') {
+                dispatch({kind: 'updateNode', stableid, metadatajson});
+            } else if (kind === 'relation') {
+                dispatch({kind: 'updateRelation', stableid, metadatajson});
+            } else {
+                dispatch({kind: 'updateContainer', stableid, metadatajson});
+            }
         });
         if (res) {
             pushHistory({
@@ -784,14 +844,27 @@ export function EditorApp(props: Props): React.ReactElement {
         </fieldset>
     );
 
-    const lockPanel = state.canmanage ? (
+    const lockPanel = (
         <LockPanel
             nodes={state.nodes}
             relations={state.relations}
+            containers={state.containers ?? []}
             disabled={disabled}
             t={t}
             onSetLock={setElementLock}
         />
+    );
+
+    // Author-only tools, grouped into one clearly delimited area. Rendering the
+    // whole group behind canmanage also gates container drawing to authors.
+    const authorTools = state.canmanage ? (
+        <div className="vimipad-author-tools" role="group" aria-label={t('editor:authortools')}>
+            <div className="vimipad-author-tools-heading small text-uppercase text-muted">
+                {t('editor:authortools')}
+            </div>
+            {containerControls}
+            {lockPanel}
+        </div>
     ) : null;
 
     return (
@@ -844,12 +917,13 @@ export function EditorApp(props: Props): React.ReactElement {
                         onCreateContainer={createContainer}
                         onDeleteContainer={deleteContainer}
                         onFinishDrawContainer={() => setDrawingContainer(false)}
+                        onUpdateContainer={updateContainerGeometry}
+                        onRenameContainer={renameContainer}
                     />
                     <div className="vimipad-controls-row">
                         {addNodeControls}
                         {addRelationControls}
-                        {containerControls}
-                        {lockPanel}
+                        {authorTools}
                     </div>
                 </>
             ) : (
@@ -874,7 +948,7 @@ export function EditorApp(props: Props): React.ReactElement {
                 <input
                     ref={importInputRef}
                     type="file"
-                    accept="application/json,application/xml,text/xml,.json,.xml"
+                    accept="application/json,application/xml,text/xml,image/svg+xml,.json,.xml,.svg"
                     className="vimipad-hidden-input"
                     onChange={(e) => void onImportFile(e)}
                 />

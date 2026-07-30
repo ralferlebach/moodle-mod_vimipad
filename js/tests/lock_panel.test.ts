@@ -25,7 +25,7 @@ import React from 'react';
 import {createRoot, Root} from 'react-dom/client';
 import {act} from 'react';
 import {LockKind, LockPanel} from '../src/components/LockPanel';
-import {VimiNode, VimiRelation} from '../src/types';
+import {VimiContainer, VimiNode, VimiRelation} from '../src/types';
 
 (globalThis as unknown as {IS_REACT_ACT_ENVIRONMENT: boolean}).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,11 +40,14 @@ describe('LockPanel', () => {
     const relations: VimiRelation[] = [
         {stableid: 'rel_a', sourceid: 'node_a', targetid: 'node_a', type: 'link', label: 'has', direction: 1},
     ];
+    const containers: VimiContainer[] = [
+        {stableid: 'container_a', type: 'group', label: 'Section', geometryjson: '{"x":0,"y":0,"w":100,"h":100}'},
+    ];
 
-    const render = (n: VimiNode[], r: VimiRelation[]): void => {
+    const render = (n: VimiNode[], r: VimiRelation[], c: VimiContainer[] = []): void => {
         act(() => {
             root.render(React.createElement(LockPanel, {
-                nodes: n, relations: r, disabled: false, t,
+                nodes: n, relations: r, containers: c, disabled: false, t,
                 onSetLock: (kind, stableid, metadatajson) => calls.push({kind, stableid, metadatajson}),
             }));
         });
@@ -62,9 +65,21 @@ describe('LockPanel', () => {
         container.remove();
     });
 
-    test('renders a row per node and relation', () => {
-        render(nodes, relations);
-        expect(container.querySelectorAll('.vimipad-lock-row').length).toBe(2);
+    test('renders a row per node, relation and container', () => {
+        render(nodes, relations, containers);
+        expect(container.querySelectorAll('.vimipad-lock-row').length).toBe(3);
+    });
+
+    test('locking a container writes locked metadata for it', () => {
+        render([], [], containers);
+        const cb = container.querySelector('.vimipad-lock-row input[type=checkbox]') as HTMLInputElement;
+        act(() => {
+            cb.click();
+        });
+        expect(calls).toHaveLength(1);
+        expect(calls[0].kind).toBe('container');
+        expect(calls[0].stableid).toBe('container_a');
+        expect(JSON.parse(calls[0].metadatajson).locked).toBe(true);
     });
 
     test('renders nothing when there is nothing to lock', () => {

@@ -78,6 +78,7 @@ class get_revision_state extends external_api {
             'layoutjson' => '',
             'nodes' => array_map([get_workspace::class, 'map_node'], $state['nodes']),
             'relations' => array_map([get_workspace::class, 'map_relation'], $state['relations']),
+            'containers' => array_map([get_workspace::class, 'map_container'], $state['containers']),
             'collab' => helper::collab_config(),
         ];
     }

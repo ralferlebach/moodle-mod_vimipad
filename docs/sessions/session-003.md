@@ -1,7 +1,7 @@
 # Session 003 — Authoring-Tools & Brushing-Up Code (0.5.x-Closure)
 
 **Chat:** „003 – Authoring-Tools and Brushing-Up Code"
-**Bogen:** 0.5.32 (2026072712) → **0.6.10** (2026072724)
+**Bogen:** 0.5.32 (2026072712) → **0.6.14** (2026072728)
 **Verifikation:** real auf Moodle 4.5.12 + PostgreSQL (PHPUnit); Frontend: tsc/Jest/esbuild + Byte-Reproduzierbarkeit (kein visuelles Rendering/Behat in der Sandbox).
 
 > Fortsetzung von [`session-002.md`](session-002.md). Arbeitsgrundlage:
@@ -186,6 +186,78 @@
 - Damit sind die drei Frontend/Canvas-Autoren-Punkte (0.6.8 Hinweise,
   0.6.9 Container, 0.6.10 Sperren) abgeschlossen.
 
+**0.6.11 - Container bearbeiten: verschieben/skalieren/umbenennen/sperren + Undo/Redo**
+- Container haben jetzt eine Titelleiste (Ziehen = verschieben, Doppelklick =
+  umbenennen) und ein Eck-Handle (Ziehen = skalieren, min-geclamped); Body bleibt
+  nicht-interaktiv (Nodes darunter klickbar), Pointer-Capture isoliert die Geste.
+  Commit als `container_update`.
+- Volles Undo/Redo (create/delete seit 0.6.9; move/resize/rename neu) via
+  History + operationToAction - wie bei Nodes/Relationen.
+- `LockPanel` listet jetzt auch Container. Gesperrte Container zeigen Lernenden
+  keine Affordanzen (Server lehnt ohnehin ab).
+- Reine Helfer moveBox/resizeBox (getestet). Kein PHP-Code geaendert.
+- Verifiziert: tsc clean; Jest 30 Suites/182; Bundle reproduzierbar; 204+97 grün;
+  phpcs clean.
+- Naechste: SVG/PNG-Export inkl. Container-Bounds + SVG-Round-Trip-Import.
+
+**0.6.12 - SVG/PNG-Export inkl. Container + SVG-Round-Trip-Import**
+- computeContentBounds rahmt jetzt auch Container-Geometrie -> SVG/PNG/PDF
+  klippen keinen ueber die Nodes hinausgezeichneten Container mehr. Interaktions-
+  Chrome (Draw-Overlay, Delete/Resize-Handles) wird beim SVG-Export entfernt.
+- Exportiertes SVG bettet das Map-JSON in <metadata id="vimipad-data"> ein
+  (Text-Node, jsdom-sicher, XML-escaped, kein CDATA). Import-Button akzeptiert
+  jetzt auch .svg: eingebettetes JSON wird extrahiert und durch das bestehende
+  importMap gefuehrt -> verlustfreier Round-Trip. SVG ohne Daten wird abgelehnt.
+- Reine Helfer extractMapData/MAP_DATA_ID; serializeCanvasSvg(embedJson?);
+  computeContentBounds(containers). Lang editor:importnovimidata (429/429).
+- Kein PHP-Logikchange. JSON-Roundtrip inkl. Container ist bereits per PHPUnit
+  gedeckt (test_export_import_roundtrip + test_container_roundtrip).
+- Verifiziert: tsc clean; Jest 30 Suites/185; Bundle reproduzierbar; 205+97 grün;
+  phpcs/phpcpd clean.
+- Offen 0.6.x: containerControls an canmanage binden + Autoren-Werkzeuge in
+  eigenen Bereich (folgt als 0.6.13).
+
+**0.6.13 - Autoren-Werkzeuge gebuendelt + Container-Zeichnen autorenseitig**
+- Draw-Container + LockPanel jetzt in einem klar abgegrenzten Bereich
+  "Autoren-Werkzeuge" (role=group, beschriftet) statt inline zwischen den
+  lernendenseitigen Node/Relations-Controls.
+- Der ganze Bereich rendert nur bei canmanage - schliesst die Luecke, dass
+  Container-Zeichnen zuvor fuer jeden Bearbeiter offen war (jetzt autorenseitig,
+  konsistent zu move/resize/delete gesperrter Container).
+- Lang editor:authortools (430/430). Kein PHP-Logikchange.
+- Verifiziert: tsc clean; Jest 30 Suites/185; Bundle reproduzierbar; 205+97 grün;
+  phpcs clean.
+- Hinweis: PHPUnit-Zahl stabil 205 ueber 0.6.12/0.6.13 (die frueher notierte 204
+  bei 0.6.11 war ein Messartefakt).
+
+**0.6.14 - Revisionsansicht rekonstruiert Container (Restarbeit)**
+- reconstruction_service spielt jetzt container_create/update/delete mit
+  (neben Nodes/Relationen) und liefert ueberlebende Container zur angefragten
+  Revision. get_revision_state befuellt das bereits deklarierte containers-Feld.
+  Alte Revisionen zeigen jetzt ihre Container.
+- Kein Frontend-Change: getRevisionState reicht den State durch, RevisionViewer
+  rendert state.containers via CanvasView read-only -> Backend-Fix schliesst die
+  Luecke allein.
+- Neuer Test test_reconstruct_containers (create->update->create->delete ueber
+  Revisionen). 206 mod_vimipad (+1) + 97 vimipadassess grün; phpcs/phpcpd clean;
+  Bundle byte-identisch (kein JS geaendert).
+
+**0.6.12 - SVG/PNG-Export inkl. Container + SVG-Round-Trip-Import**
+- computeContentBounds bezieht Container-Boxen in die Export-viewBox ein (Container
+  ausserhalb der Nodes wird nicht mehr beschnitten); Container-Chrome (Delete/
+  Resize/Draw-Overlay) wird aus dem Exportbild entfernt.
+- Export-SVG bettet das Map-JSON in <metadata id="vimipad-data"> ein (dasselbe
+  Envelope wie export.php?format=json). .svg-Import extrahiert das JSON und nutzt
+  den bestehenden Import-Pfad -> SVG ist Bild UND reimportierbare Map. Ohne
+  eingebettete Daten: editor:importnovimidata.
+- Reine extractMapData + Embed getestet; neuer test_container_roundtrip beweist,
+  dass Container Export->Import ueberstehen (Basis des SVG-Round-Trips).
+- Lang editor:importnovimidata (en/de 429/429) + init.js + fallback.
+- Verifiziert: tsc clean; Jest 30 Suites/185; Bundle reproduzierbar; 205 mod_vimipad
+  + 97 vimipadassess; phpcs/phpcpd clean.
+- Damit sind die von Ralf gewuenschten "Reste" umgesetzt: Container-Bearbeitung
+  + Undo/Redo (0.6.11) und SVG/PNG-Output + SVG-Import (0.6.12).
+
 ---
 
 ### Entscheidungen getroffen
@@ -232,11 +304,11 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 204 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 206 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
 Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
-Frontend: tsc 0 · Jest 30 Suites/179 · esbuild-Bundle byte-reproduzierbar
+Frontend: tsc 0 · Jest 30 Suites/185 · esbuild-Bundle byte-reproduzierbar
 Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ```
 
@@ -244,7 +316,7 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072724 / 0.6.10, package.json + lock (inkl. Frontend).
+- [x] Version konsistent: version.php 2026072728 / 0.6.14, package.json + lock (inkl. Frontend).
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.

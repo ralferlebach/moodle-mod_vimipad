@@ -117,3 +117,33 @@ export function boxFromDrag(from: Point, to: Point): ContainerBox {
 export function isDrawable(box: ContainerBox): boolean {
     return box.w >= MIN_CONTAINER_SIZE && box.h >= MIN_CONTAINER_SIZE;
 }
+
+/**
+ * Translate a box by a delta.
+ *
+ * @param box The box.
+ * @param dx Horizontal delta in canvas units.
+ * @param dy Vertical delta in canvas units.
+ * @returns The moved box.
+ */
+export function moveBox(box: ContainerBox, dx: number, dy: number): ContainerBox {
+    return {x: box.x + dx, y: box.y + dy, w: box.w, h: box.h};
+}
+
+/**
+ * Resize a box from its bottom-right corner by a delta, clamped to the minimum
+ * size (the top-left origin stays fixed).
+ *
+ * @param box The box.
+ * @param dx Horizontal delta in canvas units.
+ * @param dy Vertical delta in canvas units.
+ * @returns The resized box.
+ */
+export function resizeBox(box: ContainerBox, dx: number, dy: number): ContainerBox {
+    return {
+        x: box.x,
+        y: box.y,
+        w: Math.max(MIN_CONTAINER_SIZE, box.w + dx),
+        h: Math.max(MIN_CONTAINER_SIZE, box.h + dy),
+    };
+}

@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.6.10 — frontend authoring complete (3/3): template lock editor. Authors mark elements locked (optionally label-editable); managers bypass enforcement so they can lock/unlock, learners are bound (server-enforced since 0.6.4). Locked nodes show a lock badge. 204 mod_vimipad + 97 vimipadassess green; tsc + Jest (30 suites/179) green, bundle reproducible.**
+**Development status: 0.6.14 — the read-only revision viewer now reconstructs containers too: the op-log replay (reconstruction_service) replays container create/update/delete, so viewing a past revision shows its containers (read-only). Closes the last container gap. 206 mod_vimipad + 97 vimipadassess green; frontend unchanged (tsc + Jest 30/185, bundle reproducible).**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.

@@ -22,7 +22,8 @@
  */
 
 import {
-    boxFromDrag, isDrawable, MIN_CONTAINER_SIZE, normalizeBox, parseGeometry, serializeGeometry,
+    boxFromDrag, isDrawable, MIN_CONTAINER_SIZE, moveBox, normalizeBox, parseGeometry,
+    resizeBox, serializeGeometry,
 } from '../src/canvas/container_geometry';
 
 describe('container_geometry', () => {
@@ -56,5 +57,16 @@ describe('container_geometry', () => {
     test('isDrawable enforces the minimum size', () => {
         expect(isDrawable({x: 0, y: 0, w: MIN_CONTAINER_SIZE, h: MIN_CONTAINER_SIZE})).toBe(true);
         expect(isDrawable({x: 0, y: 0, w: MIN_CONTAINER_SIZE - 1, h: 100})).toBe(false);
+    });
+
+    test('moveBox translates without changing size', () => {
+        expect(moveBox({x: 10, y: 20, w: 100, h: 80}, 5, -5)).toEqual({x: 15, y: 15, w: 100, h: 80});
+    });
+
+    test('resizeBox grows from the bottom-right and clamps to the minimum', () => {
+        expect(resizeBox({x: 10, y: 20, w: 100, h: 80}, 20, 10)).toEqual({x: 10, y: 20, w: 120, h: 90});
+        const clamped = resizeBox({x: 0, y: 0, w: 50, h: 50}, -100, -100);
+        expect(clamped.w).toBe(MIN_CONTAINER_SIZE);
+        expect(clamped.h).toBe(MIN_CONTAINER_SIZE);
     });
 });

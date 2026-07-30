@@ -27,13 +27,16 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {LayoutMap, SizeMap, VimiNode} from '../types';
+import {LayoutMap, SizeMap, VimiContainer, VimiNode} from '../types';
+import {parseGeometry} from './container_geometry';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const DEFAULT_NODE_W = 120;
 const DEFAULT_NODE_H = 44;
 const TEXT_COLOR = '#495057';
 const BACKGROUND = '#ffffff';
+/** Id of the metadata element that carries the embedded map JSON. */
+export const MAP_DATA_ID = 'vimipad-data';
 
 /** A rectangle in canvas coordinates. */
 export interface Bounds {
@@ -60,7 +63,8 @@ export function computeContentBounds(
     layout: LayoutMap,
     sizes: SizeMap,
     pad: number,
-    fallback: Bounds
+    fallback: Bounds,
+    containers: VimiContainer[] = []
 ): Bounds {
     let minx = Infinity;
     let miny = Infinity;
@@ -83,6 +87,18 @@ export function computeContentBounds(
         maxy = Math.max(maxy, pos.y + halfh);
     }
 
+    for (const container of containers) {
+        const box = parseGeometry(container.geometryjson);
+        if (!box) {
+            continue;
+        }
+        found = true;
+        minx = Math.min(minx, box.x);
+        miny = Math.min(miny, box.y);
+        maxx = Math.max(maxx, box.x + box.w);
+        maxy = Math.max(maxy, box.y + box.h);
+    }
+
     if (!found) {
         return fallback;
     }
@@ -102,7 +118,7 @@ export function computeContentBounds(
  * @param bounds The viewBox/content bounds.
  * @returns The standalone SVG XML.
  */
-export function serializeCanvasSvg(svg: SVGSVGElement, bounds: Bounds): string {
+export function serializeCanvasSvg(svg: SVGSVGElement, bounds: Bounds, embedJson?: string): string {
     const clone = svg.cloneNode(true) as SVGSVGElement;
 
     clone.setAttribute('viewBox', `${bounds.x} ${bounds.y} ${bounds.w} ${bounds.h}`);
@@ -114,7 +130,8 @@ export function serializeCanvasSvg(svg: SVGSVGElement, bounds: Bounds): string {
 
     // Drop interaction-only overlays that should not appear in the export.
     clone.querySelectorAll(
-        '.vimipad-canvas-seloutline, .vimipad-canvas-handle, .vimipad-canvas-connector'
+        '.vimipad-canvas-seloutline, .vimipad-canvas-handle, .vimipad-canvas-connector, '
+        + '.vimipad-container-draw, .vimipad-container-delete, .vimipad-container-resize'
     ).forEach((el) => el.remove());
 
     // Opaque background so the map is not transparent in viewers.
@@ -126,8 +143,37 @@ export function serializeCanvasSvg(svg: SVGSVGElement, bounds: Bounds): string {
     bg.setAttribute('fill', BACKGROUND);
     clone.insertBefore(bg, clone.firstChild);
 
+    // Embed the semantic map JSON so the SVG round-trips back into the editor.
+    if (embedJson) {
+        const metadata = document.createElementNS(SVG_NS, 'metadata');
+        metadata.setAttribute('id', MAP_DATA_ID);
+        metadata.appendChild(document.createTextNode(embedJson));
+        clone.appendChild(metadata);
+    }
+
     const xml = new XMLSerializer().serializeToString(clone);
     return `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
+}
+
+/**
+ * Extract the embedded map JSON from an exported SVG document, if present.
+ *
+ * @param svgXml The SVG document text.
+ * @returns The embedded map JSON, or null when the SVG carries none.
+ */
+export function extractMapData(svgXml: string): string | null {
+    let doc: Document;
+    try {
+        doc = new DOMParser().parseFromString(svgXml, 'image/svg+xml');
+    } catch {
+        return null;
+    }
+    if (doc.querySelector('parsererror')) {
+        return null;
+    }
+    const metadata = doc.querySelector(`[id="${MAP_DATA_ID}"]`);
+    const text = metadata?.textContent?.trim();
+    return text && text.length > 0 ? text : null;
 }
 
 /**
@@ -156,8 +202,10 @@ function triggerDownload(blob: Blob, filename: string): void {
  * @param filename The download filename.
  * @returns void
  */
-export function downloadCanvasSvg(svg: SVGSVGElement, bounds: Bounds, filename: string): void {
-    const doc = serializeCanvasSvg(svg, bounds);
+export function downloadCanvasSvg(
+    svg: SVGSVGElement, bounds: Bounds, filename: string, embedJson?: string
+): void {
+    const doc = serializeCanvasSvg(svg, bounds, embedJson);
     triggerDownload(new Blob([doc], {type: 'image/svg+xml;charset=utf-8'}), filename);
 }
 

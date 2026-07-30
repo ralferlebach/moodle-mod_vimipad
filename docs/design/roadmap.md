@@ -88,10 +88,10 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 - Vorlagen/Templates durch Lehrende mit einschränkbaren Änderungen ✅ (0.6.10: Element-Sperren, Manager-Bypass)
 - Hintergründe zeichnen (Kästen/Abschnitte/Container auf dem Canvas) ✅ (0.6.9) — Backend
   (Container-Operationen) ✅; Canvas-Oberfläche offen
-- Verknüpfung mit der Import/Export-Funktion (JSON/XML) — Container/Memberships
+- Verknüpfung mit der Import/Export-Funktion ✅ (0.6.12: SVG-Round-Trip, Container in Export/Import) (JSON/XML) — Container/Memberships
   round-trippen jetzt ✅
-- Oberflächen und Menüs hierfür
-- Dedizierte Freigabe-Optionen dieser Möglichkeiten an Lernende
+- Oberflächen und Menüs hierfür ✅ (0.6.13: gebündelter Autoren-Werkzeuge-Bereich)
+- Dedizierte Freigabe-Optionen dieser Möglichkeiten an Lernende 〜 (0.6.13: Autoren-Werkzeuge nur bei canmanage; feinere Freigaben offen)
 
 ## 0.7.x — Hardening, Datenschutz & Persistenz
 

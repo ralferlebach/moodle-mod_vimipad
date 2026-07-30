@@ -21,8 +21,10 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {computeContentBounds, buildImagePdf, serializeCanvasSvg, Bounds} from '../src/canvas/svg_export';
-import {VimiNode} from '../src/types';
+import {
+    buildImagePdf, Bounds, computeContentBounds, extractMapData, serializeCanvasSvg,
+} from '../src/canvas/svg_export';
+import {VimiContainer, VimiNode} from '../src/types';
 
 const node = (id: string): VimiNode => ({stableid: id, type: 'concept', label: id});
 const fallback: Bounds = {x: 0, y: 0, w: 800, h: 520};
@@ -44,6 +46,18 @@ describe('computeContentBounds', () => {
         expect(bounds.y).toBe(20);
         expect(bounds.w).toBe(320 + 120); // (360-40) + 2*60
         expect(bounds.h).toBe(140 + 120); // (220-80) + 2*60
+    });
+
+    test('includes container boxes in the bounds', () => {
+        const containers: VimiContainer[] = [
+            {stableid: 'c1', type: 'group', label: 'A', geometryjson: '{"x":-50,"y":-40,"w":600,"h":500}'},
+        ];
+        const bounds = computeContentBounds([node('a')], {a: {x: 0, y: 0}}, {}, 10, fallback, containers);
+        // The container extends well beyond the single node, so it drives the box.
+        expect(bounds.x).toBe(-70);
+        expect(bounds.y).toBe(-50);
+        expect(bounds.w).toBe(630);
+        expect(bounds.h).toBe(520);
     });
 
     test('ignores unplaced nodes but still frames placed ones', () => {
@@ -103,5 +117,29 @@ describe('buildImagePdf', () => {
         expect(text).toContain('xref\n0 6');
         // The embedded JPEG length is declared correctly.
         expect(text).toContain(`/Length ${jpeg.length}`);
+    });
+});
+
+describe('SVG map-data round-trip', () => {
+    const NS = 'http://www.w3.org/2000/svg';
+
+    test('embeds and re-extracts the map JSON, stripping container chrome', () => {
+        const svg = document.createElementNS(NS, 'svg') as SVGSVGElement;
+        const del = document.createElementNS(NS, 'g');
+        del.setAttribute('class', 'vimipad-container-delete');
+        svg.appendChild(del);
+
+        const json = '{"nodes":[{"stableid":"n1","label":"Cell"}],"relations":[]}';
+        const out = serializeCanvasSvg(svg, {x: 0, y: 0, w: 100, h: 80}, json);
+
+        expect(out).not.toContain('vimipad-container-delete');
+        expect(extractMapData(out)).toBe(json);
+    });
+
+    test('extractMapData returns null when there is no embedded data', () => {
+        const svg = document.createElementNS(NS, 'svg') as SVGSVGElement;
+        const out = serializeCanvasSvg(svg, {x: 0, y: 0, w: 10, h: 10});
+        expect(extractMapData(out)).toBeNull();
+        expect(extractMapData('not svg at all')).toBeNull();
     });
 });

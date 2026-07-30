@@ -92,6 +92,8 @@ const FALLBACK_STRINGS: Record<string, string> = {
     'editor:templatelocks': 'Template locks',
     'editor:templatelockshint': 'Lock elements so learners cannot restructure or delete them.',
     'editor:lockallowlabel': 'Allow renaming',
+    'editor:importnovimidata': 'This SVG does not contain an embedded ViMi map.',
+    'editor:authortools': 'Author tools',
 
 
     'editor:locked': 'This map is locked and can no longer be edited.',

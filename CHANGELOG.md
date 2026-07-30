@@ -4,7 +4,118 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.10** (2026072724).
+> release is **0.6.14** (2026072728).
+
+## 0.6.14 (2026072728) — revision view reconstructs containers
+
+Closes the container gap in the historical revision viewer.
+
+- `reconstruction_service` now replays container operations (create / update /
+  delete) alongside nodes and relations, returning surviving containers at the
+  requested revision. `get_revision_state` populates the `containers` field it
+  already declared (VALUE_OPTIONAL). Viewing a past revision now shows that
+  revision's containers.
+- **No frontend change needed:** `getRevisionState` passes the state through and
+  `RevisionViewer` already renders `state.containers` via `CanvasView` in
+  read-only mode — the backend fix alone closes the loop.
+- **Verification:** new `test_reconstruct_containers` drives create → update
+  (label + geometry) → create → delete across revisions on real Moodle; **206
+  `mod_vimipad`** (+1) + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd
+  clean. Frontend unchanged (bundle byte-identical, Jest 30/185).
+
+## 0.6.13 (2026072727) — author tools grouped into one area, drawing author-gated
+
+Discoverability/permissions cleanup for the 0.6 authoring tools.
+
+- **One author area.** Draw-containers and the template `LockPanel` now live in a
+  single, clearly delimited "Author tools" group (`role="group"`, labelled) instead
+  of sitting inline among the learner-facing node/relation controls.
+- **Author-gated.** The whole group renders only when `canmanage`
+  (mod/vimipad:manageprofiles). This also closes the earlier gap where *drawing*
+  containers was open to any editor — it is now author-only, consistent with
+  moving/resizing/deleting locked containers.
+- Learners see only the node/relation controls; authors additionally see the
+  author area. Canvas view only (unchanged).
+- Lang: `editor:authortools` (en/de, 430/430 parity) + init.js key + fallback.
+- **Verification:** no PHP logic change; `tsc` clean; **Jest 30 suites / 185
+  tests**; esbuild bundle rebuilt and **byte-reproducible**; **205 `mod_vimipad`**
+  + **97 `vimipadassess`** green; whole-plugin phpcs clean. Visual placement runs
+  in CI.
+
+## 0.6.12 (2026072726) — SVG/PNG export with containers + SVG round-trip import
+
+Rounds out import/export for the 0.6 authoring tools. SVG/PNG/PDF export already
+existed (it serializes the live SVG, so containers have been drawn into it since
+0.6.9); this makes the export container-aware and adds an SVG re-import path.
+
+- **Containers in the export frame.** `computeContentBounds` now folds container
+  boxes into the export viewBox, so a container drawn beyond the nodes is no longer
+  clipped in the SVG/PNG/PDF output. Container interaction chrome (delete, resize
+  handle, draw overlay) is stripped from the exported image.
+- **SVG round-trip.** An exported SVG embeds the semantic map JSON in a
+  `<metadata id="vimipad-data">` element (the same envelope `export.php?format=json`
+  serves). Importing an `.svg` extracts that JSON and feeds it through the existing
+  import path — so an SVG is both a viewable image and a re-importable map. If the
+  SVG carries no embedded map, the import reports `editor:importnovimidata`.
+- Pure `extractMapData` and the embed step are unit-tested; a new
+  `test_container_roundtrip` proves containers survive export → import (the backend
+  basis the SVG round-trip stands on).
+- Lang: `editor:importnovimidata` (en/de, 429/429 parity) + init.js key + fallback.
+- **Verification:** `tsc` clean; **Jest 30 suites / 185 tests** (extended
+  `svg_export`); esbuild bundle rebuilt and **byte-reproducible**;
+  **205 `mod_vimipad`** + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd
+  clean. Actual download/upload flows run in the browser / CI.
+
+## 0.6.12 (2026072726) — SVG/PNG export with containers + SVG round-trip import
+
+Rounds out image output and adds a lossless SVG round-trip. No PHP logic change
+(one lang string); the round-trip rides on the existing JSON export/import.
+
+- **Containers in image output.** `computeContentBounds` now frames container
+  geometry as well as nodes, so SVG/PNG/PDF exports no longer clip a container
+  drawn beyond the nodes. Container interaction chrome (draw overlay, delete and
+  resize handles) is stripped from the exported SVG.
+- **SVG round-trip.** An exported SVG embeds the map's semantic JSON in a
+  `<metadata id="vimipad-data">` element (plain text node — jsdom-safe and
+  XML-escaped, no CDATA). The Import button now also accepts `.svg`: on import the
+  embedded JSON is extracted and fed through the existing `importMap`, so an
+  exported SVG re-imports exactly like a JSON export. An SVG without embedded data
+  is rejected with a clear message.
+- Pure, tested helpers: `extractMapData`, `MAP_DATA_ID`, extended
+  `serializeCanvasSvg(embedJson?)` and `computeContentBounds(containers)`.
+- Lang: `editor:importnovimidata` (en/de, 429/429 parity) + init.js key + fallback.
+- **Verification:** the JSON export/import round-trip incl. containers is covered
+  by existing `test_export_import_roundtrip` + `test_container_roundtrip`
+  (PHPUnit); embed/extract and container bounds by Jest. `tsc` clean; **Jest 30
+  suites / 185 tests**; esbuild bundle rebuilt and **byte-reproducible**; **205
+  `mod_vimipad`** + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd clean.
+  Browser download/upload and `@javascript` Behat run in CI.
+
+## 0.6.11 (2026072725) — containers: move, resize, rename, lock + undo/redo
+
+Completes the container authoring tool (the "Reste" of 0.6.9) — no PHP change;
+container_update was already enforced and manager-bypassed.
+
+- **Move / resize / rename on the canvas.** Each container now has a title bar
+  (drag to move, double-click to rename) and a bottom-right handle (drag to
+  resize, clamped to a minimum). The body stays non-interactive so nodes beneath
+  remain clickable; the drag uses pointer capture, isolated from the node/connect
+  gestures. Committed as `container_update` operations.
+- **Full undo/redo** for containers — create, delete, move, resize and rename all
+  push history entries and replay through `operationToAction` (create/delete since
+  0.6.9; move/resize/rename now), matching how nodes and relations behave.
+- **Lock containers.** The template `LockPanel` now lists containers too, so an
+  author can lock a container like any node or relation.
+- **Learner safety.** A locked container shows no move/resize/delete/rename
+  affordances to non-managers (the server already rejects such edits; this avoids
+  offering an action that would fail).
+- New pure geometry helpers `moveBox` / `resizeBox` (clamped), unit-tested.
+- **Verification:** `tsc` clean; **Jest 30 suites / 182 tests** (extended
+  `container_geometry`, `lock_panel`); esbuild bundle rebuilt and
+  **byte-reproducible**; **204 `mod_vimipad`** + **97 `vimipadassess`** green
+  (PHP unchanged); whole-plugin phpcs clean. Canvas drag visuals and `@javascript`
+  Behat run in CI.
+- Next: SVG/PNG export includes containers in bounds, and SVG round-trip import.
 
 ## 0.6.10 (2026072724) — template lock editor (frontend authoring 3/3)
 
