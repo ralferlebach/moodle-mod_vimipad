@@ -58,32 +58,19 @@ class get_constraint_status extends external_api {
      * @return array
      */
     public static function execute(int $cmid, int $workspaceid): array {
-        global $USER, $DB;
-
         $params = self::validate_parameters(
             self::execute_parameters(),
             ['cmid' => $cmid, 'workspaceid' => $workspaceid]
         );
 
-        [, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
-        $context = \context_module::instance($cm->id);
-        self::validate_context($context);
-        require_capability('mod/vimipad:view', $context);
-
-        $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
-        $workspace = $DB->get_record(
-            'vimipad_workspace',
-            ['id' => $params['workspaceid'], 'vimipadid' => $instance->id],
-            '*',
-            MUST_EXIST
+        $instance = null;
+        $workspace = null;
+        helper::validate_workspace_for_read(
+            (int) $params['cmid'],
+            (int) $params['workspaceid'],
+            $instance,
+            $workspace
         );
-
-        // A user may inspect their own map; inspecting another's needs grading.
-        $isown = ((int) $workspace->userid === (int) $USER->id)
-            || (!empty($workspace->groupid) && groups_is_member((int) $workspace->groupid, (int) $USER->id));
-        if (!$isown) {
-            require_capability('mod/vimipad:grade', $context);
-        }
 
         $config = constraint_config::from_instance($instance);
         $normalized = (new snapshot_service())->build_normalized($workspace, $instance->defaultprofile);

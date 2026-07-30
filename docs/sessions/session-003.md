@@ -119,6 +119,14 @@
   (isoliert, Rueckgabe via `clean_returnvalue` gegen die Struktur validiert).
 - Editor-Anzeige (Hinweis-Banner, ruft den Endpoint debounced) = Frontend-Folgeschritt.
 
+**0.6.6 - Read-Zugriffskontrolle entdoppelt (phpcpd)**
+- Neuer `helper::validate_workspace_for_read()` (Spiegel von
+  `validate_workspace_for_edit`): cmid -> Kontext -> Instanz -> Workspace,
+  Kontext-Validierung, `view`-Capability und die Eigen-oder-grade-Regel an einer
+  Stelle. `get_revision_state` und `get_constraint_status` nutzen ihn statt eigener
+  Kopie -> sicherheitsrelevanter Block kann nicht mehr driften.
+- phpcpd (`--min-lines 5 --min-tokens 70`): **keine Klone** (vorher 1 Klon, 18 Zeilen).
+
 ---
 
 ### Entscheidungen getroffen
@@ -165,7 +173,7 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 199 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 200 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
           betroffene Service-Tests einzeln grün (operation/snapshot/workspace/import/consensus/collab/reconstruction/layout)
 PHPCS:    OK — 0 auf allen geänderten/neuen Dateien (moodle-Standard, severity=1)
 Frontend: tsc 0 · Jest 22 Suites/147 · Bundle reproduzierbar (Vorbereitungsrunde)
@@ -176,7 +184,7 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 
 ### Auslieferung
 
-- [x] Version konsistent: version.php 2026072719 / 0.6.5, package.json + lock.
+- [x] Version konsistent: version.php 2026072720 / 0.6.6, package.json + lock.
 - [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
 - [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
 - [x] amd/build/ + js/build/ eingecheckt.
@@ -186,15 +194,15 @@ Behat:    SKIP hier (kein Browser); @javascript in CI (grün gemeldet)
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.6.5 — 0.5.x abgeschlossen; 0.6-Autoren-Backend steht: Container-Ops + Import
-> (0.6.1); Constraint-Engine + Gate (0.6.2) + Felder (0.6.3); Struktursperren
-> (0.6.4); Constraint-Status-Endpoint fuer weiche Hinweise (0.6.5). Real auf
-> Moodle 4.5.12 verifiziert (199+97 grün); ganzes Plugin phpcs-clean.
+> 0.6.6 — 0.6-Autoren-Backend komplett: Container+Import (0.6.1); Constraint-
+> Engine+Gate (0.6.2)+Felder (0.6.3); Struktursperren (0.6.4); Status-Endpoint
+> (0.6.5); Read-Access entdoppelt (0.6.6). Real auf Moodle 4.5.12 (200+97 grün);
+> ganzes Plugin phpcs- und phpcpd-clean.
 
 **Zuletzt abgeschlossen:**
-> 0.6.1 Container+Import; 0.6.2 Constraint-Engine+Gate; 0.6.3 Constraint-Felder;
-> 0.6.4 Struktursperren+Lint; 0.6.5 Constraint-Status-Endpoint. Konvention: 0.6.x
-> ohne alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
+> 0.6.1 Container+Import; 0.6.2 Engine+Gate; 0.6.3 Felder; 0.6.4 Struktursperren;
+> 0.6.5 Status-Endpoint; 0.6.6 Read-Access-Helfer (phpcpd). Konvention: 0.6.x ohne
+> alpha-Suffix; 0.6.0-alpha1-Paket = 0.6.1.
 
 **Als nächstes geplant:**
 > Frontend: Hinweis-Banner im Editor (ruft `get_constraint_status` debounced),

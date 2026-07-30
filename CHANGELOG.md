@@ -4,7 +4,25 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.5** (2026072719).
+> release is **0.6.6** (2026072720).
+
+## 0.6.6 (2026072720) — de-duplicate read access control (phpcpd)
+
+Small hardening: the access-control boilerplate shared by the read external
+functions is now in one place, so it cannot drift — the kind of duplication that
+matters because it is security-relevant.
+
+- **New `helper::validate_workspace_for_read()`** mirrors the existing
+  `validate_workspace_for_edit()`: it resolves cmid → context → instance →
+  workspace, validates the context, requires `mod/vimipad:view`, and enforces the
+  "own map, or grader for someone else's" rule in one spot. `get_revision_state`
+  and `get_constraint_status` now call it instead of each carrying their own copy
+  of the block.
+- **phpcpd (`--min-lines 5 --min-tokens 70`) reports no clones** (was 1 clone, 18
+  duplicated lines across the two external functions).
+- **Verified on real Moodle 4.5.12 + PostgreSQL:** full suite **200 `mod_vimipad`**
+  **+ 97 `vimipadassess`** green (get_constraint_status and collaboration external
+  tests exercise the shared helper); whole-plugin phpcs clean.
 
 ## 0.6.5 (2026072719) — non-blocking constraint status endpoint
 

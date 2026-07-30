@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.6.5 — non-blocking constraint status endpoint (get_constraint_status) so the editor can show soft, edit-time hints from the same policy resolver. 199 mod_vimipad + 97 vimipadassess green on real Moodle 4.5; whole plugin phpcs-clean.**
+**Development status: 0.6.6 — extracted a shared read-access helper (validate_workspace_for_read) so the two read external functions no longer duplicate the access-control block (phpcpd clone removed). 200 mod_vimipad + 97 vimipadassess green; whole plugin phpcs + phpcpd clean.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.
