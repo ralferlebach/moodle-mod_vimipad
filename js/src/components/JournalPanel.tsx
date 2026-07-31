@@ -76,43 +76,45 @@ export function JournalPanel(props: Props): React.ReactElement | null {
     }
 
     return (
-        <fieldset className="vimipad-control vimipad-journal-control">
-            <legend className="h6 vimipad-journal-legend">
-                <span>{t('editor:journal')}</span>
+        <fieldset className="vimipad-control vimipad-journal-control" aria-label={t('editor:journal')}>
+            <div className="vimipad-journal-head">
+                <span className="h6 vimipad-journal-title">{t('editor:journal')}</span>
                 <span className="vimipad-journal-ref text-muted font-italic">
                     {t('editor:revision')}: {revision}
                 </span>
-            </legend>
-            <textarea
-                className="form-control vimipad-journal-input"
-                rows={3}
-                value={text}
-                placeholder={t('editor:journalnew')}
-                aria-label={t('editor:journalnew')}
-                onChange={(e) => {
-                    setText(e.target.value);
-                    setSaved(false);
-                }}
-            />
-            <div className="vimipad-journal-controls">
-                {allowPrivate && (
-                    <label className="vimipad-journal-visibility">
-                        <input
-                            type="checkbox"
-                            checked={priv}
-                            onChange={(e) => setPriv(e.target.checked)}
-                        />{' '}
-                        {t('editor:journalprivate')}
-                    </label>
-                )}
-                <button
-                    type="button"
-                    className="btn btn-primary btn-sm vimipad-journal-save"
-                    onClick={() => void submit()}
-                    disabled={busy || text.trim() === ''}
-                >
-                    <Icon name={FA.journalSave} /> {t('editor:journalsave')}
-                </button>
+            </div>
+            <div className="vimipad-journal-body">
+                <textarea
+                    className="form-control vimipad-journal-input"
+                    rows={3}
+                    value={text}
+                    placeholder={t('editor:journalnew')}
+                    aria-label={t('editor:journalnew')}
+                    onChange={(e) => {
+                        setText(e.target.value);
+                        setSaved(false);
+                    }}
+                />
+                <div className="vimipad-journal-side">
+                    {allowPrivate && (
+                        <label className="vimipad-journal-visibility">
+                            <input
+                                type="checkbox"
+                                checked={priv}
+                                onChange={(e) => setPriv(e.target.checked)}
+                            />{' '}
+                            {t('editor:journalprivate')}
+                        </label>
+                    )}
+                    <button
+                        type="button"
+                        className="btn btn-primary vimipad-journal-save"
+                        onClick={() => void submit()}
+                        disabled={busy || text.trim() === ''}
+                    >
+                        <Icon name={FA.journalSave} /> {t('editor:journalsave')}
+                    </button>
+                </div>
             </div>
             {saved && (
                 <div className="vimipad-journal-saved text-muted small" role="status" aria-live="polite">

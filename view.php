@@ -97,6 +97,7 @@ $tabgates = [
     'canvas' => $canview,
     'list' => $canview,
     'journal' => $canview,
+    'tools' => $canedit,
     'peer' => !empty($instance->peerreviewmode) && has_capability('mod/vimipad:peerreview', $context),
     'grade' => $cangrade,
 ];
@@ -112,7 +113,7 @@ if (!in_array($tab, $availabletabs, true)) {
 }
 
 // Load the editor bundle only on the tabs that render it.
-$editortabs = ['canvas', 'list'];
+$editortabs = ['canvas', 'list', 'tools'];
 if ($canedit && in_array($tab, $editortabs, true)) {
     $PAGE->requires->js_call_amd('mod_vimipad/init', 'init', [$cm->id]);
 }
@@ -267,6 +268,7 @@ echo $OUTPUT->tabtree($tabtree, $tab);
 switch ($tab) {
     case 'canvas':
     case 'list':
+    case 'tools':
         // Companion channel (optional forum/chat/BBB link).
         if (!empty($instance->channelurl)) {
             echo html_writer::div(html_writer::link(

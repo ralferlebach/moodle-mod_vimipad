@@ -4,7 +4,59 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.7.13** (2026072751).
+> release is **0.7.16** (2026072754).
+
+## 0.7.16 (2026072754) — block G: journal save button matches the add buttons
+
+- The journal "Save entry" button dropped its `btn-sm` class, so it is now the
+  same size as the concept/relation "Add" buttons, matching the two-column
+  control layout. Frontend only: 245 Jest tests green, tsc clean, bundle
+  rebuilt, `init.min.js` reproducible through Grunt.
+
+## 0.7.15 (2026072753) — block G: journal layout corrected to the two-column design
+
+Corrects the journal layout from 0.7.13, which did not match the requested
+design.
+
+- **Header spacing fixed.** The title and the revision reference were rendered
+  inside a `<legend>` used as a flex container, which browsers do not lay out
+  reliably — so the two ran together ("Learning journal*Revision: 149*"). The
+  header is now a normal wrapping row (`vimipad-journal-head`) with the title on
+  the left and the muted italic reference on the right, with a real gap.
+- **Two-column body.** The textarea and the save button now sit side by side
+  (textarea on the left, the save button — and the optional private-note
+  checkbox — in a narrow column on the right) via a CSS grid, matching the
+  concept/relation add-menu layout, instead of the button dropping full-width
+  below the textarea. The columns collapse to a single column on narrow screens.
+- The `<legend>` is replaced by a heading span with an `aria-label` on the
+  fieldset, so removing the legend does not cost the accessible name.
+- Verified: 245 Jest tests green, tsc clean, esbuild bundle rebuilt,
+  `init.min.js` reproducible through Grunt, phpcs clean.
+
+## 0.7.15 (2026072753) — block G: keep the add-concept/relation controls on one line
+
+- **Fix: the add-concept and add-relation controls are two-line again** —
+  heading on the first line, all controls (fields and the Add button) on a
+  single row below it — instead of each field stacking onto its own line. The
+  control line no longer wraps (`flex-flow: row nowrap`) and the fields shrink
+  to share the row (`flex: 1 1 0; min-width: 0`) rather than forcing a wrap when
+  the column is narrow; the Add button keeps its intrinsic width. On very narrow
+  (phone) viewports the fields are allowed to wrap again so they stay tappable.
+- CSS-only change; no bundle rebuild required.
+
+## 0.7.14 (2026072752) — block G: import moved into a Tools tab
+
+- **Import now lives in its own "Tools" tab** instead of a strip permanently
+  shown beneath the editor. The server-side `tools` tab is re-enabled (edit
+  access only) and loads the editor bundle with `data-view="tools"`; the editor
+  renders only the tools section there (no canvas/list), keeping the group and
+  user context so an import targets the correct map. The import control gains a
+  heading and a short hint. This is the home for the bulk-export functions
+  planned next. New strings `editor:importheading` / `editor:importhint`
+  (EN/DE); the previously unused `tab:tools` string is now in use.
+- Verified: 251 backend tests green, 245 Jest tests green, tsc clean, esbuild
+  bundle rebuilt, `init.min.js` reproducible through Grunt, phpcs / phpdoc /
+  validate clean, all tab labels and import strings resolve.
 
 ## 0.7.13 (2026072751) — block G: journal layout and re-arrange chain propagation
 

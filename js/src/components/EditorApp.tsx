@@ -95,7 +95,7 @@ interface Props {
     targetUserid?: number;
 }
 
-type ViewMode = 'canvas' | 'list';
+type ViewMode = 'canvas' | 'list' | 'tools';
 
 const EMPTY: EditorState = {
     workspaceid: 0, revision: 0, locked: 0, profile: 'conceptmap', layoutjson: '', nodes: [], relations: [],
@@ -962,7 +962,7 @@ export function EditorApp(props: Props): React.ReactElement {
             <ConstraintBanner status={constraintStatus} t={t} />
 
             <div className="vimipad-viewpanel">
-            {view === 'canvas' ? (
+            {view === 'tools' ? null : view === 'canvas' ? (
                 <>
                     <CanvasView
                         state={state}
@@ -1046,32 +1046,40 @@ export function EditorApp(props: Props): React.ReactElement {
             )}
             </div>
 
-            <div className="vimipad-tools mt-2">
-                <input
-                    ref={importInputRef}
-                    type="file"
-                    accept="application/json,application/xml,text/xml,image/svg+xml,.json,.xml,.svg"
-                    className="vimipad-hidden-input"
-                    onChange={(e) => void onImportFile(e)}
-                />
-                <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={() => importInputRef.current?.click()}
-                    disabled={state.locked === 1 || readonly}
-                >
-                    {t('editor:import')}
-                </button>
-                <label className="vimipad-import-replace">
-                    <input
-                        type="checkbox"
-                        checked={importReplace}
-                        onChange={(e) => setImportReplace(e.target.checked)}
-                        disabled={state.locked === 1 || readonly}
-                    />{' '}
-                    {t('editor:importreplace')}
-                </label>
-            </div>
+            {view === 'tools' && (
+                <div className="vimipad-tools-panel">
+                    <fieldset className="vimipad-control">
+                        <legend className="h6">{t('editor:importheading')}</legend>
+                        <div className="vimipad-tools mt-2">
+                            <input
+                                ref={importInputRef}
+                                type="file"
+                                accept="application/json,application/xml,text/xml,image/svg+xml,.json,.xml,.svg"
+                                className="vimipad-hidden-input"
+                                onChange={(e) => void onImportFile(e)}
+                            />
+                            <button
+                                type="button"
+                                className="btn btn-outline-secondary btn-sm"
+                                onClick={() => importInputRef.current?.click()}
+                                disabled={state.locked === 1 || readonly}
+                            >
+                                {t('editor:import')}
+                            </button>
+                            <label className="vimipad-import-replace">
+                                <input
+                                    type="checkbox"
+                                    checked={importReplace}
+                                    onChange={(e) => setImportReplace(e.target.checked)}
+                                    disabled={state.locked === 1 || readonly}
+                                />{' '}
+                                {t('editor:importreplace')}
+                            </label>
+                        </div>
+                        <p className="text-muted small mt-1">{t('editor:importhint')}</p>
+                    </fieldset>
+                </div>
+            )}
         </div>
     );
 }

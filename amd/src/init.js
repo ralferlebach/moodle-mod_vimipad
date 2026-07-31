@@ -49,7 +49,7 @@ const STRING_KEYS = [
     'editor:canvasview', 'editor:canvasplaceholder',
     'editor:confirm', 'editor:deleterelation', 'editor:fmt_bold', 'editor:fmt_italic', 'editor:fmt_underline', 'editor:fullview',
     'editor:dir_both', 'editor:dir_left', 'editor:dir_none', 'editor:dir_right',
-    'editor:import', 'editor:importreplace',
+    'editor:import', 'editor:importheading', 'editor:importhint', 'editor:importreplace',
     'editor:journal', 'editor:journalnew', 'editor:journalprivate', 'editor:journalsave', 'editor:journalsaved',
     'editor:dragnodes', 'editor:export', 'editor:line_curved', 'editor:line_orthogonal',
     'editor:line_straight', 'editor:listview', 'editor:loading',
@@ -128,7 +128,9 @@ export const init = async(cmid, selector = 'vimipad-editor-root') => {
         editor.mount(element, {
             cmid,
             groupid: parseInt(element.dataset.groupid || '0', 10),
-            initialView: element.dataset.view === 'list' ? 'list' : 'canvas',
+            initialView: element.dataset.view === 'list'
+                ? 'list'
+                : (element.dataset.view === 'tools' ? 'tools' : 'canvas'),
             readonly: element.dataset.readonly === '1',
             targetUserid: parseInt(element.dataset.targetuserid || '0', 10),
             callService: buildTransport(),
