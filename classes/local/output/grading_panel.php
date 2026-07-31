@@ -83,6 +83,10 @@ class grading_panel {
     ): void {
         global $DB, $USER;
 
+        // A mutating grading handler enforces its own core requirement rather
+        // than relying on the calling page to have filtered access already.
+        require_capability('mod/vimipad:grade', $context);
+
         $snapshotid = (int) $snapshot->id;
         $pageurl = self::detail_url($cm, $snapshotid);
 
@@ -116,7 +120,16 @@ class grading_panel {
         if (optional_param('setreference', 0, PARAM_BOOL) && confirm_sesskey()) {
             require_capability('mod/vimipad:grade', $context);
             $makeref = optional_param('makeref', 0, PARAM_BOOL);
+            // The reference is frozen as a JSON copy on the activity record,
+            // decoupled from the source workspace: it survives userinfo-less
+            // backups, privacy deletion of the author and workspace cleanup.
             $DB->set_field('vimipad', 'referencesnapshotid', $makeref ? $snapshotid : null, ['id' => $instance->id]);
+            $DB->set_field(
+                'vimipad',
+                'referencemapjson',
+                $makeref ? $snapshot->snapshotjson : null,
+                ['id' => $instance->id]
+            );
             redirect(
                 $pageurl,
                 get_string($makeref ? 'referenceset' : 'referencecleared', 'mod_vimipad')
@@ -411,7 +424,7 @@ class grading_panel {
             echo self::reference_button($pageurl, false);
         } else {
             echo self::reference_button($pageurl, true);
-            if ($referenceid === 0) {
+            if (!(new assess_service())->has_reference($instance)) {
                 echo html_writer::div(get_string('noreference', 'mod_vimipad'), 'text-muted small mt-2');
             }
         }
@@ -448,6 +461,13 @@ class grading_panel {
 
         $scorer = registry::get('llm');
         if ($scorer === null || !$scorer->uses_ai()) {
+            return;
+        }
+
+        // Hide the AI scorer entirely when AI is unavailable to this user
+        // (missing useai, or AI disabled site-wide / on the activity). The
+        // execution path below is additionally enforced inside score_ai().
+        if (!ai_feedback_service::is_available($context, $instance)) {
             return;
         }
 

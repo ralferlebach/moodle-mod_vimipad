@@ -129,7 +129,7 @@ class poll_changes extends external_api {
             'operations' => $operationsout,
             'hasmore' => $hasmore,
             'layoutjson' => $layout['layoutjson'],
-            'layouttime' => $layout['timemodified'],
+            'layouttime' => $layout['revision'],
             'leases' => $leases,
         ];
     }

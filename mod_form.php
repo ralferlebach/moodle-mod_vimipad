@@ -284,6 +284,11 @@ class mod_vimipad_mod_form extends moodleform_mod {
         if (!empty($data['completionminnodesenabled']) && (int) $data['completionminnodes'] < 1) {
             $errors['completionminnodesgroup'] = get_string('completionminnodes_error', 'mod_vimipad');
         }
+        if (isset($data['grade']) && (int) $data['grade'] < 0) {
+            // A negative modgrade value selects a Moodle scale. ViMi Pad grades
+            // in points only; the manual grading UI has no scale domain.
+            $errors['grade'] = get_string('error:scalesnotsupported', 'mod_vimipad');
+        }
         if (
             !empty($data['duedate']) && !empty($data['cutoffdate'])
                 && (int) $data['cutoffdate'] < (int) $data['duedate']

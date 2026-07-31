@@ -229,10 +229,11 @@ class peer_review_service {
      * @return array Scorer key => ['name' => string, 'result' => \mod_vimipad\local\assess\result].
      */
     public function guidance(stdClass $instance, int $snapshotid): array {
-        if (empty($instance->referencesnapshotid)) {
+        $assessservice = new assess_service();
+        if (!$assessservice->has_reference($instance)) {
             return [];
         }
-        return (new assess_service())->score_all($instance, $snapshotid);
+        return $assessservice->score_all($instance, $snapshotid);
     }
 
     /**

@@ -206,6 +206,21 @@ class workspace_service {
                 'locked' => 0,
                 'timemodified' => time(),
             ]);
+            // Lifecycle contract: reopening withdraws the submitted state of
+            // not-yet-graded snapshots (submitted / in review), so completion
+            // and listings revert until a fresh submission. Graded snapshots
+            // keep their status: the awarded grade and an achieved completion
+            // remain as history until a regrade replaces them.
+            $DB->execute(
+                'UPDATE {vimipad_snapshot} SET status = :reopened
+                  WHERE workspaceid = :wsid AND status IN (:submitted, :inreview)',
+                [
+                    'reopened' => \mod_vimipad\local\service\snapshot_service::STATUS_REOPENED,
+                    'wsid' => $workspaceid,
+                    'submitted' => \mod_vimipad\local\service\snapshot_service::STATUS_SUBMITTED,
+                    'inreview' => \mod_vimipad\local\service\snapshot_service::STATUS_INREVIEW,
+                ]
+            );
         } finally {
             $lock->release();
         }

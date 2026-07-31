@@ -239,8 +239,14 @@ class operation_service {
                 $DB->update_record('vimipad_node', (object) [
                     'id' => $node->id, 'deleted' => 1, 'modifiedby' => $userid, 'timemodified' => $now,
                 ]);
-                // Soft-delete relations attached to this node.
-                $this->soft_delete_attached_relations($workspaceid, $payload['stableid'], $userid, $now);
+                // Soft-delete relations attached to this node, and drop the
+                // membership rows of the node and of those relations so no
+                // membership can reference a deleted element.
+                $attached = $this->soft_delete_attached_relations($workspaceid, $payload['stableid'], $userid, $now);
+                $this->purge_memberships($workspaceid, 'node', [$payload['stableid']]);
+                if (!empty($attached)) {
+                    $this->purge_memberships($workspaceid, 'relation', $attached);
+                }
                 return null;
 
             case operation_type::RELATION_CREATE:
@@ -300,6 +306,7 @@ class operation_service {
                 $DB->update_record('vimipad_relation', (object) [
                     'id' => $relation->id, 'deleted' => 1, 'modifiedby' => $userid, 'timemodified' => $now,
                 ]);
+                $this->purge_memberships($workspaceid, 'relation', [$payload['stableid']]);
                 return null;
 
             case operation_type::RELATION_RETARGET:
@@ -365,12 +372,31 @@ class operation_service {
                 $container = $this->get_live_container($workspaceid, $payload['stableid']);
                 $this->assert_element_editable($container->metadatajson, 'delete');
                 $DB->set_field('vimipad_container', 'deleted', 1, ['id' => $container->id]);
-                // Membership rows are meaningless once the container is gone.
+                // Membership rows are meaningless once the container is gone:
+                // both the rows it owns and any row where it is itself a member
+                // of another container.
                 $DB->delete_records('vimipad_membership', ['containerid' => $container->id]);
+                $this->purge_memberships($workspaceid, 'container', [$payload['stableid']]);
                 return null;
 
             case operation_type::MEMBERSHIP_ADD:
                 $container = $this->get_live_container($workspaceid, $payload['containerstableid']);
+                // The referenced item must exist live in this workspace, and a
+                // container cannot be a member of itself.
+                switch ($payload['itemtype']) {
+                    case 'node':
+                        $this->assert_node_exists($workspaceid, $payload['itemstableid']);
+                        break;
+                    case 'relation':
+                        $this->get_live_relation($workspaceid, $payload['itemstableid']);
+                        break;
+                    case 'container':
+                        if ($payload['itemstableid'] === $payload['containerstableid']) {
+                            throw new \invalid_parameter_exception('A container cannot be a member of itself.');
+                        }
+                        $this->get_live_container($workspaceid, $payload['itemstableid']);
+                        break;
+                }
                 $criteria = [
                     'containerid' => $container->id,
                     'itemtype' => $payload['itemtype'],
@@ -556,19 +582,47 @@ class operation_service {
      * @param string $nodestableid The node stable id.
      * @param int $userid The acting user id.
      * @param int $now Timestamp.
-     * @return void
+     * @return string[] The stable ids of the relations that were soft-deleted.
      */
-    private function soft_delete_attached_relations(int $workspaceid, string $nodestableid, int $userid, int $now): void {
+    private function soft_delete_attached_relations(int $workspaceid, string $nodestableid, int $userid, int $now): array {
         global $DB;
         $relations = $DB->get_records_select(
             'vimipad_relation',
             'workspaceid = :wsid AND deleted = 0 AND (sourceid = :src OR targetid = :tgt)',
             ['wsid' => $workspaceid, 'src' => $nodestableid, 'tgt' => $nodestableid]
         );
+        $stableids = [];
         foreach ($relations as $relation) {
             $DB->update_record('vimipad_relation', (object) [
                 'id' => $relation->id, 'deleted' => 1, 'modifiedby' => $userid, 'timemodified' => $now,
             ]);
+            $stableids[] = $relation->stableid;
         }
+        return $stableids;
+    }
+
+    /**
+     * Delete all membership rows in this workspace that reference the given items.
+     *
+     * Keeps the membership store free of rows pointing at deleted elements.
+     *
+     * @param int $workspaceid The workspace id.
+     * @param string $itemtype The member item type (node, relation, container).
+     * @param string[] $itemstableids The member stable ids.
+     * @return void
+     */
+    private function purge_memberships(int $workspaceid, string $itemtype, array $itemstableids): void {
+        global $DB;
+        if (empty($itemstableids)) {
+            return;
+        }
+        [$insql, $inparams] = $DB->get_in_or_equal($itemstableids, SQL_PARAMS_NAMED);
+        $DB->delete_records_select(
+            'vimipad_membership',
+            "itemtype = :itemtype AND itemstableid $insql AND containerid IN (
+                SELECT id FROM {vimipad_container} WHERE workspaceid = :wsid
+            )",
+            array_merge($inparams, ['itemtype' => $itemtype, 'wsid' => $workspaceid])
+        );
     }
 }

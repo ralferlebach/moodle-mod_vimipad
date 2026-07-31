@@ -49,6 +49,12 @@ class cleanup {
             $DB->delete_records_select('vimipad_aifeedback', "snapshotid $sinsql", $sparams);
             $DB->delete_records_select('vimipad_gradeinstance', "snapshotid $sinsql", $sparams);
             $DB->delete_records_select('vimipad_peerreview', "snapshotid $sinsql", $sparams);
+            // Clear any reference pointer at a deleted snapshot. The frozen
+            // reference copy (referencemapjson) on the activity is deliberately
+            // kept: the model solution is course configuration and its JSON
+            // carries no user identifiers.
+            [$rinsql, $rparams] = $DB->get_in_or_equal($snapshotids, SQL_PARAMS_NAMED);
+            $DB->set_field_select('vimipad', 'referencesnapshotid', null, "referencesnapshotid $rinsql", $rparams);
         }
 
         $containerids = $DB->get_fieldset_select('vimipad_container', 'id', "workspaceid $insql", $params);

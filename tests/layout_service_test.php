@@ -135,7 +135,9 @@ final class layout_service_test extends \advanced_testcase {
     }
 
     /**
-     * get_layout_since returns the layout only when newer than the given time.
+     * get_layout_since returns the layout only when newer than the given token,
+     * and the token is strictly monotonic: two saves in the same second yield
+     * distinguishable revisions, so no save can be missed by a polling client.
      *
      * @return void
      */
@@ -143,24 +145,31 @@ final class layout_service_test extends \advanced_testcase {
         global $DB;
         $service = new layout_service();
         $service->save($this->workspaceid, 'conceptmap', '{"v":1}', '', $this->userid);
-        $time = (int) $DB->get_field(
+        $revision = (int) $DB->get_field(
             'vimipad_layout',
-            'timemodified',
+            'layoutrevision',
             ['workspaceid' => $this->workspaceid, 'profile' => 'conceptmap']
         );
 
-        $before = $service->get_layout_since($this->workspaceid, 'conceptmap', $time - 1);
+        $before = $service->get_layout_since($this->workspaceid, 'conceptmap', $revision - 1);
         $this->assertTrue($before['changed']);
         $this->assertSame('{"v":1}', $before['layoutjson']);
-        $this->assertSame($time, $before['timemodified']);
+        $this->assertSame($revision, $before['revision']);
 
-        $same = $service->get_layout_since($this->workspaceid, 'conceptmap', $time);
+        $same = $service->get_layout_since($this->workspaceid, 'conceptmap', $revision);
         $this->assertFalse($same['changed']);
         $this->assertSame('', $same['layoutjson']);
-        $this->assertSame($time, $same['timemodified']);
+        $this->assertSame($revision, $same['revision']);
+
+        // A second save within the same wall-clock second must still advance
+        // the token, so a client holding the previous token sees the change.
+        $service->save($this->workspaceid, 'conceptmap', '{"v":1,"pos":{}}', '', $this->userid);
+        $after = $service->get_layout_since($this->workspaceid, 'conceptmap', $revision);
+        $this->assertTrue($after['changed']);
+        $this->assertGreaterThan($revision, $after['revision']);
 
         $none = $service->get_layout_since($this->workspaceid, 'tree', 0);
         $this->assertFalse($none['changed']);
-        $this->assertSame(0, $none['timemodified']);
+        $this->assertSame(0, $none['revision']);
     }
 }

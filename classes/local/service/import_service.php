@@ -47,6 +47,7 @@ class import_service {
         if (!is_array($envelope) || ($envelope['generator'] ?? '') !== 'mod_vimipad') {
             throw new \moodle_exception('error:importformat', 'mod_vimipad');
         }
+        self::assert_supported_version($envelope['formatversion'] ?? null);
         $data = $envelope['data'] ?? null;
         if (!is_array($data)) {
             throw new \moodle_exception('error:importformat', 'mod_vimipad');
@@ -89,6 +90,8 @@ class import_service {
         ) {
             throw new \moodle_exception('error:importformat', 'mod_vimipad');
         }
+        $versionattr = (string) ($doc['formatversion'] ?? '');
+        self::assert_supported_version($versionattr === '' ? null : $versionattr);
 
         $nodes = [];
         if (isset($doc->nodes)) {
@@ -189,6 +192,11 @@ class import_service {
         $nodes = is_array($data['nodes'] ?? null) ? $data['nodes'] : [];
         $relations = is_array($data['relations'] ?? null) ? $data['relations'] : [];
 
+        if (!in_array($mode, ['append', 'replace'], true)) {
+            // An unknown mode must not silently fall back to append.
+            throw new \invalid_parameter_exception('Unknown import mode: ' . $mode);
+        }
+
         $operationservice = new operation_service();
         $revision = (int) $workspace->currentrevision;
         $wsid = (int) $workspace->id;
@@ -199,8 +207,10 @@ class import_service {
         $transaction = $DB->start_delegated_transaction();
 
         if ($mode === 'replace') {
-            // Remove the existing map first (deleting a node cascades to its
-            // relations), so the import starts from a clean workspace.
+            // Remove the entire existing map first, so the import starts from a
+            // clean workspace: nodes (deleting a node cascades to its
+            // relations) and containers (deleting a container drops its
+            // membership rows). The stored layout is replaced below.
             $existing = $DB->get_fieldset_select(
                 'vimipad_node',
                 'stableid',
@@ -209,6 +219,22 @@ class import_service {
             );
             foreach ($existing as $stableid) {
                 $result = $operationservice->apply_locked($wsid, $revision, 'node_delete', ['stableid' => $stableid], $userid);
+                $revision = (int) $result['revision'];
+            }
+            $existingcontainers = $DB->get_fieldset_select(
+                'vimipad_container',
+                'stableid',
+                'workspaceid = :wsid AND deleted = 0',
+                ['wsid' => $wsid]
+            );
+            foreach ($existingcontainers as $stableid) {
+                $result = $operationservice->apply_locked(
+                    $wsid,
+                    $revision,
+                    'container_delete',
+                    ['stableid' => $stableid],
+                    $userid
+                );
                 $revision = (int) $result['revision'];
             }
         }
@@ -335,7 +361,7 @@ class import_service {
         // Apply the imported layout after commit (remapped to the new stable
         // ids), so the imported arrangement is preserved. Positions are
         // non-critical: a failure here does not undo the imported elements.
-        $this->apply_layout($data, $workspace, $idmap, $userid);
+        $this->apply_layout($data, $workspace, $idmap, $userid, $mode);
 
         return [
             'nodes' => $nodecount,
@@ -346,25 +372,48 @@ class import_service {
     }
 
     /**
+     * Reject export documents with an unsupported format version.
+     *
+     * Version 1 is the only supported format. A missing version is read as 1
+     * (all real exports carry it; the tolerance keeps hand-written documents
+     * working); anything else is rejected instead of being silently
+     * misinterpreted.
+     *
+     * @param mixed $version The declared format version, or null when absent.
+     * @return void
+     * @throws \moodle_exception If the version is present but unsupported.
+     */
+    private static function assert_supported_version(mixed $version): void {
+        if ($version === null) {
+            return;
+        }
+        if (!is_numeric($version) || (int) $version !== export_service::FORMAT_VERSION) {
+            throw new \moodle_exception('error:importversion', 'mod_vimipad');
+        }
+    }
+
+    /**
      * Persist the imported layout, remapped from the exported stable ids to the
-     * freshly assigned ones. Merged so existing positions are preserved.
+     * freshly assigned ones. In append mode the layout is merged so existing
+     * positions are preserved; in replace mode it replaces the stored layout
+     * entirely (an import without layout clears it), matching the replace
+     * semantics of the map itself.
      *
      * @param array $data The normalized data (may contain 'layout').
      * @param stdClass $workspace The target workspace record.
      * @param array $idmap Old stable id => new stable id.
      * @param int $userid The acting user id.
+     * @param string $mode 'append' or 'replace'.
      * @return void
      */
-    private function apply_layout(array $data, stdClass $workspace, array $idmap, int $userid): void {
+    private function apply_layout(array $data, stdClass $workspace, array $idmap, int $userid, string $mode): void {
         global $DB;
 
         $layout = $data['layout'] ?? null;
-        if (!is_array($layout)) {
-            return;
-        }
+        $layout = is_array($layout) ? $layout : [];
         $pos = self::remap_layout_map(is_array($layout['pos'] ?? null) ? $layout['pos'] : [], $idmap);
         $size = self::remap_layout_map(is_array($layout['size'] ?? null) ? $layout['size'] : [], $idmap);
-        if (empty($pos) && empty($size)) {
+        if ($mode !== 'replace' && empty($pos) && empty($size)) {
             return;
         }
 
@@ -376,7 +425,21 @@ class import_service {
         );
         $layoutjson = json_encode(['v' => $layout['v'] ?? 1, 'pos' => $pos, 'size' => $size]);
 
-        (new layout_service())->save((int) $workspace->id, $profile, $layoutjson, '', $userid, 'merge');
+        try {
+            (new layout_service())->save(
+                (int) $workspace->id,
+                $profile,
+                $layoutjson,
+                '',
+                $userid,
+                $mode === 'replace' ? 'replace' : 'merge'
+            );
+        } catch (\moodle_exception $e) {
+            // Positions are non-critical presentation state: the semantic
+            // import has committed, so a layout lock timeout must not fail the
+            // import (a retry would duplicate content in append mode).
+            debugging('vimipad import: layout not applied (' . $e->getMessage() . ')', DEBUG_DEVELOPER);
+        }
     }
 
     /**

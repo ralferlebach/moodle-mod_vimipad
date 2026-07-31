@@ -55,10 +55,32 @@ class grading_service {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/mod/vimipad/lib.php');
 
+        // Server-side grade domain: 0 <= grade <= activity maximum (points
+        // grading only). UI limits are not a contract.
+        if ($grade !== null) {
+            $max = (float) $instance->grade;
+            if ($max <= 0 || $grade < 0 || $grade > $max) {
+                throw new \moodle_exception('error:gradeoutofrange', 'mod_vimipad', '', format_float($max, 2));
+            }
+        }
+
         $cm = get_coursemodule_from_instance('vimipad', $instance->id, 0, false, MUST_EXIST);
         $context = \context_module::instance($cm->id);
 
-        $recipients = $this->resolve_recipients($workspace, $context);
+        // The grade goes to the cohort frozen at submission time; membership
+        // changes after submitting do not shift it. Legacy snapshots without a
+        // stored cohort fall back to resolving the current membership.
+        $recipients = null;
+        $cohortjson = $DB->get_field('vimipad_snapshot', 'cohortjson', ['id' => $snapshotid]);
+        if ($cohortjson !== false && $cohortjson !== null && $cohortjson !== '') {
+            $decoded = json_decode($cohortjson, true);
+            if (is_array($decoded) && $decoded !== []) {
+                $recipients = array_map('intval', array_values($decoded));
+            }
+        }
+        if ($recipients === null) {
+            $recipients = $this->resolve_recipients($workspace, $context);
+        }
         $now = time();
 
         foreach ($recipients as $userid) {
@@ -104,7 +126,7 @@ class grading_service {
      * @param \context_module $context The activity context.
      * @return int[] The recipient user ids.
      */
-    private function resolve_recipients(stdClass $workspace, \context_module $context): array {
+    public function resolve_recipients(stdClass $workspace, \context_module $context): array {
         if (!empty($workspace->userid)) {
             return [(int) $workspace->userid];
         }

@@ -180,11 +180,13 @@ class reconstruction_service {
 
             case operation_type::RELATION_RETARGET:
                 if (isset($relations[$stableid])) {
-                    if (array_key_exists('sourceid', $payload)) {
-                        $relations[$stableid]->sourceid = $payload['sourceid'];
+                    // The retarget payload carries newsource/newtarget (see the
+                    // operation contract), not sourceid/targetid.
+                    if (!empty($payload['newsource'])) {
+                        $relations[$stableid]->sourceid = $payload['newsource'];
                     }
-                    if (array_key_exists('targetid', $payload)) {
-                        $relations[$stableid]->targetid = $payload['targetid'];
+                    if (!empty($payload['newtarget'])) {
+                        $relations[$stableid]->targetid = $payload['newtarget'];
                     }
                 }
                 break;

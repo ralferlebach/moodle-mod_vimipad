@@ -54,6 +54,7 @@ $cangrade = has_capability('mod/vimipad:grade', $context);
 $canview = has_capability('mod/vimipad:view', $context);
 $canedit = has_capability('mod/vimipad:editown', $context)
     || has_capability('mod/vimipad:editgroup', $context);
+$cansubmit = has_capability('mod/vimipad:submit', $context);
 
 $isgroup = (int) $instance->collaborationmode === \mod_vimipad\local\service\workspace_service::MODE_GROUP;
 
@@ -128,8 +129,10 @@ if ($targetuserid) {
 }
 
 // Handle a submission started from the Journal & submission tab (own map).
+// Submitting requires mod/vimipad:submit in addition to edit access, matching
+// the create_snapshot external function.
 if (
-    $tab === 'journal' && $canedit && !$readonly
+    $tab === 'journal' && $canedit && $cansubmit && !$readonly
         && optional_param('dosubmit', 0, PARAM_BOOL) && confirm_sesskey()
 ) {
     $journalurl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']);
@@ -161,7 +164,7 @@ if (
 // Handle group-consensus actions (start / confirm / cancel) from the same tab.
 $consensusaction = optional_param('consensus', '', PARAM_ALPHA);
 if (
-    $tab === 'journal' && $canedit && !$readonly
+    $tab === 'journal' && $canedit && $cansubmit && !$readonly
         && in_array($consensusaction, ['start', 'confirm', 'cancel'], true) && confirm_sesskey()
 ) {
     $journalurl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']);
@@ -450,8 +453,8 @@ switch ($tab) {
             $ws = $wsservice->get_or_create_for_user($instance, $context, (int) $USER->id, $activegroupid ?: null);
         }
 
-        // Submission block (own map only).
-        if (!$readonly && $canedit && $ws !== null) {
+        // Submission block (own map only, and only for users allowed to submit).
+        if (!$readonly && $canedit && $cansubmit && $ws !== null) {
             echo $OUTPUT->heading(get_string('submission', 'mod_vimipad'), 4);
             $formaction = (new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']))->out(false);
             $isconsensus = $isgroup && (int) $instance->requireallteamsubmit === 1 && !empty($ws->groupid);

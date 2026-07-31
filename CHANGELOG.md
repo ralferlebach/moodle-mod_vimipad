@@ -4,7 +4,177 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.24** (2026072738).
+> release is **0.7.5** (2026072743).
+
+## 0.7.5 (2026072743) — hardening block E: grading lifecycle contracts
+
+- **Points-only grading.** ViMi Pad grades in points; the activity form now
+  rejects a Moodle scale selection (`error:scalesnotsupported`). The legacy
+  scale branch in `lib.php` stays for any pre-existing data, but no new scale
+  activity can be configured — resolving the half-implemented scale support.
+- **Server-side grade domain.** `grading_service::save_grade()` validates
+  `0 <= grade <= activity maximum` (and rejects any numeric grade when the
+  activity is ungraded), throwing `error:gradeoutofrange`. UI limits are no
+  longer the only guard; the advanced-grading path passes through the same
+  check.
+- **Grade recipients frozen at submission time.** The terminal submission step
+  stores the resolved recipient cohort on the snapshot (`cohortjson`), and
+  grading pays out to that cohort — group or course membership changes between
+  submission and grading no longer shift who receives the grade. Legacy
+  snapshots without a cohort fall back to resolving current membership. The
+  cohort is backed up with the snapshot and user-remapped on restore.
+- **Reopen lifecycle defined.** `STATUS_REOPENED` (deliberately `-1`, sorting
+  below draft so every `status >= submitted` consumer excludes it without
+  changes): reopening withdraws the submitted state of not-yet-graded
+  snapshots, so completion-on-submit reverts until a fresh submission; a
+  graded snapshot keeps its status and the awarded grade remains in the
+  gradebook as history until a regrade replaces it. The whole transition runs
+  under the workspace write lock.
+- New PHPUnit suite `grading_lifecycle_test` covering the domain check, the
+  frozen cohort under membership change, and the reopen contract.
+
+## 0.7.4 (2026072742) — hardening block D: privacy matrix, reference decoupling, real upgrade proof
+
+- **Privacy matrix completed.** Context discovery and userlist discovery now
+  cover peer reviewers (`vimipad_peerreview.reviewerid`) and advanced-grading
+  raters (`vimipad_gradeinstance.raterid`). `delete_data_for_users()` mirrors
+  the single-user path exactly (own grade records, peer reviews written, rater
+  links), so the deletion outcome no longer depends on which privacy pathway
+  Moodle chose. The export now covers every declared personal-data field:
+  node `content`, a new "Activity involvement" section (operations, submitted
+  snapshots, layout edits, element locks, submit intents) and a "Grading and
+  review activity" section (peer reviews, AI feedback authored, advanced
+  gradings, grades given with the authored feedback text). New PHPUnit suite
+  `privacy_matrix_test` (discovery, bulk/single parity, export completeness).
+- **Reference solution decoupled from learner data.** New activity field
+  `referencemapjson`: marking a snapshot as reference freezes its JSON on the
+  activity record. Scoring reads the frozen copy
+  (`assess_service::reference_submission()` / `has_reference()`, with a legacy
+  snapshot-pointer fallback), the peer-review guidance and the grading-panel
+  hints follow it, and workspace cleanup only clears the snapshot *pointer*.
+  Contract: the model solution is course configuration; its JSON carries no
+  user identifiers and deliberately survives (a) course backup **without user
+  info**, (b) privacy deletion of the source learner, and (c) deletion of the
+  source snapshot — all three proven in `reference_decoupling_test`. The
+  upgrade migrates existing references by copying the marked snapshot's JSON.
+- **Real upgrade path proven (0.6.24 → 0.7.4).** A fresh site install of the
+  0.6.24 release was seeded with legacy fixtures (duplicate membership rows, a
+  layout row with a plain timestamp, a marked reference snapshot) and upgraded
+  via CLI: membership rows deduplicated to the oldest, the unique index active
+  (a duplicate insert is rejected), `layoutrevision` seeded from
+  `timemodified`, `referencemapjson` migrated — and the upgraded schema is
+  **column- and index-identical** to a fresh install of the same version.
+
+## 0.7.3 (2026072741) — hardening block C: correctness contracts
+
+- **`relation_retarget` reconstruction fixed.** The historical reconstruction
+  read `sourceid`/`targetid` while the operation payload carries
+  `newsource`/`newtarget`, so revision views could show a retargeted relation
+  with its old endpoints. New `reconstruction_roundtrip_test` proves for
+  **every operation type** that applying operations and reconstructing at the
+  final revision yields the identical normalized state. Memberships are
+  intentionally not reconstructed: membership truth is spatial (0.7.2) and
+  layout is not versioned, so membership exists only at materialization points.
+- **Layout save is fail-closed with a monotonic revision.** When the
+  per-workspace/profile serialization lock cannot be acquired, `save()` now
+  throws `error:layoutbusy` instead of writing unserialized (lost-update risk).
+  Layout change detection moves from the second-granular `timemodified` to a
+  strictly monotonic `layoutrevision` (new field, upgrade seeds it from the
+  existing timestamp so in-flight client tokens stay comparable; each save
+  takes `max(revision + 1, now)`), so two saves within the same second can no
+  longer be missed by a polling client. No frontend change needed: the client
+  already treats the token as an opaque growing number.
+- **Course-workspace read authorization fixed.** In course mode the single
+  shared workspace is everyone's map: any enrolled user with `view` may read
+  it (constraint/revision APIs included). Inspecting another learner's map
+  still requires `grade`. Covered by a read-access matrix test.
+- **Import `replace` replaces the whole map.** Previously only nodes were
+  deleted, so containers, memberships and stale layout survived a "replace"
+  import. Replace now deletes containers too (their memberships cascade via
+  the 0.7.2 cleanup) and replaces the stored layout entirely (an import
+  without layout clears it).
+- **Import format version and mode are enforced.** `formatversion` > 1 (or
+  malformed) is rejected with `error:importversion` for both JSON and XML;
+  an unknown import mode string raises an error instead of silently acting
+  as `append`.
+- **Import stays idempotent against layout contention.** The semantic import
+  commits as one transaction; the post-commit layout apply catches a layout
+  lock timeout and logs it via `debugging()` instead of failing the request,
+  because a user retry after commit would duplicate content in append mode.
+
+## 0.7.2 (2026072740) — hardening block B: one membership truth (spatial)
+
+**Architecture decision:** container membership truth is **spatial**. A node
+belongs to a container when its centre lies inside the container's box — the
+same rule the editor uses. Membership is derived server-side at the
+materialization points (snapshot creation and export) from container geometry
+plus the profile layout, so assessment and export always contain exactly what
+the canvas shows. Previously the snapshot copied the `vimipad_membership`
+table, which the editor never writes, so visually contained nodes were
+invisible to the submap assessment (dual-truth P0 from the 0.6.24 review).
+
+- New `\mod_vimipad\local\membership_resolver`: pure, unit-tested derivation
+  mirroring `container_geometry.ts::centerInBox` (edges inclusive), reading
+  both layout formats (versioned envelope and legacy bare position map),
+  skipping non-finite positions and malformed geometry, deterministic output
+  order. Only nodes participate; container nesting stays visual.
+- `snapshot_service::build_normalized()` now derives memberships spatially and
+  no longer consults the `vimipad_membership` table. Export inherits this via
+  `build_envelope()`.
+- The `vimipad_membership` table remains as a compatibility store for the
+  import round-trip and the membership operations, with hardened integrity:
+  - `membership_add` validates that the referenced item exists live in the
+    workspace (node/relation/container) and rejects container self-membership.
+  - `node_delete` purges membership rows of the node and of its soft-deleted
+    attached relations; `relation_delete` purges the relation's rows;
+    `container_delete` also purges rows where the container was itself a
+    member of another container.
+  - New **unique index** on (containerid, itemtype, itemstableid) replacing the
+    non-unique (containerid, itemtype) index; the upgrade step deduplicates
+    existing rows first (keeping the oldest).
+- New PHPUnit suites: `membership_resolver_test` (pure derivation: rule, both
+  layout formats, overlap, degenerate inputs) and `membership_integrity_test`
+  (existence checks, self-membership rejection, delete cleanup in all three
+  directions, and end-to-end proof that a snapshot contains the spatially
+  contained node while a stale table row for an outside node does not leak in).
+- Historical revisions (reconstruction) intentionally carry no membership:
+  layout is not versioned, so spatial membership exists only at materialization
+  points. The revision viewer does not display membership.
+
+## 0.7.1 (2026072739) — hardening block A: capability contracts
+
+Feature freeze: 0.7.x is the hardening line towards beta. This release closes
+the capability gaps found in the 0.6.24 security audit.
+
+- **AI scorer authorisation enforced at the service boundary.**
+  `assess_service::score_ai()` now requires `mod/vimipad:useai` for the acting
+  user, checks `ai_feedback_service::is_available()` (core AI present, site
+  setting, activity `aienabled`) and the user's AI policy acceptance before
+  building any prompt. Previously the on-demand "Run AI scorer" link in the
+  grading panel bypassed all of these, so a non-editing teacher with `grade`
+  but without `useai` could trigger AI calls.
+- **AI scorer UI hidden when unavailable.** The grading panel no longer renders
+  the AI scorer block for users without `useai` or when AI is disabled
+  site-wide or on the activity.
+- **`is_available()` accepts an acting user.** New optional `$userid` parameter
+  (defaults to the current user) so service-side checks can evaluate the actual
+  actor.
+- **Submission paths in `view.php` require `mod/vimipad:submit`.** The direct
+  `dosubmit` handler, all three consensus actions (start/confirm/cancel) and
+  the submission UI block now require the `submit` capability in addition to
+  edit access, matching the `create_snapshot` external function. Previously a
+  role with edit access but without `submit` (e.g. a teacher) could submit via
+  the page path.
+- **`grade.php` enforces its own contract.** The legacy grading entry point now
+  requires `mod/vimipad:grade` itself (defense in depth; the target tab already
+  filtered).
+- **`grading_panel::handle_action()` requires `mod/vimipad:grade`.** The
+  mutating POST handler enforces its central precondition instead of relying on
+  the calling page.
+- New PHPUnit suite `ai_authorization_test` covering: teacher without `useai`
+  rejected, activity AI off rejected, site AI off rejected, policy not accepted
+  rejected, fully authorised call passes the gates, and `handle_action` rejects
+  users without `grade`.
 
 ## 0.6.23 (2026072737) — T5: re-arrange keeps container membership
 

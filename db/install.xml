@@ -24,6 +24,7 @@
         <FIELD NAME="cutoffdate" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Submissions are blocked after this time (0 = no cut-off)"/>
         <FIELD NAME="requireallteamsubmit" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if every group member must submit before the group map is submitted"/>
         <FIELD NAME="referencesnapshotid" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Snapshot marked as the reference (model) solution for automatic scoring, null if none"/>
+        <FIELD NAME="referencemapjson" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Frozen copy of the reference solution map (normalized snapshot JSON), decoupled from learner workspaces so it survives userinfo-less backups and privacy deletion"/>
         <FIELD NAME="matchmode" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Label matching strategy for content scorers: 0 exact, 1 fuzzy, 2 word-overlap"/>
         <FIELD NAME="peerreviewmode" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if students review each other's submitted maps"/>
         <FIELD NAME="peerreviewcount" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="2" SEQUENCE="false" COMMENT="How many peer reviews each submission should receive"/>
@@ -155,7 +156,7 @@
         <KEY NAME="containerid" TYPE="foreign" FIELDS="containerid" REFTABLE="vimipad_container" REFFIELDS="id"/>
       </KEYS>
       <INDEXES>
-        <INDEX NAME="containerid-itemtype" UNIQUE="false" FIELDS="containerid, itemtype"/>
+        <INDEX NAME="containerid-itemtype-itemstableid" UNIQUE="true" FIELDS="containerid, itemtype, itemstableid"/>
       </INDEXES>
     </TABLE>
 
@@ -168,6 +169,7 @@
         <FIELD NAME="layoutjson" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="layoutrevision" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>
         <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
@@ -204,7 +206,8 @@
         <FIELD NAME="revision" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="Revision this snapshot was taken at"/>
         <FIELD NAME="snapshotjson" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="Full normalized nodes+relations+containers+memberships+layout"/>
         <FIELD NAME="submittedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
-        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Phase: 0=draft,1=submitted,2=inreview,3=graded,4=returned"/>
+        <FIELD NAME="status" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Phase: -1=reopened,0=draft,1=submitted,2=inreview,3=graded,4=returned"/>
+        <FIELD NAME="cohortjson" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Grade-recipient user ids frozen at submission time (JSON int array)"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

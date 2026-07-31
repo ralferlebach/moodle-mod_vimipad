@@ -42,9 +42,10 @@ class ai_feedback_service {
      *
      * @param context_module $context The module context.
      * @param stdClass $instance The vimipad instance.
+     * @param int|null $userid The acting user id (defaults to the current user).
      * @return bool
      */
-    public static function is_available(context_module $context, stdClass $instance): bool {
+    public static function is_available(context_module $context, stdClass $instance, ?int $userid = null): bool {
         if (!class_exists('\core_ai\manager')) {
             return false;
         }
@@ -54,7 +55,7 @@ class ai_feedback_service {
         if ((int) $instance->aienabled !== 1) {
             return false;
         }
-        return has_capability('mod/vimipad:useai', $context);
+        return has_capability('mod/vimipad:useai', $context, $userid);
     }
 
     /**

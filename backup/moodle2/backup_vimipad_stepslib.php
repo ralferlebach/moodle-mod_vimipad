@@ -43,6 +43,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             'collaborationmode', 'gradingmode', 'aienabled', 'channelurl',
             'grade', 'completionsubmit', 'completionminnodes', 'completiongraded',
             'duedate', 'cutoffdate', 'requireallteamsubmit', 'referencesnapshotid',
+            'referencemapjson',
             'matchmode', 'activescorers', 'peerreviewmode', 'peerreviewcount',
             'requiredconcepts', 'forbiddenconcepts', 'allowedrelationtypes',
             'minnodes', 'minrelations', 'lockmodeforlearners',
@@ -97,7 +98,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
 
         $snapshots = new backup_nested_element('snapshots');
         $snapshot = new backup_nested_element('snapshot', ['id'], [
-            'revision', 'snapshotjson', 'submittedby', 'status', 'timecreated',
+            'revision', 'snapshotjson', 'submittedby', 'status', 'cohortjson', 'timecreated',
         ]);
 
         $annotations = new backup_nested_element('annotations');
