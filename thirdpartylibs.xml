@@ -3,8 +3,24 @@
     <library>
         <location>amd/build/editor_lazy.min.js</location>
         <name>React</name>
-        <description>React and ReactDOM are bundled into the prebuilt editor AMD module (amd/build/editor_lazy.min.js) for Moodle versions without native React runtime support. Built from source in js/src via the development-only esbuild toolchain (build.mjs); the accompanying editor_lazy.min.js.map lets Moodle serve this artefact directly in developer mode.</description>
+        <description>React is bundled into the prebuilt editor AMD module (amd/build/editor_lazy.min.js) for Moodle versions without native React runtime support. Built from source in js/src via the development-only esbuild toolchain (build.mjs); the accompanying editor_lazy.min.js.map lets Moodle serve this artefact directly in developer mode. The bundle carries a license banner listing every third-party component it contains.</description>
         <version>18.3.1</version>
+        <license>MIT</license>
+        <licenseversion></licenseversion>
+    </library>
+    <library>
+        <location>amd/build/editor_lazy.min.js</location>
+        <name>ReactDOM</name>
+        <description>ReactDOM is bundled into the prebuilt editor AMD module together with React (see the React entry for build details).</description>
+        <version>18.3.1</version>
+        <license>MIT</license>
+        <licenseversion></licenseversion>
+    </library>
+    <library>
+        <location>amd/build/editor_lazy.min.js</location>
+        <name>Scheduler</name>
+        <description>Scheduler (a ReactDOM runtime dependency) is bundled into the prebuilt editor AMD module together with React and ReactDOM.</description>
+        <version>0.23.2</version>
         <license>MIT</license>
         <licenseversion></licenseversion>
     </library>

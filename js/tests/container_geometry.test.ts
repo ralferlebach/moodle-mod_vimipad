@@ -22,8 +22,8 @@
  */
 
 import {
-    boxFromDrag, isDrawable, MIN_CONTAINER_SIZE, moveBox, normalizeBox, parseGeometry,
-    resizeBox, serializeGeometry,
+    boundingBox, boxFromDrag, centerInBox, isDrawable, MIN_CONTAINER_SIZE, moveBox,
+    normalizeBox, parseGeometry, resizeBox, serializeGeometry,
 } from '../src/canvas/container_geometry';
 
 describe('container_geometry', () => {
@@ -68,5 +68,32 @@ describe('container_geometry', () => {
         const clamped = resizeBox({x: 0, y: 0, w: 50, h: 50}, -100, -100);
         expect(clamped.w).toBe(MIN_CONTAINER_SIZE);
         expect(clamped.h).toBe(MIN_CONTAINER_SIZE);
+    });
+
+    test('centerInBox is inclusive of the border', () => {
+        const box = {x: 0, y: 0, w: 100, h: 100};
+        expect(centerInBox({x: 50, y: 50}, box)).toBe(true);
+        expect(centerInBox({x: 0, y: 100}, box)).toBe(true);
+        expect(centerInBox({x: 101, y: 50}, box)).toBe(false);
+    });
+
+    test('re-arrange refit around a nested container keeps the child enclosed', () => {
+        // Reproduces the container-in-container collapse fix: an outer container
+        // refits around a member node AND a nested child container, so its
+        // bounding box must fully contain the child box (the outer no longer
+        // collapses onto the inner one).
+        const childBox = {x: 200, y: 200, w: 150, h: 120};
+        const memberNodeBox = {x: 40, y: 40, w: 60, h: 30};
+        const fit = boundingBox([memberNodeBox, childBox], 24);
+
+        expect(fit).not.toBeNull();
+        const box = fit as {x: number; y: number; w: number; h: number};
+        // The child container is entirely inside the refitted outer box.
+        expect(box.x).toBeLessThanOrEqual(childBox.x);
+        expect(box.y).toBeLessThanOrEqual(childBox.y);
+        expect(box.x + box.w).toBeGreaterThanOrEqual(childBox.x + childBox.w);
+        expect(box.y + box.h).toBeGreaterThanOrEqual(childBox.y + childBox.h);
+        // Sanity: the child's centre lies inside the refitted outer box.
+        expect(centerInBox({x: childBox.x + childBox.w / 2, y: childBox.y + childBox.h / 2}, box)).toBe(true);
     });
 });

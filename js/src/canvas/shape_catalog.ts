@@ -42,8 +42,7 @@ interface ProfileShapes {
 }
 
 /**
- * The MVP profile table. Every current profile permits all three universal
- * shapes but names a profile-appropriate default; future profiles may restrict
+ * The client-side catalogue. Every current profile permits all three universal
  * the allowed set, at which point {@link clampShape} converts existing nodes.
  */
 const PROFILE_SHAPES: Record<string, ProfileShapes> = {

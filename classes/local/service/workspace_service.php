@@ -145,8 +145,9 @@ class workspace_service {
      * Create a workspace for an owner, serialized so concurrent first-access
      * cannot produce duplicate workspaces.
      *
-     * Uses the core lock API keyed per owner. If the lock cannot be obtained in
-     * time, a best-effort create is performed (the race window is tiny).
+     * Uses the core lock API keyed per owner. If the lock cannot be acquired,
+     * an already-created workspace is reused; otherwise creation aborts, so
+     * owner uniqueness is preserved (fail closed).
      *
      * @param int $vimipadid The vimipad instance id.
      * @param int|null $userid Owner user id (individual mode) or null.

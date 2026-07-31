@@ -99,8 +99,6 @@ $tabgates = [
     'journal' => $canview,
     'peer' => !empty($instance->peerreviewmode) && has_capability('mod/vimipad:peerreview', $context),
     'grade' => $cangrade,
-    'feedback' => $canview,
-    'tools' => $cangrade,
 ];
 $availabletabs = array_keys(array_filter($tabgates));
 
@@ -605,8 +603,8 @@ switch ($tab) {
         break;
 
     default:
-        // Feedback and tools content follows in later steps.
-        echo html_writer::tag('p', get_string('tab:comingsoon', 'mod_vimipad'), ['class' => 'text-muted']);
+        // Unknown tab parameter: nothing to render (the navigation only offers
+        // implemented tabs; direct URLs with stale tab names land here).
         break;
 }
 

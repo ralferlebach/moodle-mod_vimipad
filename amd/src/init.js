@@ -39,10 +39,11 @@ import Notification from 'core/notification';
 /** @type {string[]} Editor string keys, kept in sync with lang/en/vimipad.php. */
 const STRING_KEYS = [
     'constraint:hintsheading',
-    'editor:containers', 'editor:containerdelete', 'editor:drawcontainer', 'editor:drawcontainerdone',
+    'editor:containers', 'editor:drawcontainer', 'editor:drawcontainerdone',
     'editor:node', 'editor:templatelocks', 'editor:templatelockshint', 'editor:lockallowlabel',
     'editor:importnovimidata', 'editor:authortools',
     'editor:lockmode', 'editor:lockelement', 'editor:unlockelement',
+    'editor:fmt_fontsans', 'editor:fmt_fontserif', 'editor:fmt_fontmono',
     'editor:add', 'editor:addnode', 'editor:addrelation', 'editor:actions',
     'editor:beingedited', 'editor:cancel', 'editor:canvasaria', 'editor:canvashint',
     'editor:canvasview', 'editor:canvasplaceholder',

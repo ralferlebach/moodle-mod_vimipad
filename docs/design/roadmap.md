@@ -1,9 +1,9 @@
 # ViMi Pad — Roadmap
 
-Stand: **0.5.32** (Backend fachlich vollständig; real auf Moodle 4.5.12 und
-5.0.8 verifiziert). Vor 0.6.x ist eine kurze **0.5.33-Closure-Runde** geplant
-(offene 0.5-Verträge entscheiden, Concurrency-Garantie schließen, Importformat/
-Container-/Template-Verträge vorab festziehen). Status-Marker unten:
+Stand: **0.7.6** — 0.6.x (Autoren-Werkzeuge, Container, Templates, Constraints)
+ist abgeschlossen; das Plugin befindet sich im Feature Freeze der
+**0.7.x-Hardening-Linie** (Sicherheit, Dateninvarianten, Privacy, Backup,
+Grading-Lifecycle, Limits/Compliance — Blöcke A–F der Audit-Priorisierung). Status-Marker unten:
 ✅ umgesetzt · ◐ teilweise · ○ geplant · → verschoben.
 
 Diese Roadmap ordnet die geplanten Ausbaustufen bis zur

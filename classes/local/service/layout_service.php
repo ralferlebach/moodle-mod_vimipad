@@ -55,6 +55,11 @@ class layout_service {
         int $userid,
         string $mode = 'replace'
     ): void {
+        \mod_vimipad\local\policy\limits::check_text(
+            $layoutjson,
+            \mod_vimipad\local\policy\limits::MAX_LAYOUT_BYTES,
+            'layout'
+        );
         $lockfactory = \core\lock\lock_config::get_lock_factory('mod_vimipad_layout');
         $lock = $lockfactory->get_lock($workspaceid . ':' . $profile, 5);
 

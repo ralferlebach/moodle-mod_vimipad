@@ -18,6 +18,7 @@ namespace mod_vimipad\local\service;
 
 use mod_vimipad\local\id\stable_id;
 use mod_vimipad\local\operation\operation_type;
+use mod_vimipad\local\policy\limits;
 
 /**
  * Applies validated operations to a workspace and maintains the operation log.
@@ -185,6 +186,7 @@ class operation_service {
         global $DB;
 
         $now = time();
+        $this->enforce_limits($workspaceid, $type, $payload);
 
         switch ($type) {
             case operation_type::NODE_CREATE:
@@ -599,6 +601,55 @@ class operation_service {
             $stableids[] = $relation->stableid;
         }
         return $stableids;
+    }
+
+    /**
+     * Enforce the resource limits for a mutating operation.
+     *
+     * Text lengths and geometry are checked on every payload that carries the
+     * fields; element-count ceilings are checked on the create operations. The
+     * import path funnels through here as well, so imported maps obey the same
+     * envelope.
+     *
+     * @param int $workspaceid The target workspace id.
+     * @param string $type The operation type.
+     * @param array $payload The operation payload.
+     * @return void
+     * @throws \moodle_exception error:maplimit, error:textlimit or error:invalidgeometry.
+     */
+    private function enforce_limits(int $workspaceid, string $type, array $payload): void {
+        global $DB;
+
+        limits::check_text($payload['label'] ?? null, limits::MAX_LABEL, 'label');
+        limits::check_text($payload['content'] ?? null, limits::MAX_CONTENT, 'content');
+        limits::check_text($payload['metadatajson'] ?? null, limits::MAX_METADATA, 'metadata');
+        if (array_key_exists('geometryjson', $payload)) {
+            limits::check_geometry($payload['geometryjson']);
+        }
+
+        switch ($type) {
+            case operation_type::NODE_CREATE:
+                limits::check_count(
+                    $DB->count_records('vimipad_node', ['workspaceid' => $workspaceid, 'deleted' => 0]),
+                    limits::MAX_NODES,
+                    'nodes'
+                );
+                break;
+            case operation_type::RELATION_CREATE:
+                limits::check_count(
+                    $DB->count_records('vimipad_relation', ['workspaceid' => $workspaceid, 'deleted' => 0]),
+                    limits::MAX_RELATIONS,
+                    'relations'
+                );
+                break;
+            case operation_type::CONTAINER_CREATE:
+                limits::check_count(
+                    $DB->count_records('vimipad_container', ['workspaceid' => $workspaceid, 'deleted' => 0]),
+                    limits::MAX_CONTAINERS,
+                    'containers'
+                );
+                break;
+        }
     }
 
     /**

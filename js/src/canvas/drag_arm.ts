@@ -17,16 +17,8 @@
  * The ordering rule for arming a node drag on pointer-down.
  *
  * A node drag is armed synchronously on pointer-down; the collaboration lock is
- * an async round-trip that must NOT precede arming. The bug this encodes against:
- * when the lock was awaited first, the drag id was set a tick later, so a
- * pointer-up landing in that gap ran while no drag was armed and never cleared
- * it — the node stayed latched and then followed the bare cursor on the next
- * move. This module models that sequence with plain callbacks so the ordering
- * and the lost-capture/refusal handling can be tested without a DOM.
- *
- * @module     mod_vimipad/canvas/drag_arm
- * @copyright  2026 Ralf Erlebach
- * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * an async round-trip that must NOT precede arming. Invariant: arm pointer tracking synchronously before awaiting the lease,
+ * so pointer-up can always clear local drag state.
  */
 
 /** The mutable drag state a host keeps. */

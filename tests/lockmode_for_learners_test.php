@@ -75,11 +75,15 @@ final class lockmode_for_learners_test extends \externallib_advanced_testcase {
      *
      * @return void
      */
-    public function test_learner_may_edit_locked_node_when_enabled(): void {
+    public function test_learner_may_not_edit_locked_node_even_when_enabled(): void {
         global $DB;
         $s = $this->scenario(1);
         $this->setUser($s['student']);
 
+        // Template protection and cooperative lock mode are separate concepts:
+        // opting learners into lock mode grants collaboration leases, but it
+        // must not disable teacher-authored element locks.
+        $this->expectException(\moodle_exception::class);
         apply_operation::execute(
             (int) $s['instance']->cmid,
             $s['wsid'],
@@ -87,8 +91,6 @@ final class lockmode_for_learners_test extends \externallib_advanced_testcase {
             'node_update',
             json_encode(['stableid' => $s['nodeid'], 'label' => 'Changed'])
         );
-
-        $this->assertSame('Changed', $DB->get_field('vimipad_node', 'label', ['stableid' => $s['nodeid']]));
     }
 
     /**

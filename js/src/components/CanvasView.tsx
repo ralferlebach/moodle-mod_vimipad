@@ -1130,33 +1130,8 @@ export function CanvasView(props: Props): React.ReactElement {
                                 {container.label || t('editor:containers')}
                             </text>
                         )}
-                        {editable && !renaming && props.onDeleteContainer && (
-                            <g
-                                className="vimipad-container-delete"
-                                role="button"
-                                aria-label={t('editor:containerdelete')}
-                                style={{cursor: 'pointer'}}
-                                onPointerDown={e => {
-                                    e.stopPropagation();
-                                    props.onDeleteContainer?.(container.stableid);
-                                }}
-                            >
-                                <rect
-                                    x={box.x + box.w - 22}
-                                    y={box.y + 4}
-                                    width={16}
-                                    height={16}
-                                    rx={3}
-                                    fill="rgba(84, 110, 122, 0.22)"
-                                />
-                                <text
-                                    x={box.x + box.w - 14}
-                                    y={box.y + 16}
-                                    textAnchor="middle"
-                                    style={{fontSize: 12, fill: 'rgba(55, 71, 79, 0.95)'}}
-                                >&#215;</text>
-                            </g>
-                        )}
+                        {/* Delete lives in the container's format menu (the
+                          * trash-can button); the title-bar × was redundant. */}
                         {editable && !renaming && props.onUpdateContainer && ([
                             {c: 'nw' as BoxCorner, x: box.x, y: box.y, cursor: 'nwse-resize'},
                             {c: 'ne' as BoxCorner, x: box.x + box.w, y: box.y, cursor: 'nesw-resize'},
@@ -1178,31 +1153,9 @@ export function CanvasView(props: Props): React.ReactElement {
                                 onPointerUp={onContainerDragUp}
                             />
                         )))}
-                        {/* T4: format toolbar for a selected container — same shape,
-                          * fill, text and delete controls as a node. */}
-                        {cselected && editable && !renaming && props.onUpdateContainerStyle && (
-                            <foreignObject
-                                x={box.x}
-                                y={box.y - 52}
-                                width={320}
-                                height={48}
-                                style={{overflow: 'visible', pointerEvents: 'none'}}
-                            >
-                                <div style={{pointerEvents: 'auto', display: 'inline-block'}}>
-                                    <NodeFormatToolbar
-                                        kind="node"
-                                        target={{metadatajson: container.metadatajson}}
-                                        profile={profile}
-                                        formconfig={formconfig}
-                                        disabled={disabled}
-                                        onChangeStyle={m => props.onUpdateContainerStyle?.(container.stableid, m)}
-                                        onDelete={() => props.onDeleteContainer?.(container.stableid)}
-                                        onEditText={() => startRenameContainer(container.stableid, container.label)}
-                                        t={t}
-                                    />
-                                </div>
-                            </foreignObject>
-                        )}
+                        {/* The container's format menu is rendered in the top
+                          * menu overlay (Layer 4), not here in the bottom
+                          * container layer, so nodes cannot occlude it. */}
                     </g>
                 );
             })}
@@ -1543,6 +1496,64 @@ export function CanvasView(props: Props): React.ReactElement {
                 const active = interaction.editing ?? interaction.selected;
                 if (!active || disabled) {
                     return null;
+                }
+                if (active.kind === 'container') {
+                    const container = (state.containers ?? []).find(c => c.stableid === active.id);
+                    if (!container || !props.onUpdateContainerStyle) {
+                        return null;
+                    }
+                    const box = parseGeometry(container.geometryjson);
+                    if (!box) {
+                        return null;
+                    }
+                    const renaming = renamingContainer === container.stableid;
+                    const editable = !disabled && (state.canmanage === true || !isLocked(container.metadatajson));
+                    if (!editable || renaming) {
+                        return null;
+                    }
+                    // Rendered in the top overlay so nodes overlapping the
+                    // container can never occlude the menu (fixes the z-order
+                    // and the resulting pointer/cursor and click-through bugs).
+                    return (
+                        <foreignObject
+                            x={box.x}
+                            y={box.y - 52}
+                            width={320}
+                            height={48}
+                            style={{overflow: 'visible'}}
+                            pointerEvents="none"
+                        >
+                            <div
+                                className="vimipad-node-dock-fo"
+                                style={{pointerEvents: 'auto', display: 'inline-block'}}
+                                onPointerDown={e => e.stopPropagation()}
+                            >
+                                <NodeFormatToolbar
+                                    kind="node"
+                                    target={{metadatajson: container.metadatajson}}
+                                    profile={profile}
+                                    formconfig={formconfig}
+                                    disabled={disabled}
+                                    onChangeStyle={m => props.onUpdateContainerStyle?.(container.stableid, m)}
+                                    onDelete={() => props.onDeleteContainer?.(container.stableid)}
+                                    onEditText={() => startRenameContainer(container.stableid, container.label)}
+                                    lockMode={props.lockMode}
+                                    locked={isLocked(container.metadatajson)}
+                                    onToggleLock={props.onSetElementLock && props.canLock
+                                        ? () => props.onSetElementLock?.(
+                                            'container',
+                                            container.stableid,
+                                            writeLock(container.metadatajson, {
+                                                locked: !isLocked(container.metadatajson),
+                                                editable: [],
+                                            })
+                                        )
+                                        : undefined}
+                                    t={t}
+                                />
+                            </div>
+                        </foreignObject>
+                    );
                 }
                 if (active.kind === 'node') {
                     const node = state.nodes.find(n => n.stableid === active.id);

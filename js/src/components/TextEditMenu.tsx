@@ -91,9 +91,9 @@ export function TextEditMenu(props: Props): React.ReactElement {
                         onChange={e => apply({text: {font: (e.target.value || undefined) as FontFamily | undefined}})}
                     >
                         <option value="">{t('editor:fmt_fontdefault')}</option>
-                        <option value="sans">Sans</option>
-                        <option value="serif">Serif</option>
-                        <option value="mono">Mono</option>
+                        <option value="sans">{t('editor:fmt_fontsans')}</option>
+                        <option value="serif">{t('editor:fmt_fontserif')}</option>
+                        <option value="mono">{t('editor:fmt_fontmono')}</option>
                     </select>
                     <button
                         type="button"

@@ -45,6 +45,8 @@ const noop = (): void => {
  *
  * @param props Component props.
  * @returns The rendered viewer.
+ *
+ * @module mod_vimipad/components/RevisionViewer
  */
 export function RevisionViewer(props: Props): React.ReactElement {
     const {api, workspaceid, revision, t} = props;

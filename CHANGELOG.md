@@ -4,7 +4,152 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.7.5** (2026072743).
+> release is **0.7.11** (2026072749).
+
+## 0.7.11 (2026072749) — block G: nested-container re-arrange and container locking
+
+- **Re-arrange keeps the container hierarchy.** Re-arrange refits each container
+  around its members; previously it only counted member *nodes*, so an outer
+  container holding an inner container (and the inner one's nodes) collapsed
+  onto the inner box, losing the visual nesting. A nested container whose centre
+  lies inside another now counts as a member of the outer one, and the outer
+  container's refit includes the inner container's box — so the outer keeps
+  enclosing the inner. (Containers are refitted, not moved, so a single pass
+  preserves ordinary one- and two-level nesting.) New geometry tests cover
+  `centerInBox` and the nested refit invariant (the outer box fully contains the
+  child box).
+- **Containers can be locked like nodes and relations.** The container format
+  menu now shows the lock toggle (for users who may lock: authors, or everyone
+  under cooperative lock mode). The server-side protection was already in place
+  — `container_update` and `container_delete` run through
+  `assert_element_editable` — and is now reachable from the UI: a locked
+  container hides its move/resize/rename handles and its geometry/style edits
+  and deletion are rejected with `error:elementlocked`, while an author
+  (bypass) can still change it. New backend test asserts the locked-container
+  contract for both the ordinary editor and the author.
+- Frontend verified: tsc clean, 240 Jest tests green, esbuild bundle rebuilt,
+  `init.min.js` reproducible through Grunt. Backend: 251 tests green.
+
+## 0.7.10 (2026072748) — block G: remove the redundant container × button
+
+- The small × delete button in the container title bar is removed: deleting a
+  container is done from the trash-can button in the container format menu
+  (reachable now that the menu sits in the top overlay, 0.7.9), so the title-bar
+  × was redundant. Cleaned up the now-unused `vimipad-container-delete` style
+  reference in the SVG export filter, the `editor:containerdelete` language
+  string (EN/DE) and its entry in the editor string-load list. The SVG export
+  chrome-stripping test now asserts against a still-present overlay class
+  (`vimipad-container-resize`) so it keeps testing the export filter.
+- Frontend verified: tsc clean, 238 Jest tests green, esbuild bundle rebuilt
+  (the delete-button markup is gone from the bundle), `init.min.js`
+  reproducible through Grunt.
+
+## 0.7.9 (2026072747) — block G: container menu z-order and interactivity
+
+Three UI defects reported from manual testing, all traced to a single root
+cause: the container format menu was rendered inside the bottom container
+layer, so any node overlapping the container drew on top of it.
+
+- **Container menu moved to the top overlay (Layer 4).** The SVG canvas draws
+  in DOM order (container → connectors → labels → nodes → menu overlay); the
+  selected container's format toolbar is now rendered in that top overlay
+  alongside the node and relation menus, instead of in the container layer
+  beneath every node. A node overlapping the container can no longer occlude
+  its menu — matching the intended stacking order.
+- **Cursor / click-through fixed as a consequence.** Because the menu is no
+  longer behind the node surface, pointer events reach the toolbar buttons
+  (which already carry `cursor: pointer`) instead of the node underneath (which
+  shows the grab cursor), so the buttons are recognised as buttons.
+- **Colour and shape changes now take effect.** Same root cause: the clicks
+  previously landed on the occluding node, not on the menu. The wiring itself
+  was already correct (`onUpdateContainerStyle` → `container_update` with
+  `metadatajson` → reducer/back end), and is now reachable. Added a Jest test
+  asserting a container style (`metadatajson`) change is forwarded as an
+  `updateContainer` action, closing the coverage gap for the colour/shape path.
+- Frontend verified: tsc clean, 238 Jest tests green, esbuild bundle rebuilt
+  with the license banner, `init.min.js` reproducible through Grunt.
+
+## 0.7.8 (2026072746) — block G: complete the group-mode quadrant coverage
+
+- Added an explicit test for the double-negative quadrant of the group-mode
+  coupling (no group mode + non-group map), for both the individual and course
+  map modes: this combination is already consistent and must be a strict no-op
+  (neither the map mode nor the course-module group mode is touched). The
+  enforcement logic already handled it correctly; this closes the test-coverage
+  gap so all four quadrants — the two inconsistent ones (repaired) and the two
+  consistent ones (untouched) — are asserted on the server side, matching the
+  form rule which already covered all four.
+
+## 0.7.7 (2026072745) — hardening block G: UI correctness
+
+First fix from manual UI testing. Block G addresses UI states that the backend
+could not actually support.
+
+- **Group map now requires (and implies) a Moodle group mode.** Previously a
+  "Group map" activity could be saved with the core group mode left at "No
+  groups"; learners then hit `error:nogroup` on first access because no group
+  could be resolved — a UI state with no working backend path. The coupling is
+  now enforced bidirectionally:
+  - **Form validation** blocks saving an inconsistent combination: a group map
+    without a group mode flags the group-mode field (or, when the course forces
+    the group mode, the map option), and a group mode without a group map flags
+    the map option. New strings `error:groupmapneedsgroupmode` /
+    `error:groupmodeneedsgroupmap` (EN/DE), pure decision function
+    `mod_vimipad_mod_form::group_mode_error()`.
+  - **Server-side reconciliation** in `vimipad_add_instance` /
+    `vimipad_update_instance` via `vimipad_enforce_group_consistency()` repairs
+    rather than rejects, so instances created by backup/restore, course import
+    or web services cannot end up inconsistent and a restore never aborts: a
+    group map without a group mode gets separate groups; a non-group map
+    carrying a group mode has it cleared, unless the course forces the group
+    mode, in which case the map is promoted to a group map instead.
+  - New PHPUnit suite `group_mode_consistency_test` (form rule in all
+    directions incl. the forced-mode case, and the three server-side repair
+    outcomes plus the no-op case).
+
+## 0.7.6 (2026072744) — hardening block F: limits, compliance, i18n
+
+- **Template protection separated from collaboration lock mode.** Enabling
+  `lockmodeforlearners` no longer bypasses teacher-authored element locks:
+  template locks are only bypassed by `manageprofiles` holders. The
+  cooperative lock mode remains a pure editing-lease feature. (The previous
+  coupling let learners edit locked template elements whenever the activity
+  used lock mode.)
+- **Resource limits.** New `\mod_vimipad\local\policy\limits` enforced on every
+  mutating operation (imports funnel through the same path): 1000 nodes /
+  2000 relations / 200 containers per map, label ≤ 255 (the column size),
+  content ≤ 50k, metadata JSON ≤ 20k, layout blob ≤ 1 MB, import documents
+  ≤ 5 MB, and container geometry must be finite, positively sized and within
+  the canvas envelope (protecting rendering, export and the spatial membership
+  derivation). New `limits_test` covers the policy and the service enforcement.
+- **XML import hardening.** Size cap before parsing and `LIBXML_NONET` on
+  `simplexml_load_string()` (defence in depth at the import trust boundary).
+- **No embedded fallback language layer.** The 80+ hard-coded English
+  `FALLBACK_STRINGS` are removed from the React bundle; a missing Moodle
+  language string now surfaces as its raw key, so gaps show up in testing
+  instead of silently rendering mixed-language UI. The font choices
+  (Sans/Serif/Mono) are localised (`editor:fmt_font*`) and loaded through
+  `core/str` like every other editor string.
+- **German language files for all five `vimipadform` subplugins** (previously
+  EN-only), plus the missing `subplugintype_vimipadassess(_plural)` strings;
+  the dead `editorplaceholder`/`editorpreview` strings are removed.
+- **Placeholder tabs removed.** The Feedback and Tools tabs (which rendered a
+  "coming soon" notice) are removed from the navigation together with the
+  `tab:comingsoon` string; unknown tab URLs render nothing instead of a stub.
+- **Third-party manifest completed.** `thirdpartylibs.xml` now declares React,
+  ReactDOM **and Scheduler** (all MIT) as bundled components, and the esbuild
+  bundle carries a preserved license banner listing them. `jsdom` moved to
+  `devDependencies`.
+- **Process comments cleaned.** The stale `workspace_service` docblock now
+  describes the actual fail-closed behaviour; roadmap-style comments in
+  `view.php`, `styles.css`, `drag_arm.ts` and `shape_catalog.ts` are replaced
+  by functional invariants; `RevisionViewer.tsx` gained its `@module` docblock;
+  `styles.css` and `build.mjs` carry proper license headers.
+- **Docs consolidated.** The duplicate 0.6.23 changelog section is merged and
+  the roadmap header reflects the 0.7.x feature-freeze state.
+- Frontend verified: tsc clean, 237 Jest tests green, esbuild bundle rebuilt
+  with the license banner, `init.min.js` rebuilt through Moodle's own Grunt
+  and byte-identical on a second run (reproducibility criterion).
 
 ## 0.7.5 (2026072743) — hardening block E: grading lifecycle contracts
 
@@ -175,24 +320,6 @@ the capability gaps found in the 0.6.24 security audit.
   rejected, activity AI off rejected, site AI off rejected, policy not accepted
   rejected, fully authorised call passes the gates, and `handle_action` rejects
   users without `grade`.
-
-## 0.6.23 (2026072737) — T5: re-arrange keeps container membership
-
-- Re-arrange laid out nodes by graph structure and ignored containers, so a
-  container's member nodes scattered and the box stayed put — the visual grouping
-  broke.
-- Now, before re-layout, the nodes spatially inside each container are recorded
-  (a node belongs to a container when its centre is within the box, matching what
-  the user sees — there is no separate assignment step). After the new layout each
-  non-empty container is refitted to the bounding box of its members' new
-  positions (plus padding), so members stay inside and the container follows them.
-  Empty containers are left where they are.
-- The refit rides in the same undo/redo entry as the layout change: one
-  re-arrange, one undo restores both node positions and container geometry.
-- New pure helpers `centerInBox` and `boundingBox` in `canvas/container_geometry`
-  (with a minimum-size clamp); 6 tests. Pure frontend — 210 `mod_vimipad` + 97
-  `vimipadassess` unchanged; phpcs clean; **Jest 36 suites / 230 tests**; bundle
-  reproducible. The felt result needs a browser.
 
 ## 0.6.24 (2026072738) — T4: containers format and label like nodes
 

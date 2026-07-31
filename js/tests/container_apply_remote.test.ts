@@ -52,6 +52,20 @@ describe('operationToAction container operations', () => {
         });
     });
 
+    test('container_update forwards a style (metadatajson) change', () => {
+        // The container format menu (shape/fill/text) edits metadatajson; this
+        // is the payload that carries a colour or shape change end to end.
+        const action = operationToAction(op('container_update', {
+            stableid: 'container_a',
+            metadatajson: JSON.stringify({shape: 'ellipse', fill: '#ffcc00'}),
+        }));
+        expect(action).toEqual({
+            kind: 'updateContainer',
+            stableid: 'container_a',
+            metadatajson: '{"shape":"ellipse","fill":"#ffcc00"}',
+        });
+    });
+
     test('container_delete maps to deleteContainer', () => {
         expect(operationToAction(op('container_delete', {stableid: 'container_a'})))
             .toEqual({kind: 'deleteContainer', stableid: 'container_a'});

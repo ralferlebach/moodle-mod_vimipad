@@ -89,6 +89,7 @@ function vimipad_add_instance(stdClass $data, ?mod_vimipad_mod_form $mform = nul
     $data->timemodified = $data->timecreated;
     vimipad_prepare_completion_fields($data);
     vimipad_prepare_scorer_fields($data);
+    vimipad_enforce_group_consistency($data);
 
     $id = $DB->insert_record('vimipad', $data);
 
@@ -112,12 +113,68 @@ function vimipad_update_instance(stdClass $data, ?mod_vimipad_mod_form $mform = 
     $data->timemodified = time();
     vimipad_prepare_completion_fields($data);
     vimipad_prepare_scorer_fields($data);
+    vimipad_enforce_group_consistency($data);
 
     $result = $DB->update_record('vimipad', $data);
 
     vimipad_grade_item_update($data);
 
     return $result;
+}
+
+/**
+ * Enforce the group-map / group-mode invariant server-side, non-breaking.
+ *
+ * The activity form validates this bidirectionally and blocks saving, but
+ * instances are also created by backup/restore, course import and web
+ * services, which never run the form. Here we therefore repair rather than
+ * reject, so a restore cannot abort:
+ *
+ * - A group map without a course group mode gets separate groups.
+ * - A non-group map that carries a group mode has the group mode cleared,
+ *   unless the course forces a group mode — then the map is promoted to a
+ *   group map instead, because the group mode cannot be removed.
+ *
+ * The course-module group mode lives on {course_modules}.groupmode, addressed
+ * through the form's coursemodule id; the value is mirrored onto $data so the
+ * caller and later hooks see a consistent record.
+ *
+ * @param stdClass $data The instance data (modified in place). Expects
+ *      collaborationmode, and — when called from the module edit flow —
+ *      coursemodule and groupmode.
+ * @return void
+ */
+function vimipad_enforce_group_consistency(stdClass $data): void {
+    global $DB, $COURSE;
+
+    if (!property_exists($data, 'coursemodule') || empty($data->coursemodule)) {
+        // No course module in scope (e.g. certain low-level test inserts):
+        // nothing to reconcile against.
+        return;
+    }
+
+    $cmid = (int) $data->coursemodule;
+    $isgroupmap = (int) ($data->collaborationmode ?? 0)
+        === \mod_vimipad\local\service\workspace_service::MODE_GROUP;
+    $groupmode = isset($data->groupmode)
+        ? (int) $data->groupmode
+        : (int) $DB->get_field('course_modules', 'groupmode', ['id' => $cmid]);
+    $forced = !empty($COURSE->groupmodeforce);
+
+    if ($isgroupmap && $groupmode === NOGROUPS) {
+        $groupmode = SEPARATEGROUPS;
+    } else if (!$isgroupmap && $groupmode !== NOGROUPS) {
+        if ($forced) {
+            $data->collaborationmode = \mod_vimipad\local\service\workspace_service::MODE_GROUP;
+        } else {
+            $groupmode = NOGROUPS;
+        }
+    }
+
+    // Persist the reconciled group mode onto the course module and mirror it
+    // onto $data for any later hook in the same request.
+    $DB->set_field('course_modules', 'groupmode', $groupmode, ['id' => $cmid]);
+    $data->groupmode = $groupmode;
 }
 
 /**

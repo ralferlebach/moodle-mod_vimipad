@@ -43,6 +43,9 @@ class import_service {
      * @throws \moodle_exception If the document is not a valid ViMi Pad export.
      */
     public function import_json(string $json, stdClass $workspace, int $userid, string $mode = 'append'): array {
+        if (strlen($json) > \mod_vimipad\local\policy\limits::MAX_IMPORT_BYTES) {
+            throw new \moodle_exception('error:importtoolarge', 'mod_vimipad');
+        }
         $envelope = json_decode($json, true);
         if (!is_array($envelope) || ($envelope['generator'] ?? '') !== 'mod_vimipad') {
             throw new \moodle_exception('error:importformat', 'mod_vimipad');
@@ -78,8 +81,14 @@ class import_service {
      * @throws \moodle_exception If the document is not a valid ViMi Pad export.
      */
     private function parse_xml(string $xml): array {
+        // Import documents are a trust boundary: cap the size and forbid any
+        // network access during parsing (defence in depth; modern libxml does
+        // not resolve external entities by default either).
+        if (strlen($xml) > \mod_vimipad\local\policy\limits::MAX_IMPORT_BYTES) {
+            throw new \moodle_exception('error:importtoolarge', 'mod_vimipad');
+        }
         $previous = libxml_use_internal_errors(true);
-        $doc = simplexml_load_string($xml);
+        $doc = simplexml_load_string($xml, null, LIBXML_NONET);
         libxml_clear_errors();
         libxml_use_internal_errors($previous);
 

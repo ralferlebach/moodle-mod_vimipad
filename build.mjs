@@ -1,3 +1,18 @@
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
 // Development-only build script. Bundles the React/TypeScript editor and wraps
 // it as the AMD module mod_vimipad/editor_lazy in amd/build/. Emitting it as an
 // AMD module (rather than injecting a <script> tag at runtime) keeps the load
@@ -35,7 +50,7 @@ const result = await build({
     outfile: 'amd/build/editor_lazy.min.js',
     jsx: 'automatic',
     define: {'process.env.NODE_ENV': '"production"'},
-    banner: {js: 'define("mod_vimipad/editor_lazy", [], function() {'},
+    banner: {js: '/*! mod_vimipad editor bundle (GPLv3+). Bundled third-party components: React 18.3.1 (MIT), ReactDOM 18.3.1 (MIT), Scheduler 0.23.2 (MIT); upstream https://react.dev. Built by build.mjs. */\ndefine("mod_vimipad/editor_lazy", [], function() {'},
     footer: {js: 'return __vimipadEditor.default || __vimipadEditor;\n});'},
     logLevel: 'info',
 });

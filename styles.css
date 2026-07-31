@@ -1,4 +1,9 @@
-/* ViMi Pad editor styles. */
+/* ViMi Pad (mod_vimipad) editor styles.
+ *
+ * @package   mod_vimipad
+ * @copyright 2026 Ralf Erlebach
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 .vimipad-editor .vimipad-canvas {
     width: 100%;
@@ -470,8 +475,7 @@
     right: 0.5rem;
 }
 
-/* The full view button now sits inside the right-hand group, so it no longer
-   positions itself. */
+/* Position the full-view button within the right-hand overlay group. */
 .vimipad-canvas-fullview {
     position: static;
 }

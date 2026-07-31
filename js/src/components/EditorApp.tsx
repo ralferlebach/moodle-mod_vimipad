@@ -751,10 +751,30 @@ export function EditorApp(props: Props): React.ReactElement {
             const members = state.nodes
                 .filter(n => stored[n.stableid] && centerInBox(stored[n.stableid], box))
                 .map(n => n.stableid);
-            if (members.length === 0) {
+            // Nested containers count as members too: a container whose centre
+            // lies inside this one must keep enclosing it after re-arrange, so
+            // an outer container refits around the inner container's fixed box
+            // (not just the inner container's nodes). Without this the outer
+            // container collapses onto the inner one, losing the visual nesting.
+            const childBoxes: ContainerBox[] = [];
+            for (const other of containers) {
+                if (other.stableid === c.stableid) {
+                    continue;
+                }
+                const otherBox = parseGeometry(other.geometryjson);
+                if (!otherBox) {
+                    continue;
+                }
+                const otherCentre = {x: otherBox.x + otherBox.w / 2, y: otherBox.y + otherBox.h / 2};
+                if (centerInBox(otherCentre, box)) {
+                    childBoxes.push(otherBox);
+                }
+            }
+            if (members.length === 0 && childBoxes.length === 0) {
                 continue; // Empty container: leave it where it is.
             }
-            const fit = boundingBox(members.map(id => boxOf(id, auto)), CONTAINER_REFIT_PAD);
+            const memberBoxes = members.map(id => boxOf(id, auto));
+            const fit = boundingBox([...memberBoxes, ...childBoxes], CONTAINER_REFIT_PAD);
             if (!fit) {
                 continue;
             }
