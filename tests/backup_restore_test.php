@@ -145,6 +145,7 @@ final class backup_restore_test extends \advanced_testcase {
             'activescorers' => 'reference,structure',
             'peerreviewmode' => 1,
             'peerreviewcount' => 3,
+            'journalallowprivate' => 1,
             'requiredconcepts' => "Cell\nDNA",
             'forbiddenconcepts' => 'virus',
             'allowedrelationtypes' => 'contains',
@@ -204,6 +205,7 @@ final class backup_restore_test extends \advanced_testcase {
         $this->assertSame(1, (int) $newinstance->lockmodeforlearners);
         $this->assertSame(1, (int) $newinstance->peerreviewmode);
         $this->assertSame(3, (int) $newinstance->peerreviewcount);
+        $this->assertSame(1, (int) $newinstance->journalallowprivate);
         $this->assertSame("Cell\nDNA", $newinstance->requiredconcepts);
         $this->assertSame('virus', $newinstance->forbiddenconcepts);
         $this->assertSame('contains', $newinstance->allowedrelationtypes);

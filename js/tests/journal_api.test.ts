@@ -45,7 +45,7 @@ describe('ApiClient journal methods', () => {
         expect(res.entries[0].entrytext).toBe('hi');
     });
 
-    test('addJournalEntry sends the text and visibility flag', async () => {
+    test('addJournalEntry sends the text and private flag', async () => {
         const calls: Call[] = [];
         const transport = async (method: string, args: Record<string, unknown>): Promise<unknown> => {
             calls.push({method, args});
@@ -53,10 +53,10 @@ describe('ApiClient journal methods', () => {
         };
         const api = new ApiClient(transport, 42);
 
-        const res = await api.addJournalEntry(7, 'my entry', 1);
+        const res = await api.addJournalEntry(7, 'my entry', true);
 
         expect(calls[0].method).toBe('mod_vimipad_add_journal_entry');
-        expect(calls[0].args).toEqual({cmid: 42, workspaceid: 7, entrytext: 'my entry', visibility: 1});
+        expect(calls[0].args).toEqual({cmid: 42, workspaceid: 7, entrytext: 'my entry', private: 1});
         expect(res.id).toBe(99);
     });
 });

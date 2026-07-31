@@ -111,6 +111,7 @@ class get_workspace extends external_api {
             'containers' => array_map([self::class, 'map_container'], $state['containers']),
             'canmanage' => $canmanage,
             'lockmodeforlearners' => $lockmodeforlearners,
+            'journalallowprivate' => !empty($instance->journalallowprivate),
             'collab' => helper::collab_config(),
         ];
     }
@@ -140,6 +141,7 @@ class get_workspace extends external_api {
             'containers' => [],
             'canmanage' => $canmanage,
             'lockmodeforlearners' => $lockmodeforlearners,
+            'journalallowprivate' => !empty($instance->journalallowprivate),
             'collab' => helper::collab_config(),
         ];
     }
@@ -249,6 +251,11 @@ class get_workspace extends external_api {
             'lockmodeforlearners' => new external_value(
                 PARAM_BOOL,
                 'Whether learners may also toggle lock mode in this activity',
+                VALUE_OPTIONAL
+            ),
+            'journalallowprivate' => new external_value(
+                PARAM_BOOL,
+                'Whether learners may mark journal entries as private (hidden from teachers)',
                 VALUE_OPTIONAL
             ),
             'collab' => new external_single_structure([

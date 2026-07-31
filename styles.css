@@ -596,20 +596,25 @@
    Learner journal panel
    ------------------------------------------------------------------------- */
 
-.vimipad-journal {
-    margin-top: 1rem;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--vimipad-border, #ced4da);
-    border-radius: 0.4rem;
-}
-
-.vimipad-journal summary {
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.vimipad-journal-body {
+.vimipad-journal-control {
     margin-top: 0.75rem;
+}
+
+.vimipad-journal-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.vimipad-journal-ref {
+    font-size: 0.8rem;
+    font-weight: normal;
+}
+
+.vimipad-journal-input {
+    margin-bottom: 0.5rem;
 }
 
 .vimipad-journal-controls {
@@ -618,7 +623,12 @@
     gap: 0.75rem;
     align-items: center;
     justify-content: space-between;
-    margin-top: 0.5rem;
+}
+
+/* When the private-note checkbox is hidden (activity forbids private entries),
+   keep the save button aligned to the right. */
+.vimipad-journal-controls > .vimipad-journal-save:only-child {
+    margin-left: auto;
 }
 
 .vimipad-journal-visibility {
@@ -626,24 +636,8 @@
     font-size: 0.9rem;
 }
 
-.vimipad-journal-list {
-    margin-top: 1rem;
-    padding: 0;
-    list-style: none;
-}
-
-.vimipad-journal-entry {
-    padding: 0.5rem 0;
-    border-top: 1px solid var(--vimipad-border, #ced4da);
-}
-
-.vimipad-journal-meta {
-    font-size: 0.8rem;
-    color: #6c757d;
-}
-
-.vimipad-journal-text {
-    white-space: pre-wrap;
+.vimipad-journal-saved {
+    margin-top: 0.4rem;
 }
 
 /* -------------------------------------------------------------------------

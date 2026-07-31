@@ -60,10 +60,10 @@ final class journal_service_test extends \advanced_testcase {
         $wsid = $this->make_workspace((int) $instance->id);
         $service = new journal_service();
 
-        $first = $service->add_entry($wsid, (int) $u1->id, 'first', FORMAT_PLAIN, 0);
+        $first = $service->add_entry($wsid, (int) $u1->id, 'first', FORMAT_PLAIN, true, true);
         $this->waitForSecond();
-        $second = $service->add_entry($wsid, (int) $u1->id, 'second', FORMAT_PLAIN, 1);
-        $service->add_entry($wsid, (int) $u2->id, 'other user', FORMAT_PLAIN, 0);
+        $second = $service->add_entry($wsid, (int) $u1->id, 'second', FORMAT_PLAIN, false, true);
+        $service->add_entry($wsid, (int) $u2->id, 'other user', FORMAT_PLAIN, true, true);
 
         $entries = $service->get_entries_for_user($wsid, (int) $u1->id);
         $this->assertCount(2, $entries);
@@ -73,11 +73,14 @@ final class journal_service_test extends \advanced_testcase {
     }
 
     /**
-     * Any non-teacher visibility value is stored as private.
+     * Teachers can read the journal by default: an entry is only private when
+     * the author asks for it AND the activity allows private entries. When the
+     * activity forbids private entries, a private request is ignored (stored
+     * teacher-visible).
      *
      * @return void
      */
-    public function test_visibility_normalisation(): void {
+    public function test_private_requires_allowprivate(): void {
         $this->resetAfterTest();
         $course = $this->getDataGenerator()->create_course();
         $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
@@ -85,13 +88,26 @@ final class journal_service_test extends \advanced_testcase {
         $wsid = $this->make_workspace((int) $instance->id);
         $service = new journal_service();
 
-        $service->add_entry($wsid, (int) $u1->id, 'private?', FORMAT_PLAIN, 7);
-        $service->add_entry($wsid, (int) $u1->id, 'teacher', FORMAT_PLAIN, journal_service::VISIBILITY_TEACHER);
+        // Private requested but the activity forbids it -> teacher-visible.
+        $service->add_entry($wsid, (int) $u1->id, 'forced visible', FORMAT_PLAIN, true, false);
+        // Private requested and allowed -> private.
+        $service->add_entry($wsid, (int) $u1->id, 'really private', FORMAT_PLAIN, true, true);
+        // Default (no private request) -> teacher-visible.
+        $service->add_entry($wsid, (int) $u1->id, 'default', FORMAT_PLAIN, false, true);
 
         $entries = $service->get_entries_for_user($wsid, (int) $u1->id);
         $visibilities = array_map(static fn($e) => (int) $e->visibility, $entries);
         sort($visibilities);
-        $this->assertEquals([journal_service::VISIBILITY_PRIVATE, journal_service::VISIBILITY_TEACHER], $visibilities);
+        // With 0=teacher-visible, 1=private: two teacher-visible, one private.
+        $this->assertEquals(
+            [
+                journal_service::VISIBILITY_TEACHER,
+                journal_service::VISIBILITY_TEACHER,
+                journal_service::VISIBILITY_PRIVATE,
+            ],
+            $visibilities
+        );
+        $this->assertCount(2, $service->get_teacher_visible($wsid));
     }
 
     /**
@@ -108,9 +124,9 @@ final class journal_service_test extends \advanced_testcase {
         $wsid = $this->make_workspace((int) $instance->id);
         $service = new journal_service();
 
-        $service->add_entry($wsid, (int) $u1->id, 'u1 private', FORMAT_PLAIN, 0);
-        $service->add_entry($wsid, (int) $u1->id, 'u1 shared', FORMAT_PLAIN, 1);
-        $service->add_entry($wsid, (int) $u2->id, 'u2 shared', FORMAT_PLAIN, 1);
+        $service->add_entry($wsid, (int) $u1->id, 'u1 private', FORMAT_PLAIN, true, true);
+        $service->add_entry($wsid, (int) $u1->id, 'u1 shared', FORMAT_PLAIN, false, true);
+        $service->add_entry($wsid, (int) $u2->id, 'u2 shared', FORMAT_PLAIN, false, true);
 
         $visible = $service->get_teacher_visible($wsid);
         $this->assertCount(2, $visible);

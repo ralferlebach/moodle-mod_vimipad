@@ -27,20 +27,26 @@ namespace mod_vimipad\local\service;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class journal_service {
-    /** @var int Entry visible only to its author. */
-    const VISIBILITY_PRIVATE = 0;
+    /** @var int Entry visible to the author and to teachers (the default). */
+    const VISIBILITY_TEACHER = 0;
 
-    /** @var int Entry visible to the author and to teachers. */
-    const VISIBILITY_TEACHER = 1;
+    /** @var int Entry visible only to its author (hidden from teachers). */
+    const VISIBILITY_PRIVATE = 1;
 
     /**
      * Add a journal entry.
+     *
+     * Visibility contract (teachers can always read the journal by default):
+     * an entry is teacher-visible unless the author marks it private AND the
+     * activity allows private entries. The "allow private" gate is enforced
+     * here, so a client cannot hide an entry when the activity forbids it.
      *
      * @param int $workspaceid The workspace id.
      * @param int $userid The author.
      * @param string $text The entry text.
      * @param int $format The text format.
-     * @param int $visibility VISIBILITY_PRIVATE or VISIBILITY_TEACHER.
+     * @param bool $private Whether the author asked to keep the entry private.
+     * @param bool $allowprivate Whether the activity allows private entries.
      * @param int|null $revisionref The map revision the entry refers to, if any.
      * @return int The new entry id.
      */
@@ -49,15 +55,18 @@ class journal_service {
         int $userid,
         string $text,
         int $format,
-        int $visibility,
+        bool $private,
+        bool $allowprivate,
         ?int $revisionref = null
     ): int {
         global $DB;
 
         $now = time();
-        $normalised = $visibility === self::VISIBILITY_TEACHER
-            ? self::VISIBILITY_TEACHER
-            : self::VISIBILITY_PRIVATE;
+        // Private only when the author asked for it and the activity permits
+        // it; otherwise the entry is visible to teachers.
+        $normalised = ($private && $allowprivate)
+            ? self::VISIBILITY_PRIVATE
+            : self::VISIBILITY_TEACHER;
 
         return (int) $DB->insert_record('vimipad_journalentry', (object) [
             'workspaceid' => $workspaceid,

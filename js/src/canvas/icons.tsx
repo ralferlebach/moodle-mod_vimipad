@@ -66,6 +66,7 @@ export const FA = {
     expand: 'fa-solid fa-expand',
     compress: 'fa-solid fa-compress',
     edit: 'fa-solid fa-pen-to-square',
+    journalSave: 'fa-solid fa-pen-fancy',
     confirm: 'fa-solid fa-check',
     cancel: 'fa-solid fa-xmark',
     bold: 'fa-solid fa-bold',

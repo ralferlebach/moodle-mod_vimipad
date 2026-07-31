@@ -30,7 +30,10 @@ import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} fr
 import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
 import {nodeHeight, nodeWidth} from '../canvas/node_geometry';
-import {boundingBox, centerInBox, ContainerBox, parseGeometry, serializeGeometry} from '../canvas/container_geometry';
+import {
+    boundingBox, centerInBox, ContainerBox, nestingOrder, nestingParents,
+    parseGeometry, serializeGeometry,
+} from '../canvas/container_geometry';
 import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg, extractMapData} from '../canvas/svg_export';
 import {EditorState, reduce} from '../store/reducer';
 import {History, HistoryEntry, OpSpec} from '../store/history';
@@ -742,46 +745,60 @@ export function EditorApp(props: Props): React.ReactElement {
             const size = sizes[id] ?? {w: w0, h: node ? nodeHeight(node.label, w0) : 40};
             return {x: pos.x - size.w / 2, y: pos.y - size.h / 2, w: size.w, h: size.h};
         };
-        const refits: Array<{stableid: string; oldgeom: string; newgeom: string}> = [];
+        // Build an acyclic nesting forest from the current boxes, then refit
+        // inner containers before outer ones. A container refits around its
+        // member nodes plus the (already refitted) boxes of its *direct* nested
+        // children only. This removes the previous runaway growth and hierarchy
+        // flipping, which came from treating overlapping same-size containers as
+        // mutual children.
+        const nestingItems: Array<{stableid: string; box: ContainerBox}> = [];
         for (const c of containers) {
-            const box = parseGeometry(c.geometryjson);
-            if (!box) {
+            const b = parseGeometry(c.geometryjson);
+            if (b) {
+                nestingItems.push({stableid: c.stableid, box: b});
+            }
+        }
+        const parents = nestingParents(nestingItems);
+        const order = nestingOrder(nestingItems, parents);
+
+        // Working boxes, updated as we go so a parent sees refitted child boxes.
+        const workingBox = new Map<string, ContainerBox>();
+        for (const it of nestingItems) {
+            workingBox.set(it.stableid, it.box);
+        }
+
+        const refits: Array<{stableid: string; oldgeom: string; newgeom: string}> = [];
+        for (const cid of order) {
+            const container = containers.find(c => c.stableid === cid);
+            const box = workingBox.get(cid);
+            if (!container || !box) {
                 continue;
             }
-            const members = state.nodes
+            const memberBoxes = state.nodes
                 .filter(n => stored[n.stableid] && centerInBox(stored[n.stableid], box))
-                .map(n => n.stableid);
-            // Nested containers count as members too: a container whose centre
-            // lies inside this one must keep enclosing it after re-arrange, so
-            // an outer container refits around the inner container's fixed box
-            // (not just the inner container's nodes). Without this the outer
-            // container collapses onto the inner one, losing the visual nesting.
+                .map(n => boxOf(n.stableid, auto));
+            // Only direct children count, and only their current working boxes.
             const childBoxes: ContainerBox[] = [];
-            for (const other of containers) {
-                if (other.stableid === c.stableid) {
-                    continue;
-                }
-                const otherBox = parseGeometry(other.geometryjson);
-                if (!otherBox) {
-                    continue;
-                }
-                const otherCentre = {x: otherBox.x + otherBox.w / 2, y: otherBox.y + otherBox.h / 2};
-                if (centerInBox(otherCentre, box)) {
-                    childBoxes.push(otherBox);
+            for (const it of nestingItems) {
+                if (parents.get(it.stableid) === cid) {
+                    const cb = workingBox.get(it.stableid);
+                    if (cb) {
+                        childBoxes.push(cb);
+                    }
                 }
             }
-            if (members.length === 0 && childBoxes.length === 0) {
+            if (memberBoxes.length === 0 && childBoxes.length === 0) {
                 continue; // Empty container: leave it where it is.
             }
-            const memberBoxes = members.map(id => boxOf(id, auto));
             const fit = boundingBox([...memberBoxes, ...childBoxes], CONTAINER_REFIT_PAD);
             if (!fit) {
                 continue;
             }
+            workingBox.set(cid, fit);
             const newgeom = serializeGeometry(fit);
-            const oldgeom = c.geometryjson ?? serializeGeometry(box);
+            const oldgeom = container.geometryjson ?? serializeGeometry(box);
             if (newgeom !== oldgeom) {
-                refits.push({stableid: c.stableid, oldgeom, newgeom});
+                refits.push({stableid: cid, oldgeom, newgeom});
             }
         }
 
@@ -996,6 +1013,13 @@ export function EditorApp(props: Props): React.ReactElement {
                         {addNodeControls}
                         {addRelationControls}
                     </div>
+                    <JournalPanel
+                        api={api}
+                        workspaceid={state.workspaceid}
+                        allowPrivate={state.journalallowprivate === true}
+                        revision={state.revision}
+                        t={t}
+                    />
                 </>
             ) : (
                 <>
@@ -1003,6 +1027,13 @@ export function EditorApp(props: Props): React.ReactElement {
                         {addNodeControls}
                         {addRelationControls}
                     </div>
+                    <JournalPanel
+                        api={api}
+                        workspaceid={state.workspaceid}
+                        allowPrivate={state.journalallowprivate === true}
+                        revision={state.revision}
+                        t={t}
+                    />
                     <RelationListView
                         state={state}
                         disabled={disabled}
@@ -1041,10 +1072,6 @@ export function EditorApp(props: Props): React.ReactElement {
                     {t('editor:importreplace')}
                 </label>
             </div>
-
-            <JournalPanel api={api} workspaceid={state.workspaceid} t={t} />
-
-            <p className="text-muted small mt-2">{t('editor:revision')}: {state.revision}</p>
         </div>
     );
 }

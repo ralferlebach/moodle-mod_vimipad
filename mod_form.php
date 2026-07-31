@@ -73,6 +73,16 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->setDefault('aienabled', 0);
         $mform->addHelpButton('aienabled', 'aienabled', 'mod_vimipad');
 
+        // Journal: whether learners may keep individual entries private (hidden
+        // from teachers). Off by default — teachers can read the journal.
+        $mform->addElement(
+            'advcheckbox',
+            'journalallowprivate',
+            get_string('journalallowprivate', 'mod_vimipad')
+        );
+        $mform->setDefault('journalallowprivate', 0);
+        $mform->addHelpButton('journalallowprivate', 'journalallowprivate', 'mod_vimipad');
+
         $mform->addElement(
             'text',
             'channelurl',

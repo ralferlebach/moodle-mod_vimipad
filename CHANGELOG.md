@@ -4,7 +4,69 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.7.11** (2026072749).
+> release is **0.7.13** (2026072751).
+
+## 0.7.13 (2026072751) — block G: journal layout and re-arrange chain propagation
+
+- **Journal input restored to the two-column control layout.** The journal
+  input area now lines up in the same grid as the concept/relation add menus —
+  concept and relation side by side, journal below with its textarea and save
+  button — instead of appearing as a detached block. The journal legend shows
+  the current map revision as a muted italic reference number on the right, and
+  the redundant separate revision line beneath the editor is removed.
+- **Re-arrange size propagation confirmed child-to-parent.** Re-arrange already
+  processes containers deepest-child first and feeds each parent its children's
+  already-refitted boxes, so a node that enlarges the innermost container
+  propagates the growth outward through every ancestor to the root. Added a
+  three-level propagation test (`a node enlarging the innermost container
+  propagates out to the root`) that asserts each ancestor encloses its refitted
+  child after a node forces the inner box to grow.
+- Verified: 251 backend tests green, 245 Jest tests green, tsc clean, esbuild
+  bundle rebuilt, `init.min.js` reproducible through Grunt, phpcs clean.
+
+## 0.7.12 (2026072750) — block G: learning-journal rework and stable nested-container re-arrange
+
+Reworks the learning journal from manual UI feedback (point 3 of a batch).
+
+- **Journal is now an open input area**, placed directly under the
+  concept/relation controls in both the canvas and list views, instead of a
+  collapsed accordion at the bottom. The in-panel playback of past entries is
+  removed (entries are reviewed elsewhere); the save button uses a fountain-pen
+  icon (`fa-pen-fancy`) in the style of the concept/relation add buttons and
+  confirms with a saved message.
+- **Teachers can read the journal by default.** New activity setting
+  `journalallowprivate` (default off): when off, every entry is visible to
+  teachers; when on, learners may mark individual entries as a private note
+  ("not visible to teachers"). The checkbox meaning is inverted accordingly
+  (from "visible to teacher" to "private note"), and the private option only
+  appears when the activity allows it. The gate is enforced server-side in
+  `journal_service::add_entry()` — a client cannot hide an entry when the
+  activity forbids it.
+- **Visibility encoding made self-safe.** `journalentry.visibility` is now
+  `0 = teacher-visible (default), 1 = private`, so the safe state is the column
+  default; the service works through the `VISIBILITY_*` constants throughout, so
+  graders (`get_teacher_visible`) and privacy export are unaffected.
+- Backup/restore carries the new `journalallowprivate` setting (added to the
+  activity backup element and covered by the real backup/restore test). The
+  upgrade adds the field with a `field_exists` guard; a real 0.6.24 → 0.7.12
+  upgrade on a fresh site was run to confirm the field is created (default 0,
+  not null) and the journal visibility default is correct.
+- **Nested-container re-arrange made stable (no runaway growth, no hierarchy
+  flipping).** Re-arrange now builds an acyclic nesting forest from the current
+  container boxes — a container is a child of another only if the other is
+  *strictly larger* by area and encloses its centre — and refits inner
+  containers before outer ones, each around its member nodes plus its direct
+  children's already-refitted boxes. The previous centre-only rule treated two
+  overlapping same-size containers as mutual children, which made the relation
+  cyclic and caused both containers to inflate and swap inner/outer on each
+  pass. New pure helpers `nestingParents` / `nestingOrder` / `boxArea` with
+  tests for the tightest-encloser choice, the no-cycle case for equal boxes,
+  the deepest-first ordering, and convergence of repeated refits.
+- Verified: 251 backend tests green (journal service test rewritten for the new
+  signature and the private-requires-allowprivate contract; backup/restore test
+  extended and confirms `journalallowprivate` round-trips), 244 Jest tests green,
+  tsc clean, esbuild bundle rebuilt (old playback markup gone), `init.min.js`
+  reproducible through Grunt, phpcs / phpdoc / savepoints / validate clean.
 
 ## 0.7.11 (2026072749) — block G: nested-container re-arrange and container locking
 

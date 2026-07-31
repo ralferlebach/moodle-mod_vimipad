@@ -240,13 +240,13 @@ export class ApiClient {
     async addJournalEntry(
         workspaceid: number,
         entrytext: string,
-        visibility: number
+        priv: boolean
     ): Promise<{id: number}> {
         const result = await this.transport('mod_vimipad_add_journal_entry', {
             cmid: this.cmid,
             workspaceid,
             entrytext,
-            visibility,
+            private: priv ? 1 : 0,
         });
         return result as {id: number};
     }

@@ -81,6 +81,8 @@ export interface WorkspaceState {
     canmanage?: boolean;
     /** Whether learners may also toggle lock mode in this activity. */
     lockmodeforlearners?: boolean;
+    /** Whether learners may mark journal entries as private (hidden from teachers). */
+    journalallowprivate?: boolean;
     collab?: CollabConfig;
 }
 

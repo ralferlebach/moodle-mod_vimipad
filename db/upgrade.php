@@ -416,5 +416,20 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072743, 'vimipad');
     }
 
+    if ($oldversion < 2026072750) {
+        // New activity setting: allow learners to mark journal entries as
+        // private (hidden from teachers). Default 0 keeps every entry visible
+        // to teachers, matching the new "teachers can always read the journal"
+        // baseline. The journalentry.visibility encoding is now
+        // 0=teacher-visible (default), 1=private; no data migration is needed.
+        $table = new xmldb_table('vimipad');
+        $field = new xmldb_field('journalallowprivate', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'peerreviewmode');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026072750, 'vimipad');
+    }
+
     return true;
 }

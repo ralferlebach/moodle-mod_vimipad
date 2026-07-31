@@ -27,6 +27,7 @@
         <FIELD NAME="referencemapjson" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Frozen copy of the reference solution map (normalized snapshot JSON), decoupled from learner workspaces so it survives userinfo-less backups and privacy deletion"/>
         <FIELD NAME="matchmode" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Label matching strategy for content scorers: 0 exact, 1 fuzzy, 2 word-overlap"/>
         <FIELD NAME="peerreviewmode" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if students review each other's submitted maps"/>
+        <FIELD NAME="journalallowprivate" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 if learners may mark individual journal entries as private (hidden from teachers); default 0 = all entries visible to teachers"/>
         <FIELD NAME="peerreviewcount" TYPE="int" LENGTH="3" NOTNULL="true" DEFAULT="2" SEQUENCE="false" COMMENT="How many peer reviews each submission should receive"/>
         <FIELD NAME="activescorers" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Comma-separated scorer keys to run; empty or null means every installed scorer"/>
         <FIELD NAME="requiredconcepts" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Required concept labels (newline/comma separated); empty = none"/>
@@ -309,7 +310,7 @@
         <FIELD NAME="revisionref" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Map revision the entry refers to, if any"/>
         <FIELD NAME="entrytext" TYPE="text" NOTNULL="true" SEQUENCE="false" COMMENT="May contain recorded audio via the Moodle editor"/>
         <FIELD NAME="entryformat" TYPE="int" LENGTH="4" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
-        <FIELD NAME="visibility" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0=private,1=teacher-visible"/>
+        <FIELD NAME="visibility" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="0=teacher-visible (default), 1=private (hidden from teachers)"/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="timemodified" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>

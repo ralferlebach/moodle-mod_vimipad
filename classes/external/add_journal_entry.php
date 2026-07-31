@@ -40,7 +40,12 @@ class add_journal_entry extends external_api {
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'workspaceid' => new external_value(PARAM_INT, 'Workspace id'),
             'entrytext' => new external_value(PARAM_RAW, 'Entry text'),
-            'visibility' => new external_value(PARAM_INT, '0 private, 1 teacher-visible', VALUE_DEFAULT, 0),
+            'private' => new external_value(
+                PARAM_BOOL,
+                '1 to keep the entry private (hidden from teachers), if the activity allows it',
+                VALUE_DEFAULT,
+                0
+            ),
         ]);
     }
 
@@ -50,17 +55,17 @@ class add_journal_entry extends external_api {
      * @param int $cmid The course module id.
      * @param int $workspaceid The workspace id.
      * @param string $entrytext The entry text.
-     * @param int $visibility 0 private, 1 teacher-visible.
+     * @param bool $private 1 to keep the entry private (if the activity allows it).
      * @return array The new entry id.
      */
-    public static function execute(int $cmid, int $workspaceid, string $entrytext, int $visibility = 0): array {
+    public static function execute(int $cmid, int $workspaceid, string $entrytext, bool $private = false): array {
         global $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'cmid' => $cmid,
             'workspaceid' => $workspaceid,
             'entrytext' => $entrytext,
-            'visibility' => $visibility,
+            'private' => $private,
         ]);
 
         helper::validate_workspace_for_edit($params['cmid'], $params['workspaceid'], $instance, $workspace);
@@ -75,7 +80,8 @@ class add_journal_entry extends external_api {
             (int) $USER->id,
             $params['entrytext'],
             FORMAT_PLAIN,
-            $params['visibility'],
+            (bool) $params['private'],
+            !empty($instance->journalallowprivate),
             (int) $workspace->currentrevision
         );
 
