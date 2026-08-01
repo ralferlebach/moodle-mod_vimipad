@@ -4,7 +4,23 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.7.21** (2026072759).
+> release is **0.7.22** (2026072760).
+
+## 0.7.22 (2026072760) — CI lint fix and Tools tab moved to the far right
+
+- **Fix the CI AMD lint failure.** `amd/src/init.js` used a nested ternary to
+  pick the initial view (added in 0.7.14 for the tools view), which trips
+  eslint's `no-nested-ternary`. The CI runs `grunt amd` with
+  `--max-lint-warnings=0`, so that one warning aborted the build. The view is
+  now resolved with an explicit lookup (`knownViews.indexOf(...)`), no nested
+  ternary. Verified with the exact CI command
+  (`grunt amd --files=…init.js,…revision.js --max-lint-warnings=0`) exiting 0.
+- **Tools tab moved to the far right.** The `tools` tab now comes after
+  feedback, peer and grade in the tab bar (it was fourth, right after journal).
+  The default/auto-open tab stays canvas, so nothing routes to tools by
+  accident.
+- Verified: 254 backend tests green, 250 Jest tests green, tsc clean, esbuild
+  bundle rebuilt, `init.min.js` reproducible through Grunt, phpcs clean.
 
 ## 0.7.21 (2026072759) — list view: full-width table, matched heading, merged double-arrow actions
 

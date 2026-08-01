@@ -126,12 +126,13 @@ export const init = async(cmid, selector = 'vimipad-editor-root') => {
 
     try {
         const [strings, editor] = await Promise.all([loadStrings(), loadEditor()]);
+        const requestedView = element.dataset.view;
+        const knownViews = ['list', 'tools'];
+        const initialView = knownViews.indexOf(requestedView) !== -1 ? requestedView : 'canvas';
         editor.mount(element, {
             cmid,
             groupid: parseInt(element.dataset.groupid || '0', 10),
-            initialView: element.dataset.view === 'list'
-                ? 'list'
-                : (element.dataset.view === 'tools' ? 'tools' : 'canvas'),
+            initialView,
             readonly: element.dataset.readonly === '1',
             targetUserid: parseInt(element.dataset.targetuserid || '0', 10),
             callService: buildTransport(),

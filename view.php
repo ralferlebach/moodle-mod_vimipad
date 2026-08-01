@@ -101,10 +101,10 @@ $tabgates = [
     'canvas' => $canview,
     'list' => $canview,
     'journal' => $canview,
-    'tools' => $canedit,
     'feedback' => $hasfeedback,
     'peer' => !empty($instance->peerreviewmode) && has_capability('mod/vimipad:peerreview', $context),
     'grade' => $cangrade,
+    'tools' => $canedit,
 ];
 $availabletabs = array_keys(array_filter($tabgates));
 
