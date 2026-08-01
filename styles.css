@@ -403,10 +403,36 @@
    Mobile / touch polish
    ------------------------------------------------------------------------- */
 
+/* List view: heading, a boxed concept list, then the relation table — all at
+   full width. */
+.vimipad-listview {
+    width: 100%;
+    margin-top: 0.75rem;
+}
+
+.vimipad-listview-heading {
+    margin-bottom: 0.5rem;
+}
+
+.vimipad-node-box {
+    width: 100%;
+    border: 1px solid var(--vimipad-border, #dee2e6);
+    border-radius: 0.375rem;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.75rem;
+    background: var(--vimipad-surface-muted, #f8f9fa);
+}
+
+.vimipad-node-box-label {
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
 /* Let the relation table scroll horizontally instead of overflowing on
    narrow screens (the list view is the primary mobile editing surface). */
 .vimipad-relation-list {
     display: block;
+    width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }

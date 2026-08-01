@@ -87,19 +87,23 @@ export function RelationListView(props: Props): React.ReactElement {
     };
 
     return (
-        <>
-            <ul className="vimipad-node-chips list-inline mb-2" aria-label={t('editor:dragnodes')}>
-                {state.nodes.map(n => (
-                    <li
-                        key={n.stableid}
-                        className="list-inline-item badge badge-secondary"
-                        draggable={!disabled}
-                        onDragStart={e => e.dataTransfer.setData(DND_MIME, n.stableid)}
-                    >
-                        {n.label}
-                    </li>
-                ))}
-            </ul>
+        <div className="vimipad-listview">
+            <h3 className="h5 vimipad-listview-heading">{t('editor:conceptsandrelations')}</h3>
+            <div className="vimipad-node-box" aria-label={t('editor:concepts')}>
+                <span className="vimipad-node-box-label text-muted small">{t('editor:concepts')}</span>
+                <ul className="vimipad-node-chips list-inline mb-0" aria-label={t('editor:dragnodes')}>
+                    {state.nodes.map(n => (
+                        <li
+                            key={n.stableid}
+                            className="list-inline-item badge badge-secondary"
+                            draggable={!disabled}
+                            onDragStart={e => e.dataTransfer.setData(DND_MIME, n.stableid)}
+                        >
+                            {n.label}
+                        </li>
+                    ))}
+                </ul>
+            </div>
 
             <table className="table table-sm vimipad-relation-list">
                 <caption className="vimipad-sr-only">{t('editor:relations')}</caption>
@@ -228,6 +232,6 @@ export function RelationListView(props: Props): React.ReactElement {
                     })}
                 </tbody>
             </table>
-        </>
+        </div>
     );
 }

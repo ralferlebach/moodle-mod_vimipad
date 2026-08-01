@@ -4,7 +4,53 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.7.16** (2026072754).
+> release is **0.7.18** (2026072756).
+
+## 0.7.18 (2026072756) — learner feedback visibility (beta blocker)
+
+Closes the beta blocker from earlier analysis: participants had no reliable
+in-plugin view of their grading feedback (the grade reached the gradebook, but
+the feedback text was only visible to teachers behind `mod/vimipad:grade`).
+
+- **New learner-facing Feedback tab.** A `feedback` tab appears for a learner
+  once their own submission is graded (`get_feedback_for_user` returns a graded
+  row), and is hidden otherwise. It shows the grade (as `x / max`), the written
+  feedback text (rendered through `format_text` in the activity context) and
+  the grading date. Before grading, the tab is absent; the panel itself shows a
+  neutral "not graded yet" notice if reached directly.
+- **Service support.** `grading_service::get_feedback_for_user()` returns a
+  learner's grade, feedback text, graded snapshot id and grading date from the
+  `vimipad_grade` source-of-truth table (per-member in group mode). No schema
+  change — the fields already existed; this only surfaces them to the learner.
+- The annotated-map view for the graded snapshot is intentionally deferred to
+  the revision-viewer work (it reuses that renderer via the stored
+  `snapshotid`).
+- New strings `feedback:none` / `feedback:gradeheading` / `feedback:textheading`
+  / `feedback:dategraded` (EN/DE); the previously unused `tab:feedback` string
+  is now in use.
+- New PHPUnit suite `feedback_visibility_test` (no feedback before grading, full
+  feedback after grading, and the panel rendering both states). Verified: 254
+  backend tests green, each test file individually, phpcs / phpdoc / validate /
+  savepoints clean.
+
+## 0.7.17 (2026072755) — block G: list view restructured
+
+Restructures the list view from manual UI feedback.
+
+- **Journal moved to the bottom of the list view.** In the list view the
+  journal input (with its heading) now sits at the very end of the page, after
+  the relation table, instead of between the add controls and the table. (The
+  canvas view keeps the journal directly under the add controls.)
+- **Heading over the tabular list.** A "Concepts and relations" heading
+  (`editor:conceptsandrelations`) now sits above the list.
+- **Concepts presented in a box.** The concept (node) chips are wrapped in a
+  labelled full-width box above the relation table, instead of a bare inline
+  list.
+- **Full width.** The concept box and the relation table both span the full
+  page width.
+- New strings `editor:concepts` / `editor:conceptsandrelations` (EN/DE).
+- Verified: 245 Jest tests green, tsc clean, esbuild bundle rebuilt,
+  `init.min.js` reproducible through Grunt, phpcs clean, new strings resolve.
 
 ## 0.7.16 (2026072754) — block G: journal save button matches the add buttons
 

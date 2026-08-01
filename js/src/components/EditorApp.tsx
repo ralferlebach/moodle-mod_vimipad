@@ -1027,19 +1027,19 @@ export function EditorApp(props: Props): React.ReactElement {
                         {addNodeControls}
                         {addRelationControls}
                     </div>
-                    <JournalPanel
-                        api={api}
-                        workspaceid={state.workspaceid}
-                        allowPrivate={state.journalallowprivate === true}
-                        revision={state.revision}
-                        t={t}
-                    />
                     <RelationListView
                         state={state}
                         disabled={disabled}
                         onDeleteRelation={deleteRelation}
                         onRetarget={retarget}
                         onRenameRelation={renameRelation}
+                        t={t}
+                    />
+                    <JournalPanel
+                        api={api}
+                        workspaceid={state.workspaceid}
+                        allowPrivate={state.journalallowprivate === true}
+                        revision={state.revision}
                         t={t}
                     />
                 </>

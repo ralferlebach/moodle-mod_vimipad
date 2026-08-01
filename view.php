@@ -93,11 +93,16 @@ if ($showuserselector) {
 
 // Server-rendered, role-gated tabs. The active tab travels in the URL so it is
 // shareable and persists alongside the group selection.
+// A learner sees the feedback tab once their own submission is graded.
+$hasfeedback = $canview && (new \mod_vimipad\local\service\grading_service())
+    ->get_feedback_for_user($instance, (int) $USER->id) !== null;
+
 $tabgates = [
     'canvas' => $canview,
     'list' => $canview,
     'journal' => $canview,
     'tools' => $canedit,
+    'feedback' => $hasfeedback,
     'peer' => !empty($instance->peerreviewmode) && has_capability('mod/vimipad:peerreview', $context),
     'grade' => $cangrade,
 ];
@@ -431,6 +436,11 @@ switch ($tab) {
             }
             echo html_writer::table($table);
         }
+        break;
+
+    case 'feedback':
+        echo $OUTPUT->heading(get_string('tab:feedback', 'mod_vimipad'), 3);
+        echo \mod_vimipad\local\output\feedback_panel::render($context, $instance, (int) $USER->id);
         break;
 
     case 'peer':

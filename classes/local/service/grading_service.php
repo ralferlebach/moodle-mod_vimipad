@@ -171,4 +171,33 @@ class grading_service {
         }
         return $grades;
     }
+
+    /**
+     * The grade and feedback shown to a learner for their own submission.
+     *
+     * Returns the learner's grade row (grade, feedback text, the graded
+     * snapshot id and when it was graded), or null when the learner has no
+     * graded submission yet. In group mode the grade is stored per member, so
+     * the member's own row is returned.
+     *
+     * @param stdClass $instance The activity instance.
+     * @param int $userid The learner.
+     * @return stdClass|null The feedback record, or null if not graded.
+     */
+    public function get_feedback_for_user(stdClass $instance, int $userid): ?stdClass {
+        global $DB;
+
+        $row = $DB->get_record('vimipad_grade', ['vimipadid' => $instance->id, 'userid' => $userid]);
+        if (!$row || $row->grade === null) {
+            return null;
+        }
+        return (object) [
+            'grade' => (float) $row->grade,
+            'grademax' => (float) $instance->grade,
+            'feedback' => (string) $row->feedback,
+            'feedbackformat' => (int) $row->feedbackformat,
+            'snapshotid' => $row->snapshotid !== null ? (int) $row->snapshotid : null,
+            'dategraded' => (int) $row->timemodified,
+        ];
+    }
 }
