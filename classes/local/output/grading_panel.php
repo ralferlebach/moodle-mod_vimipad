@@ -102,6 +102,11 @@ class grading_panel {
                 }
             }
             $commenttext = required_param('commenttext', PARAM_TEXT);
+            \mod_vimipad\local\policy\limits::check_text(
+                $commenttext,
+                \mod_vimipad\local\policy\limits::MAX_TEXT,
+                'annotation'
+            );
             if (trim($commenttext) !== '') {
                 $DB->insert_record('vimipad_annotation', (object) [
                     'snapshotid' => $snapshotid,
@@ -474,16 +479,28 @@ class grading_panel {
         echo html_writer::tag('h5', $scorer->get_name(), ['class' => 'mt-3']);
 
         if (!optional_param('runai', 0, PARAM_BOOL)) {
-            $runurl = new moodle_url($pageurl, ['runai' => 1, 'sesskey' => sesskey()]);
-            echo html_writer::link(
-                $runurl,
-                get_string('runai', 'mod_vimipad'),
-                ['class' => 'btn btn-sm btn-outline-info']
-            );
+            // A state-changing, cost-incurring action: use a POST form with
+            // sesskey rather than a GET link, so it cannot be triggered by
+            // prefetch, history navigation or re-opening the URL.
+            echo html_writer::start_tag('form', [
+                'method' => 'post',
+                'action' => $pageurl->out(false),
+                'class' => 'vimipad-runai-form',
+            ]);
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'runai', 'value' => 1]);
+            echo html_writer::tag('button', get_string('runai', 'mod_vimipad'), [
+                'type' => 'submit', 'class' => 'btn btn-sm btn-outline-info',
+            ]);
+            echo html_writer::end_tag('form');
             echo html_writer::div(get_string('runaihint', 'mod_vimipad'), 'text-muted small mt-1');
             return;
         }
 
+        // Only act on a POST with a valid sesskey (reject GET-triggered runs).
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            return;
+        }
         if (!confirm_sesskey()) {
             return;
         }

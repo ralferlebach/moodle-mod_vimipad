@@ -59,6 +59,18 @@ class limits {
     /** @var float Maximum absolute canvas coordinate / dimension. */
     public const MAX_COORDINATE = 1000000.0;
 
+    /** @var int Maximum length of teacher AI notes fed into a prompt (chars). */
+    public const MAX_AI_NOTES = 5000;
+
+    /** @var int Maximum length of a full AI prompt sent to the provider (chars). */
+    public const MAX_AI_PROMPT = 40000;
+
+    /** @var int Maximum length of a generated AI draft stored/returned (chars). */
+    public const MAX_AI_DRAFT = 20000;
+
+    /** @var int Maximum length of stored provider info (char(255) column). */
+    public const MAX_AI_PROVIDERINFO = 255;
+
     /**
      * Enforce a maximum string length.
      *
@@ -71,6 +83,26 @@ class limits {
     public static function check_text(?string $value, int $max, string $what): void {
         if ($value !== null && \core_text::strlen($value) > $max) {
             throw new \moodle_exception('error:textlimit', 'mod_vimipad', '', (object) ['what' => $what, 'max' => $max]);
+        }
+    }
+
+    /**
+     * Enforce a maximum byte length (for payload/file sizes, not text fields).
+     *
+     * Unlike check_text, which counts Unicode characters for human-facing text
+     * limits, this counts bytes with strlen(), so a byte-documented cap such as
+     * MAX_LAYOUT_BYTES / MAX_IMPORT_BYTES is actually enforced in bytes even for
+     * multibyte payloads.
+     *
+     * @param string|null $value The value (null is fine).
+     * @param int $maxbytes The maximum size in bytes.
+     * @param string $what A short identifier for the error message.
+     * @return void
+     * @throws \moodle_exception error:bytelimit when the value is too large.
+     */
+    public static function check_bytes(?string $value, int $maxbytes, string $what): void {
+        if ($value !== null && strlen($value) > $maxbytes) {
+            throw new \moodle_exception('error:bytelimit', 'mod_vimipad', '', (object) ['what' => $what, 'max' => $maxbytes]);
         }
     }
 

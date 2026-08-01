@@ -228,4 +228,70 @@ final class lock_service_test extends \advanced_testcase {
 
         $this->assertSame(1, $DB->count_records('vimipad_lock', ['workspaceid' => $this->workspaceid]));
     }
+
+    /**
+     * Compare-and-swap: if another caller takes over an expired lease between
+     * this caller's read and write, this caller must NOT also report success.
+     * We simulate the interleaving by mutating the row to a fresh holder after
+     * the expired state is established, matching the CAS precondition failing.
+     *
+     * @return void
+     */
+    public function test_expired_takeover_is_compare_and_swap(): void {
+        global $DB;
+        $service = new lock_service();
+
+        // An expired lease held by 101.
+        $id = (int) $DB->insert_record('vimipad_lock', (object) [
+            'workspaceid' => $this->workspaceid, 'targettype' => 'node',
+            'targetstableid' => 'node_aaaaaaaaaaaa', 'userid' => 101,
+            'timeacquired' => time() - 100, 'timeexpires' => time() - 10,
+        ]);
+
+        // A concurrent winner (303) grabs the lease first: the row no longer
+        // matches the (olduser=101, oldexpiry) that a racing caller read.
+        $DB->update_record('vimipad_lock', (object) [
+            'id' => $id, 'userid' => 303,
+            'timeacquired' => time(), 'timeexpires' => time() + 15,
+        ]);
+
+        // A caller that read the pre-takeover (expired, 101) state now tries to
+        // acquire. The lease is currently held validly by 303, so acquire must
+        // refuse and report 303, not overwrite it.
+        $result = $service->acquire($this->workspaceid, 'node', 'node_aaaaaaaaaaaa', 202, 15);
+        $this->assertFalse((bool) $result->acquired);
+        $this->assertSame(303, (int) $result->userid);
+    }
+
+    /**
+     * Owner-renewal edge case: if the caller's OWN lease has expired and a
+     * different user has taken it over in the meantime, the original owner must
+     * not overwrite the new holder with an unconditional update. Routing the
+     * owner's expired lease through the CAS path prevents that.
+     *
+     * @return void
+     */
+    public function test_expired_own_lease_does_not_clobber_new_holder(): void {
+        global $DB;
+        $service = new lock_service();
+
+        // User 202 held a lease that has since expired.
+        $id = (int) $DB->insert_record('vimipad_lock', (object) [
+            'workspaceid' => $this->workspaceid, 'targettype' => 'node',
+            'targetstableid' => 'node_aaaaaaaaaaaa', 'userid' => 202,
+            'timeacquired' => time() - 100, 'timeexpires' => time() - 10,
+        ]);
+
+        // A new user 303 validly took it over (CAS winner).
+        $DB->update_record('vimipad_lock', (object) [
+            'id' => $id, 'userid' => 303,
+            'timeacquired' => time(), 'timeexpires' => time() + 15,
+        ]);
+
+        // The original owner 202, acting on its stale (expired) view, tries to
+        // renew. It must not overwrite 303: acquire refuses and reports 303.
+        $result = $service->acquire($this->workspaceid, 'node', 'node_aaaaaaaaaaaa', 202, 15);
+        $this->assertFalse((bool) $result->acquired);
+        $this->assertSame(303, (int) $result->userid);
+    }
 }

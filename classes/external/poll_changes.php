@@ -107,11 +107,8 @@ class poll_changes extends external_api {
         );
 
         $lockservice = new lock_service();
-        // Expired-lease cleanup is housekeeping, not needed on every read: run it
-        // occasionally rather than in the hot poll path.
-        if (mt_rand(1, 10) === 1) {
-            $lockservice->purge_expired((int) $workspace->id);
-        }
+        // Expired-lease cleanup runs in the purge_expired_locks scheduled task,
+        // not in this hot read path.
         $leases = [];
         foreach ($lockservice->get_active_leases((int) $workspace->id) as $lease) {
             $leases[] = [

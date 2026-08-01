@@ -25,10 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'vimipadassess_llm';
-$plugin->version   = 2026072700;
+$plugin->version   = 2026072701;
 $plugin->requires  = 2024100700;
 $plugin->maturity  = MATURITY_ALPHA;
 $plugin->release   = '0.1.0';
 $plugin->dependencies = [
-    'mod_vimipad' => ANY_VERSION,
+    // Depends on the stable assess (prompt_scorer) API frozen in 0.7.27.
+    'mod_vimipad' => 2026072766,
 ];

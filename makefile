@@ -58,7 +58,7 @@ fix: clear fix-phpdoc fix-lint-php build
 	@echo ""
 	@echo "=== All fixes complete. ==="
 
-check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-react build test-react phpunit
+check: clear lint-php lint-phpdoc lint-mustache lint-cpd lint-js lint-react build test-react phpunit
 	@echo ""
 	@echo "=== All checks complete. Review output above for errors. ==="
 

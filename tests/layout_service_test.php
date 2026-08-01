@@ -85,14 +85,30 @@ final class layout_service_test extends \advanced_testcase {
         global $DB;
         $service = new layout_service();
 
-        $service->save($this->workspaceid, 'conceptmap', '{"a":1}', '', $this->userid);
-        $service->save($this->workspaceid, 'conceptmap', '{"a":2}', '', $this->userid);
+        $first = '{"v":1,"pos":{"n1":{"x":1,"y":1}}}';
+        $second = '{"v":1,"pos":{"n1":{"x":2,"y":2}}}';
+        $service->save($this->workspaceid, 'conceptmap', $first, '', $this->userid);
+        $service->save($this->workspaceid, 'conceptmap', $second, '', $this->userid);
 
         $this->assertSame(1, $DB->count_records(
             'vimipad_layout',
             ['workspaceid' => $this->workspaceid, 'profile' => 'conceptmap']
         ));
-        $this->assertSame('{"a":2}', $service->get_layout_json($this->workspaceid, 'conceptmap'));
+        $this->assertSame($second, $service->get_layout_json($this->workspaceid, 'conceptmap'));
+    }
+
+    /**
+     * The layout schema is enforced at the service boundary, so an invalid
+     * payload is rejected even when it reaches save() directly (e.g. via the
+     * import path), not only through the external endpoint.
+     *
+     * @return void
+     */
+    public function test_service_rejects_invalid_layout(): void {
+        $service = new layout_service();
+        $this->expectException(\moodle_exception::class);
+        // A scalar root is not a valid layout; save() must reject it.
+        $service->save($this->workspaceid, 'conceptmap', '42', '', $this->userid);
     }
 
     /**
@@ -103,11 +119,13 @@ final class layout_service_test extends \advanced_testcase {
     public function test_layout_is_per_profile(): void {
         $service = new layout_service();
 
-        $service->save($this->workspaceid, 'conceptmap', '{"c":1}', '', $this->userid);
-        $service->save($this->workspaceid, 'mindmap', '{"m":1}', '', $this->userid);
+        $cmap = '{"v":1,"pos":{"c":{"x":1,"y":1}}}';
+        $mmap = '{"v":1,"pos":{"m":{"x":2,"y":2}}}';
+        $service->save($this->workspaceid, 'conceptmap', $cmap, '', $this->userid);
+        $service->save($this->workspaceid, 'mindmap', $mmap, '', $this->userid);
 
-        $this->assertSame('{"c":1}', $service->get_layout_json($this->workspaceid, 'conceptmap'));
-        $this->assertSame('{"m":1}', $service->get_layout_json($this->workspaceid, 'mindmap'));
+        $this->assertSame($cmap, $service->get_layout_json($this->workspaceid, 'conceptmap'));
+        $this->assertSame($mmap, $service->get_layout_json($this->workspaceid, 'mindmap'));
     }
 
     /**

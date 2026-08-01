@@ -74,6 +74,23 @@ class peer_review_service {
 
         $created = 0;
         $now = time();
+
+        // Load all existing (snapshotid, reviewerid) pairs for these snapshots
+        // once into a lookup set, instead of a record_exists() per candidate
+        // pair inside the loop (which was O(snapshots x reviewers) queries).
+        $existing = [];
+        [$insql, $inparams] = $DB->get_in_or_equal($snapshotids, SQL_PARAMS_NAMED, 'sn');
+        $rows = $DB->get_records_select(
+            'vimipad_peerreview',
+            "snapshotid $insql",
+            $inparams,
+            '',
+            'id, snapshotid, reviewerid'
+        );
+        foreach ($rows as $row) {
+            $existing[(int) $row->snapshotid . ':' . (int) $row->reviewerid] = true;
+        }
+
         foreach ($snapshotids as $index => $snapshotid) {
             $ownerid = (int) $submissions[$snapshotid];
             $assigned = 0;
@@ -86,11 +103,8 @@ class peer_review_service {
                 if ($reviewerid === $ownerid) {
                     continue;
                 }
-                if (
-                    $DB->record_exists('vimipad_peerreview', [
-                    'snapshotid' => $snapshotid, 'reviewerid' => $reviewerid,
-                    ])
-                ) {
+                $key = (int) $snapshotid . ':' . $reviewerid;
+                if (isset($existing[$key])) {
                     $assigned++;
                     continue;
                 }
@@ -104,6 +118,7 @@ class peer_review_service {
                     'timeallocated' => $now,
                     'timemodified' => $now,
                 ]);
+                $existing[$key] = true;
                 $assigned++;
                 $created++;
             }
@@ -162,6 +177,12 @@ class peer_review_service {
      */
     public function save_review(int $snapshotid, int $reviewerid, ?float $score, string $comment): void {
         global $DB;
+
+        \mod_vimipad\local\policy\limits::check_text(
+            $comment,
+            \mod_vimipad\local\policy\limits::MAX_TEXT,
+            'reviewcomment'
+        );
 
         $review = $DB->get_record('vimipad_peerreview', [
             'snapshotid' => $snapshotid, 'reviewerid' => $reviewerid,

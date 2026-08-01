@@ -55,11 +55,21 @@ class layout_service {
         int $userid,
         string $mode = 'replace'
     ): void {
-        \mod_vimipad\local\policy\limits::check_text(
+        \mod_vimipad\local\policy\limits::check_bytes(
             $layoutjson,
             \mod_vimipad\local\policy\limits::MAX_LAYOUT_BYTES,
             'layout'
         );
+        \mod_vimipad\local\policy\limits::check_bytes(
+            $viewportjson,
+            \mod_vimipad\local\policy\limits::MAX_LAYOUT_BYTES,
+            'viewport'
+        );
+        // Enforce the structural layout/viewport schema at the service boundary,
+        // so every caller (external endpoint AND import path) is validated, not
+        // just the external endpoint.
+        \mod_vimipad\local\policy\layout_policy::validate_layout($layoutjson);
+        \mod_vimipad\local\policy\layout_policy::validate_viewport($viewportjson);
         $lockfactory = \core\lock\lock_config::get_lock_factory('mod_vimipad_layout');
         $lock = $lockfactory->get_lock($workspaceid . ':' . $profile, 5);
 

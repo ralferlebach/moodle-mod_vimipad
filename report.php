@@ -45,16 +45,19 @@ $PAGE->set_context($context);
  *
  * @param array $row The overview row (with userid, groupid keys).
  * @param array $users Prefetched user records keyed by id.
+ * @param array $groups Prefetched group records keyed by id (id, name).
  * @return string The owner label.
  */
-function vimipad_owner_label(array $row, array $users): string {
+function vimipad_owner_label(array $row, array $users, array $groups = []): string {
     if (!empty($row['userid'])) {
         return isset($users[$row['userid']])
             ? fullname($users[$row['userid']])
             : get_string('mode_individual', 'mod_vimipad');
     }
     if (!empty($row['groupid'])) {
-        return groups_get_group_name($row['groupid']) ?: get_string('mode_group', 'mod_vimipad');
+        return isset($groups[$row['groupid']])
+            ? $groups[$row['groupid']]->name
+            : get_string('mode_group', 'mod_vimipad');
     }
     return get_string('mode_course', 'mod_vimipad');
 }
@@ -132,19 +135,25 @@ if ($workspaceid) {
         ];
         // Pre-fetch owner records in one query for the whole overview.
         $ownerids = [];
+        $ownergroupids = [];
         foreach ($overview as $row) {
             if (!empty($row['userid'])) {
                 $ownerids[(int) $row['userid']] = true;
+            } else if (!empty($row['groupid'])) {
+                $ownergroupids[(int) $row['groupid']] = true;
             }
         }
         $owners = empty($ownerids) ? [] : $DB->get_records_list('user', 'id', array_keys($ownerids));
+        $ownergroups = empty($ownergroupids)
+            ? []
+            : $DB->get_records_list('groups', 'id', array_keys($ownergroupids), '', 'id, name');
         foreach ($overview as $row) {
             $detailurl = new moodle_url(
                 '/mod/vimipad/report.php',
                 ['cmid' => $cm->id, 'workspaceid' => $row['workspaceid']]
             );
             $table->data[] = [
-                html_writer::link($detailurl, s(vimipad_owner_label($row, $owners))),
+                html_writer::link($detailurl, s(vimipad_owner_label($row, $owners, $ownergroups))),
                 $row['total'],
                 $row['contributors'],
                 $row['lastactivity'] ? userdate($row['lastactivity']) : '-',

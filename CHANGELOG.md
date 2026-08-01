@@ -4,7 +4,223 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.7.25** (2026072764).
+> release is **0.7.31** (2026072770).
+
+## 0.7.31 (2026072770) — 0.7.x hardening close-out (final audit follow-ups)
+
+The final 0.7.x audit gives GO for controlled beta/pilot. This release folds in
+two small, non-blocking consistency follow-ups from that audit; the remaining
+items are tracked for 0.8.x.
+
+- **Layout schema is enforced at the service boundary.** `layout_policy`
+  validation now runs inside `layout_service::save()` rather than only in the
+  external endpoint, so the import path (which calls the service directly) is
+  validated too. The redundant endpoint check is removed (single source of
+  truth). A service-level test asserts an invalid payload is rejected there.
+- **security_review.md conclusion corrected.** The summary no longer lists the
+  layout schema and AI output limits as open — they are implemented and were
+  already documented as such earlier in the same file; the wording is now
+  consistent and reflects the 0.7.30 state.
+- Backlog updated to 0.7.30 state: the code-side 0.7.x hardening arc is closed;
+  remaining beta prerequisites are the empirical ones (concurrency/load tests,
+  replay benchmarks, accessibility, browser/DB and upgrade/backup-restore CI).
+  The heartbeat `renew()` full-CAS hardening, optional get_operations coverage
+  expansion, and the guest-access product decision are recorded as 0.8.x items.
+
+## 0.7.30 (2026072769) — Partial-history correctness, bounded checkpoints, AI & layout limits
+
+Addresses the 0.7.29 audit. Fixes a P0 where a protection-truncated revision
+history could be presented as complete, bounds the checkpoint model, and closes
+the remaining AI/layout resource limits and subplugin-versioning items.
+
+Revision player (P0):
+- **A truncated history is no longer shown as complete.** When op-log loading
+  stops at a protection limit, the player tracks `highestLoadedRevision`, builds
+  the replay engine only up to it, clamps the slider to it, and shows an explicit
+  truncation warning instead of implicitly treating unloaded revisions as empty
+  up to the workspace's real maxRevision.
+- **Completeness is checked by content fingerprint.** `isHistoryIncomplete` now
+  compares a per-element fingerprint over rendering fields (type, label, content,
+  endpoints, direction, geometry, metadata), not just stable-id sets, so a
+  missing update/retarget on existing elements (same ids, different content) is
+  detected. Tests cover truncation clamping, the warning, and content mismatch.
+
+Replay scaling (P1):
+- **Checkpoint count is bounded.** `ReplayEngine` now takes a `maxCheckpoints`
+  budget and spaces checkpoints `ceil(maxRevision / budget)` apart, so retained
+  checkpoints do not grow with history length. A test asserts a 2000-revision
+  history keeps ≤ budget+2 checkpoints while staying correct.
+- **No op-log rescan in stateAt.** Each checkpoint stores its op-array start
+  index and `nearestCheckpoint` uses binary search, so reconstructing a frame
+  starts at the checkpoint without a linear scan of the log.
+
+Concurrency (P2 from the audit reply):
+- **Owner-renewal is compare-and-swap too.** An owner extending its own lease now
+  updates conditionally on the row still matching; an owner whose lease had
+  expired is routed through the takeover CAS path, so it cannot overwrite a
+  concurrent taker. Covered by a dedicated test.
+
+Resource limits:
+- **AI limits** in `ai_feedback_service`: teacher notes and the overall prompt
+  are capped before the provider call; the generated draft and `providerinfo`
+  (to the char(255) column) and stored prompt context are bounded before
+  storage — no silent DB truncation. New `MAX_AI_*` limits.
+- **Central `layout_policy`** enforces the layout/viewport schema server-side:
+  object root, only known top-level fields, finite in-range coordinates,
+  positive sizes, and a bounded object count — rejecting payloads like `42`,
+  `true`, or `{"pos":{"n":{"x":"abc"}}}` that passed the JSON+byte checks.
+
+Subplugins:
+- **Concrete parent versions.** All assess (scorer) subplugins now depend on the
+  frozen assess API version instead of `ANY_VERSION`; the form and assess
+  subplugins that changed get a version bump so the Moodle upgrade contract is
+  clean.
+
+## 0.7.29 (2026072768) — Revision-player correctness & scaling, plus P1 follow-ups
+
+Addresses the 0.7.28 audit: the new revision player introduced a historical
+correctness bug and shifted scaling load unbounded onto the client. This release
+fixes both and closes the remaining P1 points.
+
+Revision player:
+- **Immutable historical frames (P0 fix).** Frame elements are now copied out of
+  the mutable accumulator, so a later node/relation/container update or a
+  relation retarget can no longer retroactively change an earlier frame. A
+  shallow copy is complete because element fields are primitives. Regression
+  tests assert frame immutability for updates, retargets and container changes,
+  and full deep-equality of `buildFrames(rev)` and `reconstructAt(rev)` — not
+  just element counts.
+- **Paginated `get_operations`.** The endpoint now takes `fromrevision` and
+  `limit`, caps the batch server-side (`MAX_BATCH = 500`), and returns `hasmore`
+  and `nextrevision`, so no single request pulls an unbounded op-log. A
+  dedicated PHP contract/IDOR test covers own/foreign workspace, revision
+  clamping, paging through all operations, and the cap.
+- **Bounded, checkpoint-based replay.** A new `ReplayEngine` keeps periodic
+  checkpoints plus a small LRU frame cache and reconstructs frames from the
+  nearest checkpoint forward, instead of retaining one full frame per revision
+  (which was O(N^2) in memory). The player pages the op-log in and reconstructs
+  on demand.
+- **Stronger history-completeness detection.** `isHistoryIncomplete` now compares
+  the sorted stable-id sets, not just element counts, so a same-count-but-
+  different-elements mismatch is detected.
+
+Resource limits, concurrency and CSRF:
+- **Byte-accurate payload limits.** New `limits::check_bytes` counts bytes (not
+  characters); layout and viewport payloads are checked against
+  `MAX_LAYOUT_BYTES` in bytes, so a multibyte payload cannot exceed the nominal
+  cap.
+- **Compare-and-swap lock takeover.** Taking over an expired lease now uses a
+  conditional update on the prior holder + expiry, so two concurrent callers
+  cannot both believe they acquired the lease. Covered by a concurrency test.
+- **POST-only state changes.** `runai` and `allocatereviews` moved from GET links
+  to POST forms with `sesskey` and a request-method check, so they cannot be
+  triggered by prefetch, history navigation or re-opening the URL.
+
+Correctness and packaging:
+- **Snapshot-based submission metrics.** The grading overview computes node and
+  relation counts from each submission's frozen snapshot JSON, not the live
+  tables, so a reopened-and-edited workspace no longer misreports the graded
+  submission's size.
+- **Separately installable scorers.** An assess (scorer) subplugin uninstall now
+  has a safety test: a missing scorer degrades to no automatic score rather than
+  a fatal, and the uninstall semantics are documented on both plugininfo classes.
+- `package-lock.json` regenerated so `jsdom` is a devDependency in the root
+  entry, matching `package.json` (so `npm ci --omit=dev` excludes it).
+- Documentation refreshed: `security_review.md` rewritten for 0.7.29, backlog
+  and README updated, remaining duplicate changelog headings disambiguated.
+
+## 0.7.28 (2026072767) — Pre-Beta hardening (security, performance, subplugin contract)
+
+Addresses the findings of the 0.7.27 security / coding-standard / productivity
+audit. No functional feature changes; hardening, performance and consistency.
+
+Security & integrity:
+- **Journal entries now require `mod/vimipad:comment`** (P0). `add_journal_entry`
+  previously enforced only edit access; a role with editown but without comment
+  could post entries. Covered by a role-matrix test.
+- **Free-text length limits enforced** at five service boundaries (journal,
+  peer-review comment, grade feedback, accepted AI feedback, annotation) using
+  the multibyte-safe `limits::check_text` with `MAX_TEXT`.
+- **Layout, viewport and revision validation.** `save_layout` now bounds the
+  viewport payload and rejects unknown modes; `get_revision_state` enforces a
+  valid revision range, and `api\map::state_at` rejects negative revisions.
+
+Performance (N+1 and unbounded queries):
+- **Peer-review allocation** loads existing pairs once instead of a
+  `record_exists` per candidate (was O(submissions x reviewers) queries).
+- **Privacy export** loads nodes/relations/journal for all of a user's
+  workspaces in three IN-queries instead of three per workspace (3N+1).
+- **Grading** loads existing grades for the whole cohort once and commits the
+  plugin-table writes in a transaction.
+- **Owner labels** in the overview and report pre-load group names instead of
+  an uncached `groups_get_group_name` per row.
+- **Expired lock cleanup** moved from a probabilistic branch in the poll request
+  to a deterministic `purge_expired_locks` scheduled task (every 15 minutes).
+- **Revision replay reduced from N server reconstructions to one op-log fetch.**
+  A new `get_operations` endpoint returns the op-log; the player reconstructs
+  frames on the client instead of one full server reconstruction per revision
+  across N web-service calls. (0.7.29 further bounds client memory with
+  checkpoints and a bounded frame cache; see below.)
+
+Subplugin contract (separately installable/uninstallable):
+- All five `vimipadform_*` subplugins now declare a concrete parent dependency
+  (`mod_vimipad => 2026072766`, the release that froze the public profile API).
+- **Uninstalling a form subplugin is safe:** it has no tables, the editor
+  degrades to the fallback form definition, the built-in profiles stay offered,
+  and a profile reaching a non-form path (backup/restore, web service) is
+  normalised to the safe default. Covered by a dedicated safety test.
+
+Release & documentation consistency:
+- `$plugin->supported` corrected to `[405, 502]` (Moodle 5.3 is not yet
+  released); package.json / package-lock.json / README / roadmap aligned to
+  0.7.28; duplicate 0.7.20 and 0.6.12 changelog sections removed; `drag_arm.ts`
+  module docblock completed; `amd/readme_moodle.txt` added for the bundled
+  third-party libraries. The local `make check` target now includes `lint-js`.
+
+## 0.7.27 (2026072766) — Stable public API for dependent plugins
+
+- **Context-free profile validation** (`\mod_vimipad\profile\profiles`): a
+  new stable facade to validate a profile and resolve its form configuration
+  without a Moodle activity context or a stored instance — `all()`, `exists()`,
+  `form_config()`, `is_shape_allowed()`, `clamp_shape()`. This is what a
+  dependent plugin (question type, database field) needs to reuse the ViMi
+  profiles standalone.
+- **Public map-state API** (`\mod_vimipad\api\map`): `state_at(workspaceid,
+  revision)` reconstructs the surviving nodes/relations/containers from the
+  operation log through a stable entrypoint, without exposing the internal
+  service layer. (Access control stays the caller's responsibility, as
+  documented.) Joins the existing `\mod_vimipad\api\ids` facade.
+- **Embeddable editor contract.** The `mount(element, config)` entrypoint (plus
+  `mountRevision`/`mountPlayer`) is now a tested public contract: the host
+  supplies a `callService` transport — the swappable persistence adapter
+  (`ServiceTransport`) — and an optional `getString` resolver, so the editor
+  mounts and renders with no Moodle service endpoint and no network fetch.
+- **API documentation.** The README's API section is updated (the surface is no
+  longer "not frozen"), and a new `docs/design/public-api.md` describes the full
+  stable contract. Everything under `\mod_vimipad\local\*` remains internal
+  with no stability guarantee.
+- **Test coverage:** `api_profiles_test`, `api_map_test` (PHP) and
+  `embed_mount.test.ts` (editor mounts with a caller-supplied in-memory
+  transport) lock the contract in.
+
+## 0.7.26 (2026072765) — Security review, external-function hardening, docs
+
+- **Documented security review** (`docs/design/security_review.md`) covering the
+  0.7.x hardening milestone: an access-control/IDOR matrix for all 17 external
+  functions, output sanitisation (stored XSS), parameter validation, and CSRF.
+  Result: no open finding. Every external function binds its `workspaceid` to
+  the current activity and enforces the correct capability; the frontend uses no
+  `dangerouslySetInnerHTML` (React auto-escapes), PHP output goes through
+  `format_text`/`s()`, and state-changing forms carry `sesskey()`.
+- **External-function hardening.** `apply_operation` and `save_layout` now route
+  their access checks through the shared `helper::validate_workspace_for_edit()`
+  instead of duplicating the context/workspace-binding/`require_edit` logic
+  inline — same checks, one tested path. `create_snapshot` and `get_workspace`
+  keep their bespoke checks by design (submit capability plus course/cm for
+  completion; group/target-user resolution respectively), now noted in code.
+- **Docs refreshed.** The test-environment baseline is updated to the current
+  counts (264 `mod_vimipad` + 97 `vimipadassess` backend tests, 277 Jest), and
+  `docs/design/backlog.md` is rewritten for the 0.7.x/0.8.x plan.
 
 ## 0.7.25 (2026072764) — Canvas menu click-through fix, journal replay fallback, and polish
 
@@ -140,23 +356,6 @@ offered and then silently discarded.
   Jest tests green, tsc clean, esbuild bundle rebuilt, `init.min.js`
   reproducible through Grunt, phpcs clean.
 
-## 0.7.20 (2026072758) — test hygiene: shared workspace fixture
-
-Removes the three phpcpd clones reported by CI (73 duplicated lines, all in
-tests).
-
-- **Shared `workspace_fixture` trait.** The identical course + module + empty
-  workspace setup in `element_lock_test`, `membership_integrity_test` and
-  `reconstruction_roundtrip_test`, plus the shared `op()` helper, moved into a
-  single `tests/fixtures/workspace_fixture.php` trait. Behaviour is unchanged —
-  same creation, same helper.
-- **Internal clone removed.** In `membership_integrity_test`, the two
-  purge-on-delete tests shared an identical 2-nodes-plus-relation-plus-container
-  seed; that is now a `seed_nodes_relation_container()` helper.
-- phpcpd now reports no clones. Verified: 254 backend tests green (unchanged
-  count — no test lost), each test file individually, phpcs / phpdoc / validate
-  clean. The fixture is not itself a test class.
-
 ## 0.7.20 (2026072758) — test hygiene: remove duplicated test setup
 
 Removes the three clones reported by phpcpd (`--min-lines 5 --min-tokens 70`),
@@ -281,7 +480,7 @@ design.
 - Verified: 245 Jest tests green, tsc clean, esbuild bundle rebuilt,
   `init.min.js` reproducible through Grunt, phpcs clean.
 
-## 0.7.15 (2026072753) — block G: keep the add-concept/relation controls on one line
+## 0.7.15b (2026072753) — block G: keep the add-concept/relation controls on one line
 
 - **Fix: the add-concept and add-relation controls are two-line again** —
   heading on the first line, all controls (fields and the Add button) on a
@@ -980,31 +1179,6 @@ existed (it serializes the live SVG, so containers have been drawn into it since
   `svg_export`); esbuild bundle rebuilt and **byte-reproducible**;
   **205 `mod_vimipad`** + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd
   clean. Actual download/upload flows run in the browser / CI.
-
-## 0.6.12 (2026072726) — SVG/PNG export with containers + SVG round-trip import
-
-Rounds out image output and adds a lossless SVG round-trip. No PHP logic change
-(one lang string); the round-trip rides on the existing JSON export/import.
-
-- **Containers in image output.** `computeContentBounds` now frames container
-  geometry as well as nodes, so SVG/PNG/PDF exports no longer clip a container
-  drawn beyond the nodes. Container interaction chrome (draw overlay, delete and
-  resize handles) is stripped from the exported SVG.
-- **SVG round-trip.** An exported SVG embeds the map's semantic JSON in a
-  `<metadata id="vimipad-data">` element (plain text node — jsdom-safe and
-  XML-escaped, no CDATA). The Import button now also accepts `.svg`: on import the
-  embedded JSON is extracted and fed through the existing `importMap`, so an
-  exported SVG re-imports exactly like a JSON export. An SVG without embedded data
-  is rejected with a clear message.
-- Pure, tested helpers: `extractMapData`, `MAP_DATA_ID`, extended
-  `serializeCanvasSvg(embedJson?)` and `computeContentBounds(containers)`.
-- Lang: `editor:importnovimidata` (en/de, 429/429 parity) + init.js key + fallback.
-- **Verification:** the JSON export/import round-trip incl. containers is covered
-  by existing `test_export_import_roundtrip` + `test_container_roundtrip`
-  (PHPUnit); embed/extract and container bounds by Jest. `tsc` clean; **Jest 30
-  suites / 185 tests**; esbuild bundle rebuilt and **byte-reproducible**; **205
-  `mod_vimipad`** + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd clean.
-  Browser download/upload and `@javascript` Behat run in CI.
 
 ## 0.6.11 (2026072725) — containers: move, resize, rename, lock + undo/redo
 
@@ -1951,7 +2125,7 @@ Initial installable plugin shell with full project infrastructure.
 - README.md auf das Moodle-an-Hochschulen-README-Template umgestellt;
   Template gilt verbindlich für alle künftigen READMEs des Projekts.
 
-## 0.2.0 (2026072600) — Session 002 start: phpcs-Fix + M1 (Datenmodell)
+## 0.2.0-start (2026072600) — Session 002 start: phpcs-Fix + M1 (Datenmodell)
 
 ### Fixed
 - Alle 12 CI-gemeldeten phpcs-Verstöße behoben: Leerzeile nach
@@ -2026,7 +2200,7 @@ Initial installable plugin shell with full project infrastructure.
 ### Verified
 - moodlehq/moodle-cs (Standard "moodle"): 0 Fehler, 0 Warnungen.
 
-## 0.5.0 (2026072603) — Session 002: M2 Frontend (Editor-Grundgerüst)
+## 0.5.0-pre (2026072603) — Session 002: M2 Frontend (Editor-Grundgerüst)
 
 ### Added
 - React/TypeScript-Editor als einbettbare Komponente mit stabilem

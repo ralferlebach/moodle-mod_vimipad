@@ -310,13 +310,37 @@ class provider implements
                 ['vid' => $cm->instance, 'userid' => $userid]
             );
 
+            // Load nodes, relations and journal for ALL of this user's
+            // workspaces in three IN-queries and group in PHP, instead of three
+            // queries per workspace (the former 3N+1 pattern).
+            $nodesby = [];
+            $relationsby = [];
+            $journalby = [];
+            if ($workspaces) {
+                $wsids = array_keys($workspaces);
+                [$insql, $inparams] = $DB->get_in_or_equal($wsids, SQL_PARAMS_NAMED, 'ws');
+                foreach ($DB->get_records_select('vimipad_node', "workspaceid $insql", $inparams) as $n) {
+                    $nodesby[(int) $n->workspaceid][] = $n;
+                }
+                foreach ($DB->get_records_select('vimipad_relation', "workspaceid $insql", $inparams) as $r) {
+                    $relationsby[(int) $r->workspaceid][] = $r;
+                }
+                $jparams = $inparams + ['juser' => $userid];
+                foreach (
+                    $DB->get_records_select(
+                        'vimipad_journalentry',
+                        "workspaceid $insql AND userid = :juser",
+                        $jparams
+                    ) as $j
+                ) {
+                    $journalby[(int) $j->workspaceid][] = $j;
+                }
+            }
+
             foreach ($workspaces as $ws) {
-                $nodes = $DB->get_records('vimipad_node', ['workspaceid' => $ws->id]);
-                $relations = $DB->get_records('vimipad_relation', ['workspaceid' => $ws->id]);
-                $journal = $DB->get_records(
-                    'vimipad_journalentry',
-                    ['workspaceid' => $ws->id, 'userid' => $userid]
-                );
+                $nodes = $nodesby[(int) $ws->id] ?? [];
+                $relations = $relationsby[(int) $ws->id] ?? [];
+                $journal = $journalby[(int) $ws->id] ?? [];
 
                 $data = (object) [
                     'name' => $ws->name,

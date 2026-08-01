@@ -61,6 +61,14 @@ class journal_service {
     ): int {
         global $DB;
 
+        // Enforce the free-text length limit at the service boundary (not just
+        // in the form), so the web service and any other caller are bounded.
+        \mod_vimipad\local\policy\limits::check_text(
+            $text,
+            \mod_vimipad\local\policy\limits::MAX_TEXT,
+            'journalentry'
+        );
+
         $now = time();
         // Private only when the author asked for it and the activity permits
         // it; otherwise the entry is visible to teachers.

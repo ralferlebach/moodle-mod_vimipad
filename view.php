@@ -242,8 +242,13 @@ if ($gradesnapshotid && $cangrade) {
     );
 }
 
-// Peer review: a teacher allocating reviews for all submitted maps.
-if ($tab === 'grade' && $cangrade && optional_param('allocatereviews', 0, PARAM_BOOL) && confirm_sesskey()) {
+// Peer review: a teacher allocating reviews for all submitted maps. This is a
+// state-changing action, so it must be a POST with a valid sesskey.
+if (
+    $tab === 'grade' && $cangrade
+    && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
+    && optional_param('allocatereviews', 0, PARAM_BOOL) && confirm_sesskey()
+) {
     $allocated = (new \mod_vimipad\local\service\peer_review_service())->allocate($instance);
     redirect(
         new moodle_url('/mod/vimipad/view.php', ['id' => $cm->id, 'tab' => 'grade']),
@@ -358,14 +363,24 @@ switch ($tab) {
         ), 'mb-3');
 
         if (!empty($instance->peerreviewmode)) {
-            $allocateurl = new moodle_url('/mod/vimipad/view.php', [
-                'id' => $cm->id, 'tab' => 'grade', 'allocatereviews' => 1, 'sesskey' => sesskey(),
+            // POST form (not a GET link): allocation is state-changing.
+            $allocateform = html_writer::start_tag('form', [
+                'method' => 'post',
+                'action' => new moodle_url('/mod/vimipad/view.php'),
+                'class' => 'vimipad-allocate-form',
             ]);
-            echo html_writer::div(html_writer::link(
-                $allocateurl,
-                get_string('peerreviewallocate', 'mod_vimipad'),
-                ['class' => 'btn btn-outline-secondary']
-            ), 'mb-3');
+            $allocateform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
+            $allocateform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'tab', 'value' => 'grade']);
+            $allocateform .= html_writer::empty_tag(
+                'input',
+                ['type' => 'hidden', 'name' => 'allocatereviews', 'value' => 1]
+            );
+            $allocateform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+            $allocateform .= html_writer::tag('button', get_string('peerreviewallocate', 'mod_vimipad'), [
+                'type' => 'submit', 'class' => 'btn btn-outline-secondary',
+            ]);
+            $allocateform .= html_writer::end_tag('form');
+            echo html_writer::div($allocateform, 'mb-3');
         }
 
         $sql = "SELECT s.id AS snapshotid, s.status, s.timecreated, ws.id AS workspaceid, ws.userid, ws.groupid
@@ -375,24 +390,32 @@ switch ($tab) {
               ORDER BY s.timecreated DESC";
         $submissions = $DB->get_records_sql($sql, ['vid' => $instance->id]);
 
-        // Structure metrics (nodes/relations per workspace) as a grading aid,
-        // batched in two grouped queries. The workspace is locked on submission,
-        // so the live tables reflect the submitted state.
+        // Structure metrics (nodes/relations) computed from the frozen snapshot
+        // of each submission, not the live tables: after a reopen the workspace
+        // can change while the graded/submitted snapshot stays fixed, so the
+        // live counts would misreport the actually-submitted size. Snapshot ids
+        // are loaded once and the JSON is decoded per row.
         $nodecounts = [];
         $relationcounts = [];
         if (!empty($submissions)) {
-            $wsids = array_map(static fn($sub) => (int) $sub->workspaceid, $submissions);
-            [$insql, $inparams] = $DB->get_in_or_equal($wsids, SQL_PARAMS_NAMED);
-            $nodecounts = $DB->get_records_sql_menu(
-                "SELECT workspaceid, COUNT(*) FROM {vimipad_node}
-                  WHERE workspaceid $insql AND deleted = 0 GROUP BY workspaceid",
-                $inparams
+            $snapids = array_map(static fn($sub) => (int) $sub->snapshotid, $submissions);
+            [$insql, $inparams] = $DB->get_in_or_equal($snapids, SQL_PARAMS_NAMED);
+            $snaprows = $DB->get_records_select(
+                'vimipad_snapshot',
+                "id $insql",
+                $inparams,
+                '',
+                'id, workspaceid, snapshotjson'
             );
-            $relationcounts = $DB->get_records_sql_menu(
-                "SELECT workspaceid, COUNT(*) FROM {vimipad_relation}
-                  WHERE workspaceid $insql AND deleted = 0 GROUP BY workspaceid",
-                $inparams
-            );
+            foreach ($snaprows as $row) {
+                $wsid = (int) $row->workspaceid;
+                $decoded = json_decode((string) $row->snapshotjson, true);
+                $nodecounts[$wsid] = is_array($decoded) && isset($decoded['nodes']) && is_array($decoded['nodes'])
+                    ? count($decoded['nodes']) : 0;
+                $relationcounts[$wsid] = is_array($decoded) && isset($decoded['relations'])
+                    && is_array($decoded['relations'])
+                    ? count($decoded['relations']) : 0;
+            }
         }
 
         if (empty($submissions)) {
@@ -412,11 +435,22 @@ switch ($tab) {
                 }
             }
             $users = empty($userids) ? [] : $DB->get_records_list('user', 'id', array_keys($userids));
+            // Pre-load group names once, instead of a groups_get_group_name()
+            // (an uncached DB read) per submission row.
+            $groupids = [];
+            foreach ($submissions as $sub) {
+                if (empty($sub->userid) && !empty($sub->groupid)) {
+                    $groupids[(int) $sub->groupid] = true;
+                }
+            }
+            $groupnames = empty($groupids)
+                ? []
+                : $DB->get_records_list('groups', 'id', array_keys($groupids), '', 'id, name');
             foreach ($submissions as $sub) {
                 if (!empty($sub->userid)) {
                     $who = isset($users[$sub->userid]) ? fullname($users[$sub->userid]) : '';
                 } else if (!empty($sub->groupid)) {
-                    $who = groups_get_group_name($sub->groupid);
+                    $who = isset($groupnames[$sub->groupid]) ? $groupnames[$sub->groupid]->name : '';
                 } else {
                     $who = get_string('mode_course', 'mod_vimipad');
                 }

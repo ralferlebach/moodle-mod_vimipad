@@ -35,6 +35,14 @@ class vimipadform extends base {
     /**
      * Whether a subplugin of this type may be uninstalled from the admin UI.
      *
+     * Uninstalling is deliberately always allowed: form subplugins own no
+     * tables, and an activity whose profile becomes unavailable degrades to the
+     * safe fallback form definition (see \mod_vimipad\local\form\fallback and
+     * vimipad_normalise_profile in lib.php), rather than breaking. This "repair,
+     * don't block" behaviour is covered by profile_uninstall_safety_test. If a
+     * profile's subplugin is removed while activities reference it, those
+     * activities keep working with the generic fallback rendering.
+     *
      * @return bool
      */
     public function is_uninstall_allowed() {

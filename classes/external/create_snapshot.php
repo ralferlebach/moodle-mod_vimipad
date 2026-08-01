@@ -61,6 +61,9 @@ class create_snapshot extends external_api {
         [$course, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
         $context = \context_module::instance($cm->id);
         self::validate_context($context);
+        // Not routed through helper::validate_workspace_for_edit: submitting
+        // additionally requires the submit capability, and $course/$cm are
+        // needed below for completion — both outside that helper's scope.
         require_capability('mod/vimipad:submit', $context);
 
         $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);

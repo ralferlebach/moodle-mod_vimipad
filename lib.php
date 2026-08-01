@@ -90,6 +90,7 @@ function vimipad_add_instance(stdClass $data, ?mod_vimipad_mod_form $mform = nul
     vimipad_prepare_completion_fields($data);
     vimipad_prepare_scorer_fields($data);
     vimipad_enforce_group_consistency($data);
+    vimipad_normalise_profile($data);
 
     $id = $DB->insert_record('vimipad', $data);
 
@@ -114,12 +115,36 @@ function vimipad_update_instance(stdClass $data, ?mod_vimipad_mod_form $mform = 
     vimipad_prepare_completion_fields($data);
     vimipad_prepare_scorer_fields($data);
     vimipad_enforce_group_consistency($data);
+    vimipad_normalise_profile($data);
 
     $result = $DB->update_record('vimipad', $data);
 
     vimipad_grade_item_update($data);
 
     return $result;
+}
+
+/**
+ * Normalise the default profile to a known one, non-breaking.
+ *
+ * The activity form only offers known profiles, but instances are also created
+ * by backup/restore, course import and web services, which never run the form
+ * and could carry a profile whose vimipadform subplugin is not installed. To
+ * keep those paths working (the subplugins are separately installable), an
+ * unknown profile is repaired to the safe default rather than rejected; the
+ * editor still renders it via the fallback form definition.
+ *
+ * @param stdClass $data The instance data (modified in place).
+ * @return void
+ */
+function vimipad_normalise_profile(stdClass $data): void {
+    if (!isset($data->defaultprofile) || $data->defaultprofile === '') {
+        $data->defaultprofile = 'conceptmap';
+        return;
+    }
+    if (!\mod_vimipad\profile\profiles::exists((string) $data->defaultprofile)) {
+        $data->defaultprofile = 'conceptmap';
+    }
 }
 
 /**

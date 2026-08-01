@@ -55,6 +55,12 @@ class grading_service {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/mod/vimipad/lib.php');
 
+        \mod_vimipad\local\policy\limits::check_text(
+            $feedback,
+            \mod_vimipad\local\policy\limits::MAX_TEXT,
+            'gradefeedback'
+        );
+
         // Server-side grade domain: 0 <= grade <= activity maximum (points
         // grading only). UI limits are not a contract.
         if ($grade !== null) {
@@ -83,11 +89,27 @@ class grading_service {
         }
         $now = time();
 
+        // Load existing plugin-grades for all recipients once, instead of a
+        // get_record() per recipient (the former N+1). Wrap the plugin-table
+        // writes in a transaction so a large cohort commits atomically.
+        $existingby = [];
+        if ($recipients !== []) {
+            [$insql, $inparams] = $DB->get_in_or_equal($recipients, SQL_PARAMS_NAMED, 'u');
+            $inparams['vid'] = $instance->id;
+            foreach (
+                $DB->get_records_select(
+                    'vimipad_grade',
+                    "vimipadid = :vid AND userid $insql",
+                    $inparams
+                ) as $g
+            ) {
+                $existingby[(int) $g->userid] = $g;
+            }
+        }
+
+        $transaction = $DB->start_delegated_transaction();
         foreach ($recipients as $userid) {
-            $existing = $DB->get_record(
-                'vimipad_grade',
-                ['vimipadid' => $instance->id, 'userid' => $userid]
-            );
+            $existing = $existingby[(int) $userid] ?? null;
             $record = (object) [
                 'vimipadid' => $instance->id,
                 'userid' => $userid,
@@ -105,7 +127,13 @@ class grading_service {
                 $record->timecreated = $now;
                 $DB->insert_record('vimipad_grade', $record);
             }
+        }
+        $transaction->allow_commit();
 
+        // Push to the gradebook after the plugin-table writes are committed.
+        // (Gradebook updates are Moodle-side and cannot be safely batched into
+        // the same transaction.)
+        foreach ($recipients as $userid) {
             vimipad_update_grades($instance, $userid);
         }
 

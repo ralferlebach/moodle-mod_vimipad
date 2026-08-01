@@ -1,9 +1,12 @@
 # ViMi Pad — Roadmap
 
-Stand: **0.7.6** — 0.6.x (Autoren-Werkzeuge, Container, Templates, Constraints)
-ist abgeschlossen; das Plugin befindet sich im Feature Freeze der
-**0.7.x-Hardening-Linie** (Sicherheit, Dateninvarianten, Privacy, Backup,
-Grading-Lifecycle, Limits/Compliance — Blöcke A–F der Audit-Priorisierung). Status-Marker unten:
+Stand: **0.7.31** — 0.6.x (Autoren-Werkzeuge, Container, Templates, Constraints)
+ist abgeschlossen; die **0.7.x-Hardening-Linie** (Sicherheit, Dateninvarianten,
+Privacy, Backup, Grading-Lifecycle, Limits/Compliance) ist **code-seitig
+abgeschlossen** — das finale externe Audit gibt GO für kontrollierten Beta-/
+Pilotbetrieb (MATURITY_BETA vertretbar bei grüner Voll-CI). Nächste Stufe: 0.8.x
+(Feldtests, weitere Darstellungsformen, empirischer Reifenachweis Richtung
+MATURITY_STABLE). Status-Marker unten:
 ✅ umgesetzt · ◐ teilweise · ○ geplant · → verschoben.
 
 Diese Roadmap ordnet die geplanten Ausbaustufen bis zur
@@ -94,6 +97,15 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 - Dedizierte Freigabe-Optionen dieser Möglichkeiten an Lernende 〜 (0.6.13: Autoren-Werkzeuge nur bei canmanage; feinere Freigaben offen)
 
 ## 0.7.x — Hardening, Datenschutz & Persistenz
+
+> **Status: ✅ code-seitig abgeschlossen (0.7.31).** Systematischer Security-
+> Review (Zugriffskontrolle/IDOR, Stored XSS, Parameter-/Ressourcengrenzen,
+> CSRF) dokumentiert in `security_review.md`; Revisions-/Replay-Korrektheit und
+> -Skalierung, Layout-/AI-Ressourcengrenzen, Lock-CAS, Subplugin-
+> Versionierungs-/Deinstallationsverträge umgesetzt und getestet. Finales Audit:
+> GO für Beta/Pilot. ◐ Offen (0.8.x, nicht-blockierend): Heartbeat-`renew()`
+> voll-CAS, empirischer Reifenachweis (Last-/Concurrency-/Replay-Benchmarks,
+> Accessibility, Browser-/DB-/Upgrade-/Backup-Restore-Matrix in der CI).
 
 - Systematischer Security-Review: XSS beim Label-Rendering, `sesskey`/Capability-
   Checks in jeder External-Function, Eingabevalidierung. Sicherheit wird schon

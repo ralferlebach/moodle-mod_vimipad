@@ -68,7 +68,12 @@ class add_journal_entry extends external_api {
             'private' => $private,
         ]);
 
-        helper::validate_workspace_for_edit($params['cmid'], $params['workspaceid'], $instance, $workspace);
+        $context = helper::validate_workspace_for_edit($params['cmid'], $params['workspaceid'], $instance, $workspace);
+        // Writing a journal entry is a comment action: it requires the comment
+        // capability in addition to edit access. validate_workspace_for_edit
+        // only enforces editown/editgroup, so check comment explicitly here —
+        // the db/services.php capability metadatum does not authorise on its own.
+        require_capability('mod/vimipad:comment', $context);
 
         if (trim($params['entrytext']) === '') {
             throw new \moodle_exception('error:emptyjournal', 'mod_vimipad');

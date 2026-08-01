@@ -66,18 +66,60 @@ class lock_service {
         if ($existing) {
             $held = (int) $existing->userid === $userid;
             $expired = (int) $existing->timeexpires <= $now;
-            if ($held || $expired) {
-                // Caller owns it, or it lapsed: take/extend it.
-                $DB->update_record('vimipad_lock', (object) [
-                    'id' => $existing->id,
-                    'userid' => $userid,
-                    'timeacquired' => $held ? $existing->timeacquired : $now,
-                    'timeexpires' => $expires,
-                ]);
-                return $this->result(true, $userid, $expires);
+            if ($held && !$expired) {
+                // Caller owns a still-valid lease: extend it, but only if the
+                // row still matches what we read (compare-and-swap), so a
+                // concurrent takeover between our read and write is not clobbered
+                // by an unconditional update.
+                $DB->execute(
+                    'UPDATE {vimipad_lock}
+                        SET timeexpires = :exp
+                      WHERE id = :id AND userid = :olduser AND timeexpires = :oldexp',
+                    [
+                        'exp' => $expires, 'id' => $existing->id,
+                        'olduser' => $userid, 'oldexp' => (int) $existing->timeexpires,
+                    ]
+                );
+                $current = $DB->get_record('vimipad_lock', ['id' => $existing->id]);
+                if ($current && (int) $current->userid === $userid) {
+                    return $this->result(true, $userid, (int) $current->timeexpires);
+                }
+                if ($current) {
+                    // Someone took over in the gap: report the real holder.
+                    return $this->result(false, (int) $current->userid, (int) $current->timeexpires);
+                }
+                // Row vanished: fall through to insert.
+            } else if ($expired) {
+                // A lapsed lease (whether previously ours or someone else's):
+                // take it over, but only if it is still exactly the row we read
+                // (compare-and-swap on the old holder + expiry). Routing the
+                // owner's own expired lease through the CAS path too closes the
+                // owner-renewal race where a concurrent takeover would otherwise
+                // be overwritten by an unconditional owner update.
+                $DB->execute(
+                    'UPDATE {vimipad_lock}
+                        SET userid = :newuser, timeacquired = :acq, timeexpires = :exp
+                      WHERE id = :id AND userid = :olduser AND timeexpires = :oldexp',
+                    [
+                        'newuser' => $userid, 'acq' => $now, 'exp' => $expires,
+                        'id' => $existing->id, 'olduser' => (int) $existing->userid,
+                        'oldexp' => (int) $existing->timeexpires,
+                    ]
+                );
+                // The execute() call returns true; a follow-up read learns who
+                // actually holds the lease now (the CAS winner).
+                $current = $DB->get_record('vimipad_lock', ['id' => $existing->id]);
+                if ($current && (int) $current->userid === $userid) {
+                    return $this->result(true, $userid, (int) $current->timeexpires);
+                }
+                if ($current) {
+                    return $this->result(false, (int) $current->userid, (int) $current->timeexpires);
+                }
+                // The row vanished (deleted concurrently): fall through to insert.
+            } else {
+                // Held by someone else and still valid: refuse, report holder.
+                return $this->result(false, (int) $existing->userid, (int) $existing->timeexpires);
             }
-            // Held by someone else and still valid: refuse, report holder.
-            return $this->result(false, (int) $existing->userid, (int) $existing->timeexpires);
         }
 
         // Free: create the lease. Guard against a race on the unique index.
@@ -188,6 +230,20 @@ class lock_service {
             'workspaceid = :wid AND timeexpires <= :now',
             ['wid' => $workspaceid, 'now' => time()]
         );
+    }
+
+    /**
+     * Delete all expired leases across every workspace (scheduled housekeeping).
+     *
+     * Run from a scheduled task rather than the hot poll path, so cleanup is
+     * deterministic and does not add write load to reads.
+     *
+     * @return void
+     */
+    public function purge_all_expired(): void {
+        global $DB;
+
+        $DB->delete_records_select('vimipad_lock', 'timeexpires <= :now', ['now' => time()]);
     }
 
     /**
