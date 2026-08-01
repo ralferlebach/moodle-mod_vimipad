@@ -41,6 +41,7 @@ const STRING_KEYS = [
     'editor:relation', 'editor:relations', 'editor:reledit', 'editor:retarget',
     'editor:reverse', 'journal:revisiontitle',
     'revision:play', 'revision:pause', 'revision:playtitle', 'revision:scrubber',
+    'revision:historyincomplete',
 ];
 
 /**

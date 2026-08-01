@@ -19,6 +19,7 @@ namespace mod_vimipad\local\service;
 use mod_vimipad\local\id\stable_id;
 use mod_vimipad\local\operation\operation_type;
 use mod_vimipad\local\policy\limits;
+use mod_vimipad\local\lock\element_lock;
 
 /**
  * Applies validated operations to a workspace and maintains the operation log.
@@ -221,11 +222,7 @@ class operation_service {
 
             case operation_type::NODE_UPDATE:
                 $node = $this->get_live_node($workspaceid, $payload['stableid']);
-                $this->assert_element_editable(
-                    $node->metadatajson,
-                    'update',
-                    $this->changed_fields($payload, ['label', 'type', 'content', 'metadatajson'])
-                );
+                $this->assert_element_editable($node->metadatajson, 'update', $payload);
                 $update = ['id' => $node->id, 'modifiedby' => $userid, 'timemodified' => $now];
                 foreach (['label', 'type', 'content', 'metadatajson'] as $field) {
                     if (array_key_exists($field, $payload)) {
@@ -285,11 +282,7 @@ class operation_service {
 
             case operation_type::RELATION_UPDATE:
                 $relation = $this->get_live_relation($workspaceid, $payload['stableid']);
-                $this->assert_element_editable(
-                    $relation->metadatajson,
-                    'update',
-                    $this->changed_fields($payload, ['type', 'label', 'metadatajson', 'direction'])
-                );
+                $this->assert_element_editable($relation->metadatajson, 'update', $payload);
                 $update = ['id' => $relation->id, 'modifiedby' => $userid, 'timemodified' => $now];
                 foreach (['type', 'label', 'metadatajson'] as $field) {
                     if (array_key_exists($field, $payload)) {
@@ -313,11 +306,7 @@ class operation_service {
 
             case operation_type::RELATION_RETARGET:
                 $relation = $this->get_live_relation($workspaceid, $payload['stableid']);
-                $this->assert_element_editable(
-                    $relation->metadatajson,
-                    'update',
-                    (!empty($payload['newsource']) || !empty($payload['newtarget'])) ? ['endpoints'] : []
-                );
+                $this->assert_element_editable($relation->metadatajson, 'update', $payload);
                 $update = ['id' => $relation->id, 'modifiedby' => $userid, 'timemodified' => $now];
                 if (!empty($payload['newsource'])) {
                     $this->assert_node_exists($workspaceid, $payload['newsource']);
@@ -356,11 +345,7 @@ class operation_service {
 
             case operation_type::CONTAINER_UPDATE:
                 $container = $this->get_live_container($workspaceid, $payload['stableid']);
-                $this->assert_element_editable(
-                    $container->metadatajson,
-                    'update',
-                    $this->changed_fields($payload, ['type', 'label', 'geometryjson', 'metadatajson'])
-                );
+                $this->assert_element_editable($container->metadatajson, 'update', $payload);
                 $update = ['id' => $container->id];
                 foreach (['type', 'label', 'geometryjson', 'metadatajson'] as $field) {
                     if (array_key_exists($field, $payload)) {
@@ -513,49 +498,69 @@ class operation_service {
     /**
      * Enforce a template structural lock carried in an element's metadata.
      *
-     * A locked element (metadata `{"locked": true}`) cannot be deleted, and can
-     * only be updated in the fields listed in its `editable` whitelist (e.g.
-     * `{"locked": true, "editable": ["label"]}`). Elements without the flag are
-     * unaffected. This protects teacher-provided scaffolds while leaving the
-     * rest of the map freely editable.
+     * A locked element restricts edits by group (move/colour/text). Deletion is
+     * blocked whenever any group is locked. An update is rejected if it would
+     * change a field or metadata key belonging to a locked group. A legacy
+     * `{"locked": true}` with no `locks` map locks every group. Elements without
+     * the flag are unaffected. See {@see \mod_vimipad\local\lock\element_lock}.
      *
      * @param string|null $metadatajson The live element's metadata JSON.
      * @param string $mode 'delete' or 'update'.
-     * @param string[] $changedfields Fields the update would change (update mode).
+     * @param array $payload The operation payload (update mode), used to decide
+     *     which lock groups the change would touch.
      * @return void
      * @throws \moodle_exception error:elementlocked if the change is not permitted.
      */
-    private function assert_element_editable(?string $metadatajson, string $mode, array $changedfields = []): void {
+    private function assert_element_editable(?string $metadatajson, string $mode, array $payload = []): void {
         if ($this->bypasslocks) {
             return;
         }
-        if ($metadatajson === null || $metadatajson === '') {
+        $meta = ($metadatajson === null || $metadatajson === '') ? null : json_decode($metadatajson, true);
+        if (!element_lock::is_locked(is_array($meta) ? $meta : null)) {
             return;
         }
-        $meta = json_decode($metadatajson, true);
-        if (!is_array($meta) || empty($meta['locked'])) {
-            return;
-        }
+        $meta = is_array($meta) ? $meta : [];
+
+        // Deleting a locked element is blocked whenever any group is locked:
+        // deletion is destructive and not covered by a single group.
         if ($mode === 'delete') {
-            throw new \moodle_exception('error:elementlocked', 'mod_vimipad');
+            foreach (element_lock::GROUPS as $group) {
+                if (element_lock::is_group_locked($meta, $group)) {
+                    throw new \moodle_exception('error:elementlocked', 'mod_vimipad');
+                }
+            }
+            return;
         }
-        $editable = is_array($meta['editable'] ?? null) ? $meta['editable'] : [];
-        foreach ($changedfields as $field) {
-            if (!in_array($field, $editable, true)) {
+
+        // Determine which lock groups the incoming update would touch.
+        $touched = [];
+
+        // Non-metadata database fields (label, content, geometry, ...).
+        foreach (array_keys($payload) as $field) {
+            if ($field === 'metadatajson' || $field === 'stableid') {
+                continue;
+            }
+            $group = element_lock::group_for_field((string) $field);
+            if ($group !== null) {
+                $touched[$group] = true;
+            }
+        }
+
+        // Metadata changes: compare old vs new and map changed keys to groups.
+        if (array_key_exists('metadatajson', $payload)) {
+            $newmeta = $payload['metadatajson'] === null || $payload['metadatajson'] === ''
+                ? [] : json_decode((string) $payload['metadatajson'], true);
+            $newmeta = is_array($newmeta) ? $newmeta : [];
+            foreach (element_lock::changed_meta_groups($meta, $newmeta) as $group) {
+                $touched[$group] = true;
+            }
+        }
+
+        foreach (array_keys($touched) as $group) {
+            if (element_lock::is_group_locked($meta, $group)) {
                 throw new \moodle_exception('error:elementlocked', 'mod_vimipad');
             }
         }
-    }
-
-    /**
-     * The subset of candidate fields the payload would actually change.
-     *
-     * @param array $payload The operation payload.
-     * @param string[] $candidates Mutable field names for the element.
-     * @return string[]
-     */
-    private function changed_fields(array $payload, array $candidates): array {
-        return array_values(array_intersect($candidates, array_keys($payload)));
     }
 
     /**

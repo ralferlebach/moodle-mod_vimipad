@@ -24,8 +24,9 @@
 import React from 'react';
 import {createRoot, Root} from 'react-dom/client';
 import {act} from 'react';
-import {RevisionPlayer} from '../src/components/RevisionPlayer';
+import {RevisionPlayer, elementCount, isHistoryIncomplete} from '../src/components/RevisionPlayer';
 import {ApiClient} from '../src/api/service';
+import {EditorState} from '../src/store/reducer';
 
 (globalThis as unknown as {IS_REACT_ACT_ENVIRONMENT: boolean}).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,6 +40,13 @@ function makeApi(requested: number[]): ApiClient {
             return {
                 workspaceid: 1, revision: args.revision, locked: 1, profile: 'conceptmap',
                 layoutjson: '', nodes: [], relations: [],
+            };
+        }
+        if (method === 'mod_vimipad_get_workspace') {
+            // Live state matches the (empty) reconstruction: history complete.
+            return {
+                workspaceid: 1, revision: 3, locked: 1, profile: 'conceptmap',
+                layoutjson: '', nodes: [], relations: [], containers: [],
             };
         }
         return {};
@@ -125,5 +133,120 @@ describe('RevisionPlayer', () => {
 
         // The playback reached the final revision.
         expect(requested).toContain(3);
+    });
+
+    test('renders nodes, relations and containers from the reconstructed state', async () => {
+        // A transport returning a populated state (2 nodes, 1 relation, 1
+        // container) — the exact case the journal replay must show fully.
+        const transport = async (method: string): Promise<unknown> => {
+            if (method === 'mod_vimipad_get_revision_state') {
+                return {
+                    workspaceid: 1, revision: 4, locked: 1, profile: 'conceptmap', layoutjson: '',
+                    nodes: [
+                        {stableid: 'node_aaaaaaaaaaaa', type: 'concept', label: 'A',
+                            content: '', contentformat: 0, metadatajson: ''},
+                        {stableid: 'node_bbbbbbbbbbbb', type: 'concept', label: 'B',
+                            content: '', contentformat: 0, metadatajson: ''},
+                    ],
+                    relations: [
+                        {stableid: 'rel_aaaaaaaaaaaa', sourceid: 'node_aaaaaaaaaaaa',
+                            targetid: 'node_bbbbbbbbbbbb', type: 'link', label: 'r',
+                            direction: 1, metadatajson: ''},
+                    ],
+                    containers: [
+                        {stableid: 'cont_aaaaaaaaaaaa', type: 'group', label: 'C',
+                            geometryjson: '{"x":10,"y":10,"w":100,"h":100}', metadatajson: ''},
+                    ],
+                };
+            }
+            return {};
+        };
+        const api = new ApiClient(transport, 42, true);
+        await act(async () => {
+            root.render(React.createElement(RevisionPlayer, {api, workspaceid: 1, maxRevision: 4, t}));
+        });
+        await act(async () => { await Promise.resolve(); });
+
+        const nodes = container.querySelectorAll('.vimipad-canvas-node');
+        const relations = container.querySelectorAll('.vimipad-canvas-relation');
+        const containers = container.querySelectorAll('.vimipad-canvas-container');
+
+        expect(nodes.length).toBe(2);
+        expect(relations.length).toBeGreaterThanOrEqual(1);
+        expect(containers.length).toBe(1);
+    });
+
+    test('elementCount sums nodes, relations and containers', () => {
+        const s = {
+            workspaceid: 1, revision: 1, locked: 1, profile: 'conceptmap', layoutjson: '',
+            nodes: [{stableid: 'n1'}, {stableid: 'n2'}],
+            relations: [{stableid: 'r1'}],
+            containers: [{stableid: 'c1'}],
+        } as unknown as EditorState;
+        expect(elementCount(s)).toBe(4);
+    });
+
+    test('isHistoryIncomplete is true only when the live map has more elements', () => {
+        const live = {
+            workspaceid: 5, nodes: [{}, {}], relations: [{}], containers: [{}],
+        } as unknown as EditorState;
+        const full = {
+            workspaceid: 5, nodes: [{}, {}], relations: [{}], containers: [{}],
+        } as unknown as EditorState;
+        const partial = {
+            workspaceid: 5, nodes: [], relations: [], containers: [{}],
+        } as unknown as EditorState;
+        // Same counts: complete.
+        expect(isHistoryIncomplete(live, full)).toBe(false);
+        // Reconstruction has fewer: incomplete.
+        expect(isHistoryIncomplete(live, partial)).toBe(true);
+        // Different workspace: never compared.
+        expect(isHistoryIncomplete(live, {...partial, workspaceid: 9} as EditorState)).toBe(false);
+    });
+
+    test('falls back to the live state with a hint when history is incomplete', async () => {
+        // Reconstruction yields only a container; the live map also has nodes
+        // and a relation — the exact "old data" case.
+        const transport = async (method: string): Promise<unknown> => {
+            if (method === 'mod_vimipad_get_revision_state') {
+                return {
+                    workspaceid: 1, revision: 4, locked: 1, profile: 'conceptmap', layoutjson: '',
+                    nodes: [], relations: [],
+                    containers: [{stableid: 'cont_aaaaaaaaaaaa', type: 'group', label: 'C',
+                        geometryjson: '{"x":10,"y":10,"w":100,"h":100}', metadatajson: ''}],
+                };
+            }
+            if (method === 'mod_vimipad_get_workspace') {
+                return {
+                    workspaceid: 1, revision: 4, locked: 1, profile: 'conceptmap', layoutjson: '',
+                    nodes: [
+                        {stableid: 'node_aaaaaaaaaaaa', type: 'concept', label: 'A',
+                            content: '', contentformat: 0, metadatajson: ''},
+                        {stableid: 'node_bbbbbbbbbbbb', type: 'concept', label: 'B',
+                            content: '', contentformat: 0, metadatajson: ''},
+                    ],
+                    relations: [
+                        {stableid: 'rel_aaaaaaaaaaaa', sourceid: 'node_aaaaaaaaaaaa',
+                            targetid: 'node_bbbbbbbbbbbb', type: 'link', label: 'r',
+                            direction: 1, metadatajson: ''},
+                    ],
+                    containers: [{stableid: 'cont_aaaaaaaaaaaa', type: 'group', label: 'C',
+                        geometryjson: '{"x":10,"y":10,"w":100,"h":100}', metadatajson: ''}],
+                };
+            }
+            return {};
+        };
+        const api = new ApiClient(transport, 42, true);
+        await act(async () => {
+            root.render(React.createElement(RevisionPlayer, {api, workspaceid: 1, maxRevision: 4, t}));
+        });
+        await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+        // The hint is shown and the playback controls are hidden.
+        expect(container.textContent).toContain('revision:historyincomplete');
+        expect(container.querySelector('.vimipad-revision-scrubber')).toBeNull();
+        // The live map is shown in full: 2 nodes + 1 container.
+        expect(container.querySelectorAll('.vimipad-canvas-node').length).toBe(2);
+        expect(container.querySelectorAll('.vimipad-canvas-container').length).toBe(1);
     });
 });

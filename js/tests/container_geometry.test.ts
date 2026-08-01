@@ -24,6 +24,7 @@
 import {
     boundingBox, boxFromDrag, centerInBox, ContainerBox, isDrawable, MIN_CONTAINER_SIZE, moveBox,
     nestingOrder, nestingParents, normalizeBox, parseGeometry, resizeBox, serializeGeometry,
+    isNodePinnedForRearrange,
 } from '../src/canvas/container_geometry';
 
 describe('container_geometry', () => {
@@ -200,5 +201,36 @@ describe('container_geometry', () => {
         expect(small.x + small.w).toBeGreaterThanOrEqual(nodeBox.x + nodeBox.w);
         expect(encloses(medium, small)).toBe(true);
         expect(encloses(large, medium)).toBe(true);
+    });
+
+    describe('isNodePinnedForRearrange', () => {
+        const moveLocked = (m?: string): boolean => {
+            if (!m) {
+                return false;
+            }
+            const meta = JSON.parse(m);
+            if (!meta.locked) {
+                return false;
+            }
+            return meta.locks ? Boolean(meta.locks.move) : true;
+        };
+        const box: ContainerBox = {x: 0, y: 0, w: 100, h: 100};
+
+        test('a move-locked node is pinned regardless of containers', () => {
+            const meta = JSON.stringify({locked: true, locks: {move: true, color: false, text: false}});
+            expect(isNodePinnedForRearrange(meta, {x: 500, y: 500}, [], moveLocked)).toBe(true);
+        });
+
+        test('a free node outside every locked container is not pinned', () => {
+            expect(isNodePinnedForRearrange(undefined, {x: 500, y: 500}, [box], moveLocked)).toBe(false);
+        });
+
+        test('a free node inside a move-locked container is pinned', () => {
+            expect(isNodePinnedForRearrange(undefined, {x: 50, y: 50}, [box], moveLocked)).toBe(true);
+        });
+
+        test('a node with no known position is not pinned by containers', () => {
+            expect(isNodePinnedForRearrange(undefined, undefined, [box], moveLocked)).toBe(false);
+        });
     });
 });

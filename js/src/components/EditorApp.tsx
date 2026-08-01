@@ -32,7 +32,7 @@ import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../grap
 import {nodeHeight, nodeWidth} from '../canvas/node_geometry';
 import {
     boundingBox, centerInBox, ContainerBox, nestingOrder, nestingParents,
-    parseGeometry, serializeGeometry,
+    parseGeometry, serializeGeometry, isNodePinnedForRearrange,
 } from '../canvas/container_geometry';
 import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg, extractMapData} from '../canvas/svg_export';
 import {EditorState, reduce} from '../store/reducer';
@@ -43,6 +43,7 @@ import {RelationListView} from './RelationListView';
 import {FA, Icon} from '../canvas/icons';
 import {LayoutMap, Point, PolledOperation, Size, SizeMap, VimiNode, VimiRelation} from '../types';
 import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
+import {isGroupLocked} from '../canvas/element_lock';
 import {useCollaboration} from '../collab/use_collaboration';
 import {useConstraintHints} from '../hooks/use_constraint_hints';
 import {ConstraintBanner} from './ConstraintBanner';
@@ -730,13 +731,42 @@ export function EditorApp(props: Props): React.ReactElement {
     // persisting the result so collaborators receive it too.
     const reArrangeLayout = useCallback(async () => {
         const prevPos = stored;
-        const auto = computeLayout(state.nodes, {}, state.relations, state.profile);
+        const autoRaw = computeLayout(state.nodes, {}, state.relations, state.profile);
+        const containers = state.containers ?? [];
+
+        // Lock handling for re-arrange:
+        //  - a move-locked node keeps its current position (never repositioned);
+        //  - a node inside a move-locked container is pinned to its current
+        //    position too, so it cannot be pushed out of the locked container.
+        // Both are achieved by overriding the computed position with the stored
+        // one before anything else uses the layout.
+        const moveLockedContainerBoxes: ContainerBox[] = [];
+        for (const c of containers) {
+            if (isGroupLocked(c.metadatajson, 'move')) {
+                const b = parseGeometry(c.geometryjson);
+                if (b) {
+                    moveLockedContainerBoxes.push(b);
+                }
+            }
+        }
+        const isPinned = (n: {stableid: string; metadatajson?: string}): boolean =>
+            isNodePinnedForRearrange(
+                n.metadatajson,
+                stored[n.stableid],
+                moveLockedContainerBoxes,
+                (m) => isGroupLocked(m, 'move')
+            );
+        const auto: LayoutMap = {...autoRaw};
+        for (const n of state.nodes) {
+            if (isPinned(n) && stored[n.stableid]) {
+                auto[n.stableid] = stored[n.stableid];
+            }
+        }
 
         // T5: keep container membership across re-arrange. Snapshot which nodes
         // sit inside each container now, then, after the new layout, refit each
         // container around its members' new positions so a node that was inside
         // stays inside (and the container follows its members).
-        const containers = state.containers ?? [];
         const CONTAINER_REFIT_PAD = 24;
         const boxOf = (id: string, at: LayoutMap): ContainerBox => {
             const pos = at[id] ?? {x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2};
@@ -772,6 +802,11 @@ export function EditorApp(props: Props): React.ReactElement {
             const container = containers.find(c => c.stableid === cid);
             const box = workingBox.get(cid);
             if (!container || !box) {
+                continue;
+            }
+            // A move-locked container keeps its geometry: it is neither moved nor
+            // resized by re-arrange.
+            if (isGroupLocked(container.metadatajson, 'move')) {
                 continue;
             }
             const memberBoxes = state.nodes
@@ -989,8 +1024,6 @@ export function EditorApp(props: Props): React.ReactElement {
                         onExportSvg={exportSvg}
                         onExportPng={exportPng}
                         onExportPdf={exportPdf}
-                        exportJsonUrl={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
-                        exportXmlUrl={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
                         t={t}
                         isLockedByOther={collab.isLockedByOther}
                         beginEdit={collab.beginEdit}
@@ -1048,6 +1081,24 @@ export function EditorApp(props: Props): React.ReactElement {
 
             {view === 'tools' && (
                 <div className="vimipad-tools-panel">
+                    <fieldset className="vimipad-control">
+                        <legend className="h6">{t('editor:exportdataheading')}</legend>
+                        <div className="vimipad-tools mt-2">
+                            <a
+                                className="btn btn-outline-secondary btn-sm"
+                                href={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >{t('editor:exportjson')}</a>
+                            <a
+                                className="btn btn-outline-secondary btn-sm"
+                                href={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >{t('editor:exportxml')}</a>
+                        </div>
+                        <p className="text-muted small mt-1">{t('editor:exportdatahint')}</p>
+                    </fieldset>
                     <fieldset className="vimipad-control">
                         <legend className="h6">{t('editor:importheading')}</legend>
                         <div className="vimipad-tools mt-2">

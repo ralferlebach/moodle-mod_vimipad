@@ -96,7 +96,47 @@ final class feedback_visibility_test extends \advanced_testcase {
         $this->assertEquals(100.0, $feedback->grademax);
         $this->assertSame('Well structured map.', $feedback->feedback);
         $this->assertEquals((int) $snapshot->id, $feedback->snapshotid);
+        $this->assertSame((int) $snapshot->revision, $feedback->snapshotrevision);
+        $this->assertSame((int) $workspace->id, $feedback->snapshotworkspaceid);
         $this->assertGreaterThan(0, $feedback->dategraded);
+    }
+
+    /**
+     * A graded submission embeds the assessed-map viewer: the panel renders the
+     * "view the assessed map" button and needs_viewer() reports true.
+     *
+     * @return void
+     */
+    public function test_feedback_embeds_assessed_map(): void {
+        $this->resetAfterTest();
+        [, $instance, $learner, $workspace] = $this->setup_activity();
+        $cm = get_coursemodule_from_instance('vimipad', (int) $instance->id, 0, false, MUST_EXIST);
+        $context = \context_module::instance($cm->id);
+
+        // Before grading: no viewer.
+        $this->assertFalse(
+            \mod_vimipad\local\output\feedback_panel::needs_viewer($instance, (int) $learner->id)
+        );
+
+        $snapshot = (new snapshot_service())->finalize($instance, $workspace, (int) $learner->id);
+        (new grading_service())->save_grade(
+            $instance,
+            $workspace,
+            (int) $snapshot->id,
+            70.0,
+            'Nice work.',
+            FORMAT_PLAIN,
+            2
+        );
+
+        // After grading: the viewer is present.
+        $this->assertTrue(
+            \mod_vimipad\local\output\feedback_panel::needs_viewer($instance, (int) $learner->id)
+        );
+        $html = \mod_vimipad\local\output\feedback_panel::render($context, $instance, (int) $learner->id);
+        $this->assertStringContainsString(get_string('feedback:showmap', 'mod_vimipad'), $html);
+        $this->assertStringContainsString('data-vimipad-revision', $html);
+        $this->assertStringContainsString('vimipad-revision-viewer', $html);
     }
 
     /**

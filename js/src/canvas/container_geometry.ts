@@ -328,3 +328,32 @@ export function nestingOrder(items: NestingItem[], parents: Map<string, string>)
         .map(i => i.stableid)
         .sort((a, b) => depth(b) - depth(a));
 }
+
+/**
+ * Whether a node must keep its current position during a re-arrange.
+ *
+ * A node is pinned if it is itself move-locked, or if it currently sits inside
+ * any move-locked container (so re-arrange cannot push it out of that
+ * container's bounds). This is the pure decision behind the re-arrange lock
+ * handling, kept here so it can be unit-tested in isolation.
+ *
+ * @param nodeMetadatajson The node's metadata JSON.
+ * @param currentCenter The node's current centre point (or undefined).
+ * @param moveLockedContainerBoxes The boxes of all move-locked containers.
+ * @param isNodeMoveLocked Predicate: is the given metadata move-locked?
+ * @returns True if the node must not be repositioned.
+ */
+export function isNodePinnedForRearrange(
+    nodeMetadatajson: string | undefined,
+    currentCenter: Point | undefined,
+    moveLockedContainerBoxes: ContainerBox[],
+    isNodeMoveLocked: (metadatajson?: string) => boolean
+): boolean {
+    if (isNodeMoveLocked(nodeMetadatajson)) {
+        return true;
+    }
+    if (!currentCenter) {
+        return false;
+    }
+    return moveLockedContainerBoxes.some(box => centerInBox(currentCenter, box));
+}

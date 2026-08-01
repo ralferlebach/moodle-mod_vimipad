@@ -176,9 +176,10 @@ class grading_service {
      * The grade and feedback shown to a learner for their own submission.
      *
      * Returns the learner's grade row (grade, feedback text, the graded
-     * snapshot id and when it was graded), or null when the learner has no
-     * graded submission yet. In group mode the grade is stored per member, so
-     * the member's own row is returned.
+     * snapshot id — with its revision and workspace so the assessed map can be
+     * shown — and when it was graded), or null when the learner has no graded
+     * submission yet. In group mode the grade is stored per member, so the
+     * member's own row is returned.
      *
      * @param stdClass $instance The activity instance.
      * @param int $userid The learner.
@@ -191,12 +192,30 @@ class grading_service {
         if (!$row || $row->grade === null) {
             return null;
         }
+        // If the graded snapshot is known, resolve its revision and workspace so
+        // the learner can view the exact map that was assessed.
+        $snapshotrevision = null;
+        $snapshotworkspaceid = null;
+        if ($row->snapshotid !== null) {
+            $snap = $DB->get_record(
+                'vimipad_snapshot',
+                ['id' => (int) $row->snapshotid],
+                'id, revision, workspaceid',
+                IGNORE_MISSING
+            );
+            if ($snap) {
+                $snapshotrevision = (int) $snap->revision;
+                $snapshotworkspaceid = (int) $snap->workspaceid;
+            }
+        }
         return (object) [
             'grade' => (float) $row->grade,
             'grademax' => (float) $instance->grade,
             'feedback' => (string) $row->feedback,
             'feedbackformat' => (int) $row->feedbackformat,
             'snapshotid' => $row->snapshotid !== null ? (int) $row->snapshotid : null,
+            'snapshotrevision' => $snapshotrevision,
+            'snapshotworkspaceid' => $snapshotworkspaceid,
             'dategraded' => (int) $row->timemodified,
         ];
     }

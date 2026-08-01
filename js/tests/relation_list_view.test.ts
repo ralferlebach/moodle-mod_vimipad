@@ -95,4 +95,47 @@ describe('RelationListView double-arrow merging', () => {
         const spanned = Array.from(container.querySelectorAll('td[rowspan="2"]'));
         expect(spanned.length).toBe(2); // label cell + actions cell
     });
+
+    test('a move-locked relation offers no reverse button and no retarget', () => {
+        render(root, stateWith([
+            {
+                stableid: 'r3', sourceid: 'a', targetid: 'b', type: 'link', label: 'rel', direction: 1,
+                metadatajson: JSON.stringify({locked: true, locks: {move: true, color: false, text: false}}),
+            },
+        ]));
+        // Reverse button (title "editor:reverse") must be gone.
+        const titles = Array.from(container.querySelectorAll('button')).map(b => b.getAttribute('title'));
+        expect(titles).not.toContain('editor:reverse');
+        // Rename (edit) is still offered because text is not locked.
+        expect(titles).toContain('editor:reledit');
+        // Delete is gone because the relation carries a lock.
+        expect(titles).not.toContain('editor:deleterelation');
+    });
+
+    test('a text-locked relation offers no rename', () => {
+        render(root, stateWith([
+            {
+                stableid: 'r4', sourceid: 'a', targetid: 'b', type: 'link', label: 'rel', direction: 1,
+                metadatajson: JSON.stringify({locked: true, locks: {move: false, color: false, text: true}}),
+            },
+        ]));
+        const titles = Array.from(container.querySelectorAll('button')).map(b => b.getAttribute('title'));
+        // No rename (edit) button.
+        expect(titles).not.toContain('editor:reledit');
+        // Reverse is still available because move is not locked.
+        expect(titles).toContain('editor:reverse');
+    });
+
+    test('a legacy globally-locked relation offers no action buttons at all', () => {
+        render(root, stateWith([
+            {
+                stableid: 'r5', sourceid: 'a', targetid: 'b', type: 'link', label: 'rel', direction: 1,
+                metadatajson: JSON.stringify({locked: true}),
+            },
+        ]));
+        const titles = Array.from(container.querySelectorAll('button')).map(b => b.getAttribute('title'));
+        expect(titles).not.toContain('editor:reledit');
+        expect(titles).not.toContain('editor:reverse');
+        expect(titles).not.toContain('editor:deleterelation');
+    });
 });

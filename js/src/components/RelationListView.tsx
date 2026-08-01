@@ -33,6 +33,7 @@ import React, {useState} from 'react';
 import {EditorState, labelFor} from '../store/reducer';
 import {VimiRelation} from '../types';
 import {FA, Icon} from '../canvas/icons';
+import {isGroupLocked, isAnyLocked} from '../canvas/element_lock';
 
 interface Props {
     state: EditorState;
@@ -129,13 +130,21 @@ export function RelationListView(props: Props): React.ReactElement {
                         const doubled = rel.direction === 2;
                         const relSpan = doubled && !reversed;
                         const relSkip = doubled && reversed;
+                        // Locks must not be bypassable from the list view. A
+                        // move-locked relation cannot be retargeted or reversed;
+                        // a text-locked one cannot be renamed; a relation with
+                        // any lock cannot be deleted here.
+                        const moveLocked = isGroupLocked(rel.metadatajson, 'move');
+                        const textLocked = isGroupLocked(rel.metadatajson, 'text');
+                        const anyLocked = isAnyLocked(rel.metadatajson);
+                        const canEdit = isEd && !textLocked;
                         return (
                             <tr key={`${rel.stableid}-${reversed ? 'r' : 'f'}`}>
                                 <td
-                                    onDragOver={allowDrop}
-                                    onDrop={e => handleDrop(e, onSrc)}
+                                    onDragOver={moveLocked ? undefined : allowDrop}
+                                    onDrop={moveLocked ? undefined : (e => handleDrop(e, onSrc))}
                                 >
-                                    {isEd ? (
+                                    {isEd && !moveLocked ? (
                                         <select
                                             className="form-control form-control-sm"
                                             aria-label={t('editor:subject')}
@@ -150,7 +159,7 @@ export function RelationListView(props: Props): React.ReactElement {
                                         rowSpan={relSpan ? 2 : undefined}
                                         className={relSpan ? 'align-middle' : undefined}
                                     >
-                                        {isEd ? (
+                                        {canEdit ? (
                                             <input
                                                 key={rel.stableid}
                                                 type="text"
@@ -169,10 +178,10 @@ export function RelationListView(props: Props): React.ReactElement {
                                     </td>
                                 )}
                                 <td
-                                    onDragOver={allowDrop}
-                                    onDrop={e => handleDrop(e, onTgt)}
+                                    onDragOver={moveLocked ? undefined : allowDrop}
+                                    onDrop={moveLocked ? undefined : (e => handleDrop(e, onTgt))}
                                 >
-                                    {isEd ? (
+                                    {isEd && !moveLocked ? (
                                         <select
                                             className="form-control form-control-sm"
                                             aria-label={t('editor:object')}
@@ -198,7 +207,7 @@ export function RelationListView(props: Props): React.ReactElement {
                                         >
                                             <Icon name={FA.confirm} />
                                         </button>
-                                    ) : (
+                                    ) : (!textLocked && (
                                         <button
                                             type="button"
                                             className="btn btn-sm btn-outline-secondary mr-1"
@@ -209,7 +218,8 @@ export function RelationListView(props: Props): React.ReactElement {
                                         >
                                             <Icon name={FA.edit} />
                                         </button>
-                                    )}
+                                    ))}
+                                    {!moveLocked && (
                                     <button
                                         type="button"
                                         className="btn btn-sm btn-outline-secondary mr-1"
@@ -221,6 +231,8 @@ export function RelationListView(props: Props): React.ReactElement {
                                     >
                                         <Icon name={FA.reverse} />
                                     </button>
+                                    )}
+                                    {!anyLocked && (
                                     <button
                                         type="button"
                                         className="btn btn-sm btn-outline-danger"
@@ -230,6 +242,7 @@ export function RelationListView(props: Props): React.ReactElement {
                                     >
                                         &times;
                                     </button>
+                                    )}
                                 </td>
                                 )}
                             </tr>

@@ -441,6 +441,9 @@ switch ($tab) {
     case 'feedback':
         echo $OUTPUT->heading(get_string('tab:feedback', 'mod_vimipad'), 3);
         echo \mod_vimipad\local\output\feedback_panel::render($context, $instance, (int) $USER->id);
+        if (\mod_vimipad\local\output\feedback_panel::needs_viewer($instance, (int) $USER->id)) {
+            $PAGE->requires->js_call_amd('mod_vimipad/revision', 'init', [$cm->id]);
+        }
         break;
 
     case 'peer':
@@ -595,18 +598,20 @@ switch ($tab) {
                 }
                 echo html_writer::div(format_text($entry->entrytext, FORMAT_PLAIN), 'vimipad-journal-text');
                 if (!empty($entry->revisionref) && $ws !== null) {
+                    echo html_writer::start_div('vimipad-revision-buttons');
                     echo html_writer::tag('button', get_string('journal:showstate', 'mod_vimipad'), [
                         'type' => 'button',
                         'class' => 'btn btn-sm btn-outline-secondary vimipad-showstate',
                         'data-vimipad-revision' => (int) $entry->revisionref,
                         'data-workspaceid' => (int) $ws->id,
                     ]);
-                    echo ' ' . html_writer::tag('button', get_string('revision:playtitle', 'mod_vimipad'), [
+                    echo html_writer::tag('button', get_string('revision:playtitle', 'mod_vimipad'), [
                         'type' => 'button',
                         'class' => 'btn btn-sm btn-outline-secondary vimipad-playstate',
                         'data-vimipad-play-revision' => (int) $entry->revisionref,
                         'data-workspaceid' => (int) $ws->id,
                     ]);
+                    echo html_writer::end_div();
                     $hasrevisionbuttons = true;
                 }
                 echo html_writer::end_tag('div');

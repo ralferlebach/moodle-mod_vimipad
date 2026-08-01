@@ -715,6 +715,10 @@
     position: relative;
 }
 
+.vimipad-revision-incomplete {
+    margin-bottom: 0.75rem;
+}
+
 .vimipad-revision-player-stage[aria-busy="true"] {
     opacity: 0.6;
 }
@@ -775,6 +779,10 @@
     display: none;
 }
 
-.vimipad-showstate {
+.vimipad-revision-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
     margin-top: 0.5rem;
 }

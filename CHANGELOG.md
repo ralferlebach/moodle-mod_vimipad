@@ -4,7 +4,105 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.7.22** (2026072760).
+> release is **0.7.25** (2026072764).
+
+## 0.7.25 (2026072764) — Canvas menu click-through fix, journal replay fallback, and polish
+
+- **Journal replay fallback for incomplete op-history.** The replay ("film")
+  reconstructs each state from the operation log. Maps whose elements were
+  created before the op-log existed (or via a legacy import path) have no create
+  operations to replay, so those elements never appeared — the reported symptom
+  where only containers showed. The player now detects this on mount by
+  comparing the live current map (`get_workspace`) with the reconstruction at
+  the final revision; when the live map has more elements, it shows the faithful
+  live current state with a hint ("Earlier editing steps for this map are not
+  recorded") instead of an unfaithful, partial animation, and hides the playback
+  controls. Complete histories play as before. The single-revision viewer
+  ("show editing state") deliberately does not fall back, since it must show the
+  exact historical revision the journal entry refers to.
+- **Fixed the misaligned journal buttons.** "Show editing state" and "Replay map
+  development" sat at different heights because a top margin was applied to only
+  one of them. They are now wrapped in a flex container that aligns both and
+  spaces them consistently.
+
+- **Fixed the recurring canvas menu click-through / z-order bug.** The floating
+  element menus (node, relation, container) sit in the topmost canvas layer and
+  their `foreignObject` boxes are deliberately larger than the visible toolbar.
+  The container menu wrapper carried an inline `pointer-events: auto` override
+  that made the whole box capture clicks, stealing them from the graph beneath.
+  All three menus now render through one shared `MenuOverlay` component that
+  enforces the invariant in a single place: the `foreignObject` and its
+  `.vimipad-node-dock-fo` wrapper are `pointer-events: none` (click-through) and
+  only the inner `.vimipad-node-dock` toolbar is `pointer-events: auto`. A
+  pointer-down on the toolbar is stopped from reaching the canvas so choosing a
+  menu button never pans or deselects.
+- **Continuous test coverage** so the bug cannot silently return: a behavioural
+  suite (`menu_overlay.test.ts`) renders the overlay and asserts the
+  click-through attributes and that a menu pointer-down does not propagate to
+  the canvas, and a structural guard (`canvas_menu_overlay_usage.test.ts`) fails
+  if `CanvasView` ever hand-writes a menu wrapper again or reintroduces an inline
+  `pointer-events: auto`.
+- **Fixed a phpcs violation** in `grading_service.php` (multi-line `get_record`
+  call formatting) reported by the project CI.
+
+## 0.7.24 (2026072762) — Assessed map in the feedback tab, data export moved to Tools
+
+Two workflow refinements: learners can now see the exact map that was graded
+alongside their feedback, and all data import/export lives together in the
+Tools tab.
+
+- **Assessed map in the feedback tab.** When a submission has been graded, the
+  learner's Feedback tab now offers a "View the assessed map" button that opens
+  the exact graded snapshot in the read-only revision viewer — the same viewer
+  the Journal tab uses, so no new viewer code. The snapshot is the stable
+  assessment target, so later edits to the working map do not change what is
+  shown. `grading_service::get_feedback_for_user()` now also resolves the
+  snapshot's revision and workspace; a new `feedback_panel::needs_viewer()`
+  lets `view.php` initialise the viewer JS only when the map is embedded.
+- **Data export moved to the Tools tab.** JSON and XML export have been removed
+  from the canvas export menu, which now offers only the graphical exports
+  (SVG, PNG, PDF). The Tools tab gains a "Export data" section with the JSON and
+  XML downloads, directly above the existing import — so data import and export
+  are found together in one place.
+- New strings `editor:exportdataheading` / `editor:exportjson` /
+  `editor:exportxml` / `editor:exportdatahint` and `feedback:mapheading` /
+  `feedback:showmap` (English and German).
+
+## 0.7.23 (2026072761) — Differentiated element locking (move / colour / text)
+
+Locks are no longer all-or-nothing. A teacher can now lock an element's
+**movement, size and shape**, its **colour**, and its **text** independently,
+and every part of the editor respects those groups so a locked action is never
+offered and then silently discarded.
+
+- **Semantic lock groups.** Lock state is stored as
+  `{"locked": true, "locks": {"move": …, "color": …, "text": …}}`. The three
+  groups cut across the database fields (shape, fill and text styling all live in
+  the metadata JSON), so the lock is defined semantically, not per field. A new
+  `\mod_vimipad\local\lock\element_lock` class is the single source of truth for
+  which change belongs to which group; the frontend mirrors it in
+  `element_lock.ts`. A legacy `{"locked": true}` with no `locks` map keeps its
+  old meaning: everything is locked.
+- **Server enforcement by group.** `operation_service` rejects an update only
+  when it would change a field or metadata key of a *locked* group, and blocks
+  deletion whenever any group is locked. Relation retargeting
+  (`newsource`/`newtarget`) counts as movement and is protected accordingly — it
+  previously slipped through.
+- **Teacher lock menu.** In lock mode the element toolbar shows three
+  independent toggles (move / colour / text) for nodes and containers, and the
+  two applicable ones (move / text) for relations.
+- **Locked actions are hidden, not discarded.** Outside lock mode the toolbar
+  only offers a control when its group is unlocked: the shape button, colour
+  field, text button and — for relations — the direction buttons disappear when
+  their group is locked.
+- **Re-arrange respects locks.** A move-locked node keeps its position; a node
+  inside a move-locked container is pinned so it cannot be pushed out of the
+  container's bounds; a move-locked container is neither moved nor resized.
+- **List view cannot bypass locks.** Retargeting (selects and drag), reversing,
+  renaming and deleting are each hidden in the relation table when the matching
+  group is locked.
+- New strings `editor:lockgroup_move` / `editor:lockgroup_color` /
+  `editor:lockgroup_text` (English and German).
 
 ## 0.7.22 (2026072760) — CI lint fix and Tools tab moved to the far right
 

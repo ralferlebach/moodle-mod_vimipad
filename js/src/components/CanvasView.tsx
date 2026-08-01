@@ -44,11 +44,12 @@ import {labelBox, shapeElement} from '../canvas/shapes';
 import {useDismiss} from '../hooks/use_dismiss';
 import {parseNodeStyle} from '../canvas/node_style';
 import {BoxCorner, boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBoxCorner, serializeGeometry} from '../canvas/container_geometry';
-import {isLocked, writeLock} from '../canvas/element_lock';
+import {isLocked, readGroupLocks, writeGroupLocks, LockGroup, isGroupLocked} from '../canvas/element_lock';
 import {screenToViewBox} from '../canvas/viewport';
 import {editableToText} from '../canvas/editable_text';
 import {freeConnectorPath, labelPoint, offsetAnchors, siblingOffsets} from '../canvas/connection_geometry';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
+import {MenuOverlay} from './MenuOverlay';
 import {TextEditMenu} from './TextEditMenu';
 import {FA, Icon} from '../canvas/icons';
 import {
@@ -104,8 +105,6 @@ interface Props {
     onExportSvg?: () => void;
     onExportPng?: () => void;
     onExportPdf?: () => void;
-    exportJsonUrl?: string;
-    exportXmlUrl?: string;
     /** True while the "draw container" tool is active. */
     drawingContainer?: boolean;
     /** Create a container from a drawn box (geometry JSON). */
@@ -169,8 +168,21 @@ export function CanvasView(props: Props): React.ReactElement {
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
         onCreateRelation, onChangeDirection,
         onUndo, onRedo, canUndo, canRedo, onReArrange,
-        onExportSvg, onExportPng, onExportPdf, exportJsonUrl, exportXmlUrl,
+        onExportSvg, onExportPng, onExportPdf,
     } = props;
+
+    // Toggle a single lock group on an element and persist the new metadata via
+    // the element-lock service call. Shared by nodes, relations and containers.
+    const toggleLockGroup = (
+        kind: 'node' | 'relation' | 'container',
+        stableid: string,
+        metadatajson: string | undefined,
+        group: LockGroup
+    ): void => {
+        const current = readGroupLocks(metadatajson);
+        const next = {...current, [group]: !current[group]};
+        props.onSetElementLock?.(kind, stableid, writeGroupLocks(metadatajson, next));
+    };
     // Rendering rules for the active display type: prefer the backend form config,
     // fall back to the built-in profile defaults when it is absent.
     const relLine: LineStyle = formLine(formconfig, profileLine(profile));
@@ -907,24 +919,6 @@ export function CanvasView(props: Props): React.ReactElement {
                         </button>
                         {exportOpen && (
                             <div className="vimipad-export-menu" role="menu">
-                                {exportJsonUrl && (
-                                    <a
-                                        role="menuitem"
-                                        href={exportJsonUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={() => window.setTimeout(() => setExportOpen(false), 0)}
-                                    >JSON</a>
-                                )}
-                                {exportXmlUrl && (
-                                    <a
-                                        role="menuitem"
-                                        href={exportXmlUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        onClick={() => window.setTimeout(() => setExportOpen(false), 0)}
-                                    >XML</a>
-                                )}
                                 <button
                                     type="button"
                                     role="menuitem"
@@ -1515,19 +1509,7 @@ export function CanvasView(props: Props): React.ReactElement {
                     // container can never occlude the menu (fixes the z-order
                     // and the resulting pointer/cursor and click-through bugs).
                     return (
-                        <foreignObject
-                            x={box.x}
-                            y={box.y - 52}
-                            width={320}
-                            height={48}
-                            style={{overflow: 'visible'}}
-                            pointerEvents="none"
-                        >
-                            <div
-                                className="vimipad-node-dock-fo"
-                                style={{pointerEvents: 'auto', display: 'inline-block'}}
-                                onPointerDown={e => e.stopPropagation()}
-                            >
+                        <MenuOverlay x={box.x} y={box.y - 52} width={320} height={48}>
                                 <NodeFormatToolbar
                                     kind="node"
                                     target={{metadatajson: container.metadatajson}}
@@ -1538,21 +1520,13 @@ export function CanvasView(props: Props): React.ReactElement {
                                     onDelete={() => props.onDeleteContainer?.(container.stableid)}
                                     onEditText={() => startRenameContainer(container.stableid, container.label)}
                                     lockMode={props.lockMode}
-                                    locked={isLocked(container.metadatajson)}
-                                    onToggleLock={props.onSetElementLock && props.canLock
-                                        ? () => props.onSetElementLock?.(
-                                            'container',
-                                            container.stableid,
-                                            writeLock(container.metadatajson, {
-                                                locked: !isLocked(container.metadatajson),
-                                                editable: [],
-                                            })
-                                        )
+                                    onToggleLockGroup={props.onSetElementLock && props.canLock
+                                        ? (group) => toggleLockGroup(
+                                            'container', container.stableid, container.metadatajson, group)
                                         : undefined}
                                     t={t}
                                 />
-                            </div>
-                        </foreignObject>
+                        </MenuOverlay>
                     );
                 }
                 if (active.kind === 'node') {
@@ -1564,15 +1538,12 @@ export function CanvasView(props: Props): React.ReactElement {
                     const editing = isEditing(interaction, 'node', node.stableid);
                     const {h} = sizeOf(node.stableid, editing ? editValue : node.label);
                     return (
-                        <foreignObject
+                        <MenuOverlay
                             x={pos.x - 150}
                             y={pos.y + h / 2 + 12}
                             width={300}
                             height={editing ? 300 : 320}
-                            style={{overflow: 'visible'}}
-                            pointerEvents="none"
                         >
-                            <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
                                 {editing ? (
                                     <TextEditMenu
                                         metadatajson={node.metadatajson}
@@ -1592,22 +1563,13 @@ export function CanvasView(props: Props): React.ReactElement {
                                         onDelete={() => onDeleteNode && onDeleteNode(node.stableid)}
                                         onEditText={() => startNodeEdit(node.stableid, node.label)}
                                         lockMode={props.lockMode}
-                                        locked={isLocked(node.metadatajson)}
-                                        onToggleLock={props.onSetElementLock && props.canLock
-                                            ? () => props.onSetElementLock?.(
-                                                'node',
-                                                node.stableid,
-                                                writeLock(node.metadatajson, {
-                                                    locked: !isLocked(node.metadatajson),
-                                                    editable: [],
-                                                })
-                                            )
+                                        onToggleLockGroup={props.onSetElementLock && props.canLock
+                                            ? (group) => toggleLockGroup('node', node.stableid, node.metadatajson, group)
                                             : undefined}
                                         t={t}
                                     />
                                 )}
-                            </div>
-                        </foreignObject>
+                        </MenuOverlay>
                     );
                 }
                 const rel = state.relations.find(r => r.stableid === active.id);
@@ -1621,20 +1583,38 @@ export function CanvasView(props: Props): React.ReactElement {
                 const editing = isEditing(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
                 return (
-                    <foreignObject
-                        x={midX - 150}
-                        y={midY + 14}
-                        width={300}
-                        height={70}
-                        style={{overflow: 'visible'}}
-                        pointerEvents="none"
-                    >
-                        <div className="vimipad-node-dock-fo" onPointerDown={e => e.stopPropagation()}>
+                    <MenuOverlay x={midX - 150} y={midY + 14} width={300} height={70}>
                             {editing ? (
                                 <TextEditMenu disabled={disabled} onConfirm={commitEdit} t={t} />
+                            ) : props.lockMode && props.onSetElementLock && props.canLock ? (
+                                <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:relation')}>
+                                    <div className="vimipad-node-dock-row">
+                                        {(['move', 'text'] as LockGroup[]).map(group => {
+                                            const gLocked = isGroupLocked(rel.metadatajson, group);
+                                            return (
+                                                <button
+                                                    key={group}
+                                                    type="button"
+                                                    className={`vimipad-dock-btn${gLocked ? ' active' : ''}`}
+                                                    aria-pressed={gLocked}
+                                                    title={t(group === 'move'
+                                                        ? 'editor:lockgroup_move' : 'editor:lockgroup_text')
+                                                        + ' — ' + t(gLocked ? 'editor:unlockelement' : 'editor:lockelement')}
+                                                    aria-label={t(group === 'move'
+                                                        ? 'editor:lockgroup_move' : 'editor:lockgroup_text')
+                                                        + ' — ' + t(gLocked ? 'editor:unlockelement' : 'editor:lockelement')}
+                                                    onClick={() => toggleLockGroup(
+                                                        'relation', rel.stableid, rel.metadatajson, group)}
+                                                ><Icon name={gLocked ? FA.lock
+                                                    : (group === 'move' ? FA.dirRight : FA.text)} /></button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             ) : (onChangeDirection && (
                                 <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:relation')}>
                                     <div className="vimipad-node-dock-row">
+                                        {!isGroupLocked(rel.metadatajson, 'text') && (
                                         <button
                                             type="button"
                                             className="vimipad-dock-btn"
@@ -1642,6 +1622,8 @@ export function CanvasView(props: Props): React.ReactElement {
                                             aria-label={t('editor:fmt_text')}
                                             onClick={() => startRelationEdit(rel.stableid, rel.label)}
                                         ><Icon name={FA.text} /></button>
+                                        )}
+                                        {!isGroupLocked(rel.metadatajson, 'move') && (<>
                                         <button
                                             type="button"
                                             className={`vimipad-dock-btn${d === 0 ? ' active' : ''}`}
@@ -1674,6 +1656,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                             aria-label={t('editor:dir_both')}
                                             onClick={() => onChangeDirection(rel.stableid, 2)}
                                         ><Icon name={FA.dirBoth} /></button>
+                                        </>)}
                                         {onDeleteRelation && (
                                             <button
                                                 type="button"
@@ -1686,8 +1669,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                     </div>
                                 </div>
                             ))}
-                        </div>
-                    </foreignObject>
+                    </MenuOverlay>
                 );
             })()}
 
