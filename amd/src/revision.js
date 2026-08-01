@@ -40,6 +40,7 @@ const STRING_KEYS = [
     'editor:loading', 'editor:nodelabel', 'editor:norelations', 'editor:object',
     'editor:relation', 'editor:relations', 'editor:reledit', 'editor:retarget',
     'editor:reverse', 'journal:revisiontitle',
+    'revision:play', 'revision:pause', 'revision:playtitle', 'revision:scrubber',
 ];
 
 /**
@@ -75,10 +76,10 @@ const buildTransport = () => (methodname, args) => {
 const loadViewer = () => new Promise((resolve, reject) => {
     require(['mod_vimipad/editor_lazy'], (module) => {
         const editor = module && module.default ? module.default : module;
-        if (editor && typeof editor.mountRevision === 'function') {
+        if (editor && typeof editor.mountRevision === 'function' && typeof editor.mountPlayer === 'function') {
             resolve(editor);
         } else {
-            reject(new Error('ViMi Pad editor module did not expose mountRevision().'));
+            reject(new Error('ViMi Pad editor module did not expose mountRevision()/mountPlayer().'));
         }
     }, reject);
 });
@@ -91,8 +92,9 @@ const loadViewer = () => new Promise((resolve, reject) => {
  */
 export const init = async(cmid) => {
     const buttons = Array.prototype.slice.call(document.querySelectorAll('[data-vimipad-revision]'));
+    const playButtons = Array.prototype.slice.call(document.querySelectorAll('[data-vimipad-play-revision]'));
     const container = document.getElementById('vimipad-revision-viewer');
-    if (buttons.length === 0 || !container) {
+    if ((buttons.length === 0 && playButtons.length === 0) || !container) {
         return;
     }
 
@@ -108,6 +110,22 @@ export const init = async(cmid) => {
                     cmid,
                     workspaceid,
                     revision,
+                    callService: buildTransport(),
+                    getString,
+                });
+                container.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+            });
+        });
+
+        playButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                const workspaceid = parseInt(button.dataset.workspaceid || '0', 10);
+                const maxRevision = parseInt(button.dataset.vimipadPlayRevision || '0', 10);
+                editor.mountPlayer(container, {
+                    cmid,
+                    workspaceid,
+                    revision: maxRevision,
+                    maxRevision,
                     callService: buildTransport(),
                     getString,
                 });

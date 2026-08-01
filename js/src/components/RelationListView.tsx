@@ -88,7 +88,7 @@ export function RelationListView(props: Props): React.ReactElement {
 
     return (
         <div className="vimipad-listview">
-            <h3 className="h5 vimipad-listview-heading">{t('editor:conceptsandrelations')}</h3>
+            <h3 className="h6 vimipad-listview-heading">{t('editor:conceptsandrelations')}</h3>
             <div className="vimipad-node-box" aria-label={t('editor:concepts')}>
                 <span className="vimipad-node-box-label text-muted small">{t('editor:concepts')}</span>
                 <ul className="vimipad-node-chips list-inline mb-0" aria-label={t('editor:dragnodes')}>
@@ -182,7 +182,11 @@ export function RelationListView(props: Props): React.ReactElement {
                                         >{nodeOptions}</select>
                                     ) : labelFor(state, tgtId)}
                                 </td>
-                                <td className="text-right vimipad-relation-actions">
+                                {!relSkip && (
+                                <td
+                                    className="text-right vimipad-relation-actions"
+                                    rowSpan={relSpan ? 2 : undefined}
+                                >
                                     {isEd ? (
                                         <button
                                             type="button"
@@ -227,6 +231,7 @@ export function RelationListView(props: Props): React.ReactElement {
                                         &times;
                                     </button>
                                 </td>
+                                )}
                             </tr>
                         );
                     })}

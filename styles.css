@@ -408,6 +408,8 @@
 .vimipad-listview {
     width: 100%;
     margin-top: 0.75rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .vimipad-listview-heading {
@@ -428,13 +430,12 @@
     margin-bottom: 0.35rem;
 }
 
-/* Let the relation table scroll horizontally instead of overflowing on
-   narrow screens (the list view is the primary mobile editing surface). */
+/* The relation table spans the full width. Horizontal scrolling on narrow
+   screens is handled by the .vimipad-listview container, so the table itself
+   stays a real full-width table (a display:block table would shrink to its
+   content width). */
 .vimipad-relation-list {
-    display: block;
     width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
 }
 
 /* Toolbars wrap rather than overflow on small viewports. */
@@ -695,6 +696,27 @@
     .vimipad-journal-body {
         grid-template-columns: 1fr;
     }
+}
+
+.vimipad-revision-player-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.vimipad-revision-scrubber {
+    flex: 1 1 200px;
+    min-width: 120px;
+}
+
+.vimipad-revision-player-stage {
+    position: relative;
+}
+
+.vimipad-revision-player-stage[aria-busy="true"] {
+    opacity: 0.6;
 }
 
 /* -------------------------------------------------------------------------

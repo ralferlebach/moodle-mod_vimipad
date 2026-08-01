@@ -4,7 +4,95 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.7.18** (2026072756).
+> release is **0.7.21** (2026072759).
+
+## 0.7.21 (2026072759) — list view: full-width table, matched heading, merged double-arrow actions
+
+- **Relation table spans the full page width.** The table previously used
+  `display: block` (for mobile horizontal scrolling), which shrank it to its
+  content width. Scrolling now lives on the `vimipad-listview` container, so the
+  table itself is a real full-width table.
+- **"Concepts and relations" heading matched to the others.** It was an `h5`;
+  it now uses the same `h6` sizing/weight as the "Add concept" / "Add relation"
+  legends.
+- **Double-arrow rows render their buttons once.** For a double-arrow relation
+  (shown as two connected rows, A→B and B→A), the action buttons
+  (edit/reverse/delete) were rendered on both rows. They now span both rows with
+  `rowSpan=2` and render once — the same treatment the shared relation-label
+  cell already had. A single-direction relation is unaffected.
+- New Jest suite `relation_list_view` (a single-direction relation renders one
+  action cell; a double-arrow relation renders two rows but one action cell
+  spanning both, plus the label cell). Verified: 254 backend tests green, 250
+  Jest tests green, tsc clean, esbuild bundle rebuilt, `init.min.js`
+  reproducible through Grunt, phpcs clean.
+
+## 0.7.20 (2026072758) — test hygiene: shared workspace fixture
+
+Removes the three phpcpd clones reported by CI (73 duplicated lines, all in
+tests).
+
+- **Shared `workspace_fixture` trait.** The identical course + module + empty
+  workspace setup in `element_lock_test`, `membership_integrity_test` and
+  `reconstruction_roundtrip_test`, plus the shared `op()` helper, moved into a
+  single `tests/fixtures/workspace_fixture.php` trait. Behaviour is unchanged —
+  same creation, same helper.
+- **Internal clone removed.** In `membership_integrity_test`, the two
+  purge-on-delete tests shared an identical 2-nodes-plus-relation-plus-container
+  seed; that is now a `seed_nodes_relation_container()` helper.
+- phpcpd now reports no clones. Verified: 254 backend tests green (unchanged
+  count — no test lost), each test file individually, phpcs / phpdoc / validate
+  clean. The fixture is not itself a test class.
+
+## 0.7.20 (2026072758) — test hygiene: remove duplicated test setup
+
+Removes the three clones reported by phpcpd (`--min-lines 5 --min-tokens 70`),
+all in test files, without changing any test's behaviour.
+
+- **Shared workspace fixture.** The identical `setUp()` (course + module + empty
+  workspace) in `element_lock_test`, `membership_integrity_test` and
+  `reconstruction_roundtrip_test`, plus the shared `op()` helper, moved into a
+  new `mod_vimipad\workspace_fixture` trait in `tests/fixtures/`. Each suite now
+  calls `set_up_workspace()` from its `setUp()`. The trait file is loaded with an
+  explicit `require_once` (it is not autoloaded) and is not itself a test class.
+- **Internal clone removed.** In `membership_integrity_test`, the two tests that
+  built the same two-nodes-plus-relation-plus-container scenario
+  (`test_node_delete_purges_memberships` /
+  `test_relation_delete_purges_memberships`) now share a
+  `seed_nodes_relation_container()` helper.
+- phpcpd now reports no clones. Verified: 254 backend tests green (unchanged —
+  no test lost: element_lock 5, membership_integrity 6, reconstruction_roundtrip
+  1), each test file green individually, phpcs / phpdoc / validate clean. No
+  functional change, no frontend change.
+
+## 0.7.19 (2026072757) — revision player: replay map development as a film
+
+Adds the animated replay requested in point 4. The single-revision viewer
+already existed (journal entries with a `revisionref` offer a "show editing
+state" button that mounts the read-only `RevisionViewer`); this adds the
+step-by-step film alongside it.
+
+- **New `RevisionPlayer` component.** Steps through the revisions from 1 up to a
+  target revision, reconstructing and rendering each state on the read-only
+  canvas via the existing `get_revision_state` service. Play/pause button, a
+  scrubber to jump to any step, a "revision N / total" counter, and an
+  in-memory cache so scrubbing back and forth (and the animation itself) does
+  not re-hit the service for a revision already seen. Restarts from the
+  beginning when play is pressed at the end.
+- **Wired into the journal tab.** Each journal entry that references a revision
+  now offers a "Replay map development" button next to "show editing state";
+  the `mod_vimipad/revision` AMD module mounts the player (new `mountPlayer`
+  entry point on the bundled editor) into the same host element. No backend
+  change — the player reuses the reconstruction service.
+- New strings `revision:play` / `revision:pause` / `revision:playtitle` /
+  `revision:scrubber` (EN/DE).
+- **Test hardening:** the `amd_string_keys` test now also checks
+  `amd/src/revision.js` (not just `init.js`), so a string requested by the
+  revision/player bootstrap but missing from `lang/en` is caught.
+- New Jest suite `revision_player` (loads the target revision on mount, the
+  scrubber jumps to a chosen revision, play advances over time and stops at the
+  end, using fake timers). Verified: 254 backend tests green, 248 Jest tests
+  green, tsc clean, both `init.min.js` and `revision.min.js` reproducible
+  through Grunt, phpcs / validate / savepoints clean.
 
 ## 0.7.18 (2026072756) — learner feedback visibility (beta blocker)
 

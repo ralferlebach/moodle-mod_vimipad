@@ -601,6 +601,12 @@ switch ($tab) {
                         'data-vimipad-revision' => (int) $entry->revisionref,
                         'data-workspaceid' => (int) $ws->id,
                     ]);
+                    echo ' ' . html_writer::tag('button', get_string('revision:playtitle', 'mod_vimipad'), [
+                        'type' => 'button',
+                        'class' => 'btn btn-sm btn-outline-secondary vimipad-playstate',
+                        'data-vimipad-play-revision' => (int) $entry->revisionref,
+                        'data-workspaceid' => (int) $ws->id,
+                    ]);
                     $hasrevisionbuttons = true;
                 }
                 echo html_writer::end_tag('div');

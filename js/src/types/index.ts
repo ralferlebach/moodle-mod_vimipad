@@ -207,6 +207,8 @@ export interface RevisionConfig {
     workspaceid: number;
     /** The revision to reconstruct. */
     revision: number;
+    /** For the player: the highest revision to replay up to. */
+    maxRevision?: number;
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */

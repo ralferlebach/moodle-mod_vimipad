@@ -31,6 +31,7 @@ import {createRoot} from 'react-dom/client';
 import {ApiClient, createFetchTransport} from './api/service';
 import {EditorApp} from './components/EditorApp';
 import {RevisionViewer} from './components/RevisionViewer';
+import {RevisionPlayer} from './components/RevisionPlayer';
 import {MountConfig, RevisionConfig} from './types';
 
 /**
@@ -83,7 +84,7 @@ export function mount(element: HTMLElement, config: MountConfig): void {
 // The bundle is emitted as the AMD module mod_vimipad/editor_lazy. The init
 // module require()s it and calls mount() with an injected transport and string
 // resolver. On Moodle 5.3+ this can be replaced by the core React runtime.
-export default {mount, mountRevision};
+export default {mount, mountRevision, mountPlayer};
 
 /**
  * Mount the read-only revision viewer into the given element.
@@ -104,6 +105,28 @@ export function mountRevision(element: HTMLElement, config: RevisionConfig): voi
         api={api}
         workspaceid={config.workspaceid}
         revision={config.revision}
+        t={t}
+    />);
+}
+
+/**
+ * Mount the revision player (animated replay) into the given element.
+ *
+ * @param element The container element.
+ * @param config The revision configuration; `maxRevision` bounds the replay
+ *     (defaults to `revision`).
+ */
+export function mountPlayer(element: HTMLElement, config: RevisionConfig): void {
+    const transport = config.callService ?? createFetchTransport();
+    const api = new ApiClient(transport, config.cmid, true);
+    const provided = config.getString;
+    const t = provided ? (key: string): string => provided(key) ?? resolveString(key) : resolveString;
+
+    const root = createRoot(element);
+    root.render(<RevisionPlayer
+        api={api}
+        workspaceid={config.workspaceid}
+        maxRevision={config.maxRevision ?? config.revision}
         t={t}
     />);
 }

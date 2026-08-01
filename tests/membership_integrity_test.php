@@ -20,6 +20,10 @@ use mod_vimipad\local\service\layout_service;
 use mod_vimipad\local\service\operation_service;
 use mod_vimipad\local\service\snapshot_service;
 
+defined('MOODLE_INTERNAL') || die();
+
+require_once(__DIR__ . '/fixtures/workspace_fixture.php');
+
 /**
  * Membership integrity and spatial derivation tests.
  *
@@ -34,8 +38,7 @@ use mod_vimipad\local\service\snapshot_service;
  * @covers     \mod_vimipad\local\service\snapshot_service
  */
 final class membership_integrity_test extends \advanced_testcase {
-    /** @var int The workspace id. */
-    private int $workspaceid;
+    use \mod_vimipad\workspace_fixture;
 
     /**
      * Create a course, module and an empty workspace.
@@ -45,29 +48,7 @@ final class membership_integrity_test extends \advanced_testcase {
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
-
-        global $DB;
-        $course = $this->getDataGenerator()->create_course();
-        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
-        $now = time();
-        $this->workspaceid = (int) $DB->insert_record('vimipad_workspace', (object) [
-            'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
-            'currentrevision' => 0, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
-        ]);
-    }
-
-    /**
-     * Apply an operation and return [revision, stableid].
-     *
-     * @param operation_service $service The service.
-     * @param int $rev The current revision.
-     * @param string $type The operation type.
-     * @param array $payload The payload.
-     * @return array{0: int, 1: ?string}
-     */
-    private function op(operation_service $service, int $rev, string $type, array $payload): array {
-        $r = $service->apply($this->workspaceid, $rev, $type, $payload, 1);
-        return [(int) $r['revision'], $r['stableid'] ?? null];
+        $this->set_up_workspace();
     }
 
     /**
@@ -108,12 +89,7 @@ final class membership_integrity_test extends \advanced_testcase {
     public function test_node_delete_purges_memberships(): void {
         global $DB;
         $service = new operation_service();
-        [$rev, $nodea] = $this->op($service, 0, 'node_create', ['type' => 'concept', 'label' => 'A']);
-        [$rev, $nodeb] = $this->op($service, $rev, 'node_create', ['type' => 'concept', 'label' => 'B']);
-        [$rev, $relid] = $this->op($service, $rev, 'relation_create', [
-            'sourceid' => $nodea, 'targetid' => $nodeb, 'type' => 'link',
-        ]);
-        [$rev, $cid] = $this->op($service, $rev, 'container_create', ['type' => 'group']);
+        [$rev, $nodea, $nodeb, $relid, $cid] = $this->seed_nodes_relation_container($service);
         [$rev] = $this->op($service, $rev, 'membership_add', [
             'containerstableid' => $cid, 'itemtype' => 'node', 'itemstableid' => $nodea,
         ]);
@@ -130,6 +106,23 @@ final class membership_integrity_test extends \advanced_testcase {
     }
 
     /**
+     * Seed two nodes, a relation between them and an empty container.
+     *
+     * @param operation_service $service The operation service.
+     * @return array{0: int, 1: string, 2: string, 3: string, 4: string}
+     *     [revision, node A id, node B id, relation id, container id]
+     */
+    private function seed_nodes_relation_container(operation_service $service): array {
+        [$rev, $nodea] = $this->op($service, 0, 'node_create', ['type' => 'concept', 'label' => 'A']);
+        [$rev, $nodeb] = $this->op($service, $rev, 'node_create', ['type' => 'concept', 'label' => 'B']);
+        [$rev, $relid] = $this->op($service, $rev, 'relation_create', [
+            'sourceid' => $nodea, 'targetid' => $nodeb, 'type' => 'link',
+        ]);
+        [$rev, $cid] = $this->op($service, $rev, 'container_create', ['type' => 'group']);
+        return [$rev, $nodea, $nodeb, $relid, $cid];
+    }
+
+    /**
      * Deleting a relation removes its membership rows.
      *
      * @return void
@@ -137,12 +130,7 @@ final class membership_integrity_test extends \advanced_testcase {
     public function test_relation_delete_purges_memberships(): void {
         global $DB;
         $service = new operation_service();
-        [$rev, $nodea] = $this->op($service, 0, 'node_create', ['type' => 'concept', 'label' => 'A']);
-        [$rev, $nodeb] = $this->op($service, $rev, 'node_create', ['type' => 'concept', 'label' => 'B']);
-        [$rev, $relid] = $this->op($service, $rev, 'relation_create', [
-            'sourceid' => $nodea, 'targetid' => $nodeb, 'type' => 'link',
-        ]);
-        [$rev, $cid] = $this->op($service, $rev, 'container_create', ['type' => 'group']);
+        [$rev, $nodea, $nodeb, $relid, $cid] = $this->seed_nodes_relation_container($service);
         [$rev] = $this->op($service, $rev, 'membership_add', [
             'containerstableid' => $cid, 'itemtype' => 'relation', 'itemstableid' => $relid,
         ]);

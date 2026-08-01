@@ -19,6 +19,10 @@ namespace mod_vimipad;
 use mod_vimipad\local\service\operation_service;
 use mod_vimipad\local\service\reconstruction_service;
 
+defined('MOODLE_INTERNAL') || die();
+
+require_once(__DIR__ . '/fixtures/workspace_fixture.php');
+
 /**
  * Reconstruction round-trip: replaying the operation log must reproduce the
  * live state exactly, for every operation type.
@@ -32,8 +36,7 @@ use mod_vimipad\local\service\reconstruction_service;
  * @covers     \mod_vimipad\local\service\reconstruction_service
  */
 final class reconstruction_roundtrip_test extends \advanced_testcase {
-    /** @var int The workspace id. */
-    private int $workspaceid;
+    use \mod_vimipad\workspace_fixture;
 
     /**
      * Create a course, module and an empty workspace.
@@ -43,15 +46,7 @@ final class reconstruction_roundtrip_test extends \advanced_testcase {
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
-
-        global $DB;
-        $course = $this->getDataGenerator()->create_course();
-        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
-        $now = time();
-        $this->workspaceid = (int) $DB->insert_record('vimipad_workspace', (object) [
-            'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
-            'currentrevision' => 0, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
-        ]);
+        $this->set_up_workspace();
     }
 
     /**
