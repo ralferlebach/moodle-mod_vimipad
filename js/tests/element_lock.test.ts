@@ -21,7 +21,10 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {isLocked, readLock, writeLock} from '../src/canvas/element_lock';
+import {
+    isLocked, readLock, writeLock,
+    readGroupLocks, writeGroupLocks, isGroupLocked, isAnyLocked,
+} from '../src/canvas/element_lock';
 
 describe('element_lock', () => {
     test('readLock defaults to unlocked with no editable fields', () => {
@@ -62,5 +65,50 @@ describe('element_lock', () => {
         expect(parsed.shape).toBe('rect');
         expect('locked' in parsed).toBe(false);
         expect('editable' in parsed).toBe(false);
+    });
+
+    test('readGroupLocks: a legacy global lock locks every group', () => {
+        const g = readGroupLocks('{"locked":true}');
+        expect(g).toEqual({move: true, color: true, text: true});
+    });
+
+    test('readGroupLocks: an unlocked element locks nothing', () => {
+        expect(readGroupLocks(undefined)).toEqual({move: false, color: false, text: false});
+        expect(readGroupLocks('{"shape":"rect"}')).toEqual({move: false, color: false, text: false});
+    });
+
+    test('readGroupLocks: a locks map is read per group', () => {
+        const g = readGroupLocks('{"locked":true,"locks":{"move":true,"color":false,"text":true}}');
+        expect(g).toEqual({move: true, color: false, text: true});
+    });
+
+    test('isGroupLocked and isAnyLocked reflect the group flags', () => {
+        const meta = '{"locked":true,"locks":{"move":false,"color":true,"text":false}}';
+        expect(isGroupLocked(meta, 'color')).toBe(true);
+        expect(isGroupLocked(meta, 'move')).toBe(false);
+        expect(isAnyLocked(meta)).toBe(true);
+        expect(isAnyLocked('{"shape":"rect"}')).toBe(false);
+    });
+
+    test('writeGroupLocks: all-false fully unlocks and keeps styling', () => {
+        const parsed = JSON.parse(writeGroupLocks(
+            '{"shape":"rect","locked":true,"locks":{"move":true,"color":false,"text":false}}',
+            {move: false, color: false, text: false}));
+        expect(parsed.shape).toBe('rect');
+        expect('locked' in parsed).toBe(false);
+        expect('locks' in parsed).toBe(false);
+    });
+
+    test('writeGroupLocks: a partial lock writes locked plus the explicit map', () => {
+        const parsed = JSON.parse(writeGroupLocks('{"shape":"rect"}',
+            {move: true, color: false, text: true}));
+        expect(parsed.shape).toBe('rect');
+        expect(parsed.locked).toBe(true);
+        expect(parsed.locks).toEqual({move: true, color: false, text: true});
+    });
+
+    test('writeGroupLocks round-trips through readGroupLocks', () => {
+        const flags = {move: false, color: true, text: true};
+        expect(readGroupLocks(writeGroupLocks(undefined, flags))).toEqual(flags);
     });
 });

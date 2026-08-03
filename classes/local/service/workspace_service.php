@@ -145,8 +145,9 @@ class workspace_service {
      * Create a workspace for an owner, serialized so concurrent first-access
      * cannot produce duplicate workspaces.
      *
-     * Uses the core lock API keyed per owner. If the lock cannot be obtained in
-     * time, a best-effort create is performed (the race window is tiny).
+     * Uses the core lock API keyed per owner. If the lock cannot be acquired,
+     * an already-created workspace is reused; otherwise creation aborts, so
+     * owner uniqueness is preserved (fail closed).
      *
      * @param int $vimipadid The vimipad instance id.
      * @param int|null $userid Owner user id (individual mode) or null.
@@ -206,6 +207,21 @@ class workspace_service {
                 'locked' => 0,
                 'timemodified' => time(),
             ]);
+            // Lifecycle contract: reopening withdraws the submitted state of
+            // not-yet-graded snapshots (submitted / in review), so completion
+            // and listings revert until a fresh submission. Graded snapshots
+            // keep their status: the awarded grade and an achieved completion
+            // remain as history until a regrade replaces them.
+            $DB->execute(
+                'UPDATE {vimipad_snapshot} SET status = :reopened
+                  WHERE workspaceid = :wsid AND status IN (:submitted, :inreview)',
+                [
+                    'reopened' => \mod_vimipad\local\service\snapshot_service::STATUS_REOPENED,
+                    'wsid' => $workspaceid,
+                    'submitted' => \mod_vimipad\local\service\snapshot_service::STATUS_SUBMITTED,
+                    'inreview' => \mod_vimipad\local\service\snapshot_service::STATUS_INREVIEW,
+                ]
+            );
         } finally {
             $lock->release();
         }

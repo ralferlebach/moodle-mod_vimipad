@@ -36,6 +36,7 @@ import {FormConfig} from '../types';
 import {NodeStyle, parseNodeStyle, serialiseNodeStyle, withNodeStyle} from '../canvas/node_style';
 import {FA, Icon, ShapeGlyph} from '../canvas/icons';
 import {ColorField} from './ColorField';
+import {LockGroup, LOCK_GROUPS, readGroupLocks} from '../canvas/element_lock';
 
 interface Props {
     /** Element kind: nodes get the full toolset, relations a reduced one. */
@@ -55,12 +56,12 @@ interface Props {
     /** Start inline text editing of the element's label. */
     onEditText?: () => void;
     t: (key: string) => string;
-    /** Whether lock mode is armed; only then is the lock toggle offered. */
+    /** Whether lock mode is armed; only then is the lock menu offered. */
     lockMode?: boolean;
-    /** Whether this element currently carries a template lock. */
+    /** Whether this element currently carries any template lock. */
     locked?: boolean;
-    /** Toggle the template lock on this element. */
-    onToggleLock?: () => void;
+    /** Toggle a single lock group (move/color/text) on this element. */
+    onToggleLockGroup?: (group: LockGroup) => void;
 }
 
 /** Which expandable panel is open, if any. */
@@ -84,38 +85,59 @@ const SHAPE_LABEL: Record<NodeShape, string> = {
  */
 export function NodeFormatToolbar(props: Props): React.ReactElement {
     const {kind = 'node', target, profile, formconfig, disabled, defaultPanel, onChangeStyle, onDuplicate, onDelete,
-        onEditText, lockMode, locked, onToggleLock, t} = props;
+        onEditText, lockMode, onToggleLockGroup, t} = props;
     const isNode = kind !== 'relation';
     const [panel, setPanel] = useState<Panel>(defaultPanel ?? 'none');
     const style = parseNodeStyle(target.metadatajson);
     const activeShape = formClampShape(formconfig, profile, style.shape);
+    const groupLocks = readGroupLocks(target.metadatajson);
 
     const apply = (change: NodeStyle): void => onChangeStyle(withNodeStyle(target.metadatajson, change));
     const toggle = (p: Panel): void => setPanel(cur => (cur === p ? 'none' : p));
 
-    // A locked element offers nothing but the lock toggle while lock mode is on:
-    // no text, format, colour or structural editing.
-    if (lockMode && locked && onToggleLock) {
+    // Lock mode (teacher/author): the dock is the per-group lock menu — move,
+    // colour, text as independent toggles — instead of the styling controls.
+    if (lockMode && onToggleLockGroup) {
+        const groupIcon: Record<LockGroup, string> = {
+            move: FA.shape, color: FA.fill, text: FA.text,
+        };
+        const groupLabel: Record<LockGroup, string> = {
+            move: 'editor:lockgroup_move', color: 'editor:lockgroup_color', text: 'editor:lockgroup_text',
+        };
         return (
             <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:fmt_toolbar')}>
                 <div className="vimipad-node-dock-row">
-                    <button
-                        type="button"
-                        className="vimipad-dock-btn active"
-                        aria-pressed={true}
-                        title={t('editor:unlockelement')}
-                        aria-label={t('editor:unlockelement')}
-                        onClick={onToggleLock}
-                    ><Icon name={FA.lock} /></button>
+                    {LOCK_GROUPS.map(group => (
+                        <button
+                            key={group}
+                            type="button"
+                            className={`vimipad-dock-btn${groupLocks[group] ? ' active' : ''}`}
+                            aria-pressed={groupLocks[group]}
+                            title={t(groupLabel[group]) + ' — ' + t(groupLocks[group]
+                                ? 'editor:unlockelement' : 'editor:lockelement')}
+                            aria-label={t(groupLabel[group]) + ' — ' + t(groupLocks[group]
+                                ? 'editor:unlockelement' : 'editor:lockelement')}
+                            onClick={() => onToggleLockGroup(group)}
+                        >
+                            <Icon name={groupLocks[group] ? FA.lock : groupIcon[group]} />
+                        </button>
+                    ))}
                 </div>
             </div>
         );
     }
 
+    // Normal mode (learner/author editing): a control is only offered when its
+    // group is not locked, so a locked action is never presented and then
+    // silently discarded on save.
+    const moveLocked = groupLocks.move;
+    const colorLocked = groupLocks.color;
+    const textLocked = groupLocks.text;
+
     return (
         <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:fmt_toolbar')}>
             <div className="vimipad-node-dock-row">
-                {isNode && (
+                {isNode && !moveLocked && (
                     <button
                         type="button"
                         className={`vimipad-dock-btn${panel === 'shape' ? ' active' : ''}`}
@@ -126,7 +148,7 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                         onClick={() => toggle('shape')}
                     ><Icon name={FA.shape} /></button>
                 )}
-                {isNode && (
+                {isNode && !colorLocked && (
                     <ColorField
                         value={style.fill}
                         fallback={DEFAULT_FILL}
@@ -138,6 +160,7 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                         t={t}
                     />
                 )}
+                {!textLocked && (
                 <button
                     type="button"
                     className="vimipad-dock-btn"
@@ -146,6 +169,7 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                     aria-label={t('editor:fmt_text')}
                     onClick={() => onEditText && onEditText()}
                 ><Icon name={FA.text} /></button>
+                )}
                 {isNode && onDuplicate && (
                     <button
                         type="button"
@@ -155,16 +179,6 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                         aria-label={t('editor:fmt_duplicate')}
                         onClick={onDuplicate}
                     ><Icon name={FA.duplicate} /></button>
-                )}
-                {lockMode && onToggleLock && (
-                    <button
-                        type="button"
-                        className={`vimipad-dock-btn${locked ? ' active' : ''}`}
-                        aria-pressed={locked === true}
-                        title={t(locked ? 'editor:unlockelement' : 'editor:lockelement')}
-                        aria-label={t(locked ? 'editor:unlockelement' : 'editor:lockelement')}
-                        onClick={onToggleLock}
-                    ><Icon name={locked ? FA.lock : FA.unlock} /></button>
                 )}
                 <button
                     type="button"

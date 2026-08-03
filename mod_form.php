@@ -73,6 +73,16 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->setDefault('aienabled', 0);
         $mform->addHelpButton('aienabled', 'aienabled', 'mod_vimipad');
 
+        // Journal: whether learners may keep individual entries private (hidden
+        // from teachers). Off by default — teachers can read the journal.
+        $mform->addElement(
+            'advcheckbox',
+            'journalallowprivate',
+            get_string('journalallowprivate', 'mod_vimipad')
+        );
+        $mform->setDefault('journalallowprivate', 0);
+        $mform->addHelpButton('journalallowprivate', 'journalallowprivate', 'mod_vimipad');
+
         $mform->addElement(
             'text',
             'channelurl',
@@ -284,6 +294,24 @@ class mod_vimipad_mod_form extends moodleform_mod {
         if (!empty($data['completionminnodesenabled']) && (int) $data['completionminnodes'] < 1) {
             $errors['completionminnodesgroup'] = get_string('completionminnodes_error', 'mod_vimipad');
         }
+
+        // Group-map and Moodle's core group mode must be consistent (bidirectional):
+        // a group map needs an actual group mode, and an activity that runs in a
+        // group mode must be a group map. When the course forces the group mode,
+        // the field is locked and cannot be the culprit, so we only flag the map
+        // option in that case.
+        $groupmode = (int) ($data['groupmode'] ?? NOGROUPS);
+        $collaborationmode = (int) ($data['collaborationmode'] ?? 0);
+        $forced = !empty($this->_course->groupmodeforce);
+        if ($grouperror = self::group_mode_error($collaborationmode, $groupmode, $forced)) {
+            $errors[$grouperror[0]] = get_string($grouperror[1], 'mod_vimipad');
+        }
+
+        if (isset($data['grade']) && (int) $data['grade'] < 0) {
+            // A negative modgrade value selects a Moodle scale. ViMi Pad grades
+            // in points only; the manual grading UI has no scale domain.
+            $errors['grade'] = get_string('error:scalesnotsupported', 'mod_vimipad');
+        }
         if (
             !empty($data['duedate']) && !empty($data['cutoffdate'])
                 && (int) $data['cutoffdate'] < (int) $data['duedate']
@@ -291,5 +319,29 @@ class mod_vimipad_mod_form extends moodleform_mod {
             $errors['cutoffdate'] = get_string('cutoffbeforedue', 'mod_vimipad');
         }
         return $errors;
+    }
+
+    /**
+     * The group-map / group-mode consistency error, if any.
+     *
+     * Pure decision function shared conceptually with the server-side repair in
+     * vimipad_enforce_group_consistency(): a group map needs a group mode, and a
+     * group mode needs a group map. Under a forced course group mode the group
+     * mode field is locked, so the map option is flagged instead.
+     *
+     * @param int $collaborationmode The ViMi Pad map mode.
+     * @param int $groupmode The Moodle core group mode.
+     * @param bool $forced Whether the course forces the group mode.
+     * @return array{0: string, 1: string}|null [field, stringkey], or null if consistent.
+     */
+    public static function group_mode_error(int $collaborationmode, int $groupmode, bool $forced): ?array {
+        $isgroupmap = $collaborationmode === \mod_vimipad\local\service\workspace_service::MODE_GROUP;
+        if ($isgroupmap && $groupmode === NOGROUPS) {
+            return [$forced ? 'collaborationmode' : 'groupmode', 'error:groupmapneedsgroupmode'];
+        }
+        if (!$isgroupmap && $groupmode !== NOGROUPS) {
+            return ['collaborationmode', 'error:groupmodeneedsgroupmap'];
+        }
+        return null;
     }
 }

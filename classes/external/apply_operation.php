@@ -20,7 +20,6 @@ use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
-use mod_vimipad\local\access;
 use mod_vimipad\local\service\operation_service;
 
 /**
@@ -66,7 +65,7 @@ class apply_operation extends external_api {
         string $operationtype,
         string $payloadjson
     ): array {
-        global $USER, $DB;
+        global $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'cmid' => $cmid,
@@ -76,32 +75,27 @@ class apply_operation extends external_api {
             'payloadjson' => $payloadjson,
         ]);
 
-        [, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
-        $context = \context_module::instance($cm->id);
-        self::validate_context($context);
-
-        $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
-
-        // The workspace must belong to this activity.
-        $workspace = $DB->get_record(
-            'vimipad_workspace',
-            ['id' => $params['workspaceid'], 'vimipadid' => $instance->id],
-            '*',
-            MUST_EXIST
+        $instance = null;
+        $workspace = null;
+        $context = helper::validate_workspace_for_edit(
+            (int) $params['cmid'],
+            (int) $params['workspaceid'],
+            $instance,
+            $workspace
         );
-
-        // Enforce the correct edit capability and group access for the mode.
-        access::require_edit($instance, $context, $workspace, (int) $USER->id);
 
         $payload = json_decode($params['payloadjson'], true);
         if (!is_array($payload)) {
             throw new \invalid_parameter_exception('payloadjson must decode to a JSON object');
         }
 
-        // Locks are bypassed by template authors, and by everyone when the
-        // activity opts learners into lock mode (locking is then cooperative).
+        // Template element locks protect teacher-authored elements and are only
+        // bypassed by users who may author the template (manageprofiles). The
+        // cooperative collaboration lock mode (lockmodeforlearners) is a
+        // separate concept — an editing lease between peers — and must never
+        // disable template protection.
         $canmanage = has_capability('mod/vimipad:manageprofiles', $context);
-        $service = new operation_service($canmanage || !empty($instance->lockmodeforlearners));
+        $service = new operation_service($canmanage);
         $result = $service->apply(
             (int) $workspace->id,
             $params['baserevision'],

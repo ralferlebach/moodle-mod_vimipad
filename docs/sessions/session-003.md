@@ -388,33 +388,6 @@
   211 (+1)+97; phpcs/phpcpd/stylelint clean; 435/435; Jest 37/237.
 - Damit ist der komplette Issue-Satz A1-A6 / T1-T6 abgearbeitet.
 
-**0.6.23 - T5: Neu-Ausrichten erhaelt Container-Zugehoerigkeit**
-- Bisher layoutete Re-Arrange nur nach Graphstruktur und ignorierte Container ->
-  Mitglieder verstreuten sich, Box blieb stehen.
-- Jetzt: vor dem Layout raeumlich schnappen, welche Nodes in welchem Container
-  sind (Mittelpunkt in Box = zugehoerig; keine separate Zuweisung noetig). Nach
-  dem Layout jeden nicht-leeren Container auf die Bounding-Box seiner Mitglieder
-  (+ Pad 24) refitten -> Mitglieder bleiben drin, Container folgt. Leere bleiben.
-- Refit im selben Undo/Redo-Eintrag wie das Layout (ein Undo stellt beides her).
-- Reine Helfer centerInBox + boundingBox (mit Min-Size-Clamp); 6 Tests.
-  Rein Frontend: 210+97 unveraendert; phpcs clean; Jest 36/230; reproduzierbar.
-
-**0.6.12 - SVG/PNG-Export inkl. Container + SVG-Round-Trip-Import**
-- computeContentBounds bezieht Container-Boxen in die Export-viewBox ein (Container
-  ausserhalb der Nodes wird nicht mehr beschnitten); Container-Chrome (Delete/
-  Resize/Draw-Overlay) wird aus dem Exportbild entfernt.
-- Export-SVG bettet das Map-JSON in <metadata id="vimipad-data"> ein (dasselbe
-  Envelope wie export.php?format=json). .svg-Import extrahiert das JSON und nutzt
-  den bestehenden Import-Pfad -> SVG ist Bild UND reimportierbare Map. Ohne
-  eingebettete Daten: editor:importnovimidata.
-- Reine extractMapData + Embed getestet; neuer test_container_roundtrip beweist,
-  dass Container Export->Import ueberstehen (Basis des SVG-Round-Trips).
-- Lang editor:importnovimidata (en/de 429/429) + init.js + fallback.
-- Verifiziert: tsc clean; Jest 30 Suites/185; Bundle reproduzierbar; 205 mod_vimipad
-  + 97 vimipadassess; phpcs/phpcpd clean.
-- Damit sind die von Ralf gewuenschten "Reste" umgesetzt: Container-Bearbeitung
-  + Undo/Redo (0.6.11) und SVG/PNG-Output + SVG-Import (0.6.12).
-
 ---
 
 ### Entscheidungen getroffen
@@ -429,6 +402,13 @@
 | E4 `updated`-Event | akzeptiert; in 0.5.34 als `map_updated` in `apply_operation` umgesetzt (+Test) | Kontext liegt im External-Layer, kein Threading in den Service nötig |
 | E5 Provenienz | Snapshot ohne `createdby` (Log trägt Provenienz); Lastenheft später präzisieren | Normalisierung/Datenschutz |
 | E6 Import-Atomarität | Semantik atomar, Layout best-effort | billiger, Vertrag jetzt eindeutig |
+| A1 Zeiger-Mapping | getScreenCTM statt getrennter w/h-Division; reiner meet-Fallback | preserveAspectRatio=meet, nicht stretch |
+| A3 Verbinder | Abgangswinkel = Winkelhalbierende(Lot, direkte Linie); ARROW_STUB gerade | Pfeilspitze erbt korrekten Winkel automatisch |
+| A6 Editor | contentEditable bleibt Block in Flex-Wrapper; editableToText liest \n | Flex-Row machte Enter-Bloecke zu Spalten; textContent verlor Umbrueche |
+| T3 Sperrmodus | lockmodeforlearners: aus=gebunden, an=kooperativ (alle bypassen) | einfach, kohaerent, im Hilfetext dokumentiert |
+| T5 Zugehoerigkeit | raeumlich (Mittelpunkt in Box), kein separates Assignment-UI | entspricht dem, was der Nutzer sieht |
+| T4 Container-Stil | Wiederverwendung Node-Stil-Model (metadatajson) + NodeFormatToolbar | kein Parallelmodell; Backend akzeptierte metadatajson bereits |
+| Sticky-Node | Drag synchron armen, Lock im Hintergrund; abortDrag bei lost-capture | await vor setDragId erzeugte die Race |
 
 ### Entwurfsentscheidungen geändert / zurückgestellt
 
@@ -439,13 +419,23 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 
 ---
 
-### Offene Punkte für die nächste Session (0.6.0-Vorbereitung)
+### Offene Punkte für die nächste Session
 
-- 0.6.0 Autorenwerkzeuge auf der Grundlage: `constraint_policy`-Resolver
-  (rein, testbar) + hartes Abgabe-Gate; Container auf dem Canvas zeichnen
-  (Frontend); Template-Sperren (`locked`/`editable` in `apply_locked`,
-  `error:elementlocked`); Template-Autorenoberfläche.
-- Danach 0.6.0 Autorenwerkzeuge (Feedback-/Werkzeuge-Reiter, Container, Templates).
+- **A2 (Browser-Bestaetigung ausstehend):** der tote Klickbereich unter
+  selektierten Nodes wurde in 0.6.15 adressiert (foreignObjects auf
+  `pointer-events:none`, Dock behaelt `auto`), aber nie im Browser bestaetigt.
+  Ein Screenshot mit `document.querySelectorAll('foreignObject').forEach(...)`
+  oder `elementFromPoint(x,y)` in der toten Flaeche wuerde es klaeren.
+- **Visuelle Ergebnisse dieser Runde** (Container-Refit bei T5, geformte
+  Container + Vier-Ecken-Resize bei T4, Kurvenaesthetik A3) sind durch reine
+  Geometrie-/Datentests belegt, aber nicht im Browser gesehen. Feintuning-Zahlen
+  offen: `SIBLING_SPACING=16`, Kruemmungsfaktor `k=max(16, span*0.4)`,
+  `CONTAINER_REFIT_PAD=24`, `nodeHeight`-Schaetzung ~7px/Zeichen (A+ kann noch
+  ueberlaufen — echte Textmessung waere die saubere Loesung).
+- **Naechster Roadmap-Schritt: 0.7.x** — systematischer Security-Review aller
+  External-Functions (sesskey/Capability/Context/Group, keine PARAM_RAW ohne
+  Schema), Privacy-API-Vollstaendigkeit (inkl. neuer Felder), Backup/Restore-
+  Vollstaendigkeit. Vollstaendig in der Sandbox verifizierbar ("ehrliche" Arbeit).
 
 ---
 
@@ -461,12 +451,140 @@ Importformat v2 + Migration, Template-/Constraint-Policy.
 ### Testlauf-Ergebnis
 
 ```
-PHPUnit:  OK - 211 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL, exit 0)
+PHPUnit:  OK - 211 mod_vimipad + 97 vimipadassess (real auf Moodle 4.5.12 + PostgreSQL 16 + PHP 8.3.6, exit 0)
 PHPCS:    OK - ganzes Plugin clean (moodle-Standard, severity=1, --ignore=tools/)
 PHPCPD:   OK - keine Klone (--min-lines 5 --min-tokens 70)
-Release-CI: moodle-release.yml pfad-robust fuer Moodle 5.2 public/ (YAML validiert, Resolver-Logik simuliert)
-Frontend: tsc 0 · Jest 36 Suites/230 · esbuild- UND AMD-Bundle byte-reproduzierbar
+Stylelint:OK - styles.css clean (Moodle-Config; declaration-no-important behoben)
+Lang:     OK - en 435 / de 435, byteweise sortiert, Paritaet OK
+CI:       GRUEN (gherkinlint + stylelint) laut Ralf; Release-CI GRUEN laut Ralf
+Frontend: tsc 0 · Jest 37 Suites/237 · esbuild- UND AMD-Bundle byte-reproduzierbar
 Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
+```
+
+---
+
+### Verzeichnis-Snapshot (changed files)
+
+Echte Ausgabe im Sandbox-Arbeitsbaum (Git vorhanden):
+
+```bash
+git diff --name-only HEAD   # geaendert gegenueber Ausgangs-ZIP
+```
+
+```
+.github/workflows/moodle-ci.yml
+.github/workflows/moodle-release.yml
+CHANGELOG.md
+README.md
+amd/build/editor_lazy.min.js
+amd/build/editor_lazy.min.js.map
+amd/build/init.min.js
+amd/build/init.min.js.map
+amd/build/revision.min.js
+amd/src/init.js
+backup/moodle2/backup_vimipad_stepslib.php
+classes/external/apply_operation.php
+classes/external/get_revision_state.php
+classes/external/get_workspace.php
+classes/external/helper.php
+classes/external/import_map.php
+classes/local/operation/operation_type.php
+classes/local/output/grading_panel.php
+classes/local/service/import_service.php
+classes/local/service/lock_service.php
+classes/local/service/operation_service.php
+classes/local/service/reconstruction_service.php
+classes/local/service/snapshot_service.php
+classes/local/service/workspace_service.php
+db/install.xml
+db/services.php
+db/upgrade.php
+docs/design/assessment_architecture.md
+docs/design/backlog.md
+docs/design/connector-styles.md
+docs/design/roadmap.md
+docs/design/ui_reorder_plan.md
+docs/dev/moodle-test-environment-setup.md
+docs/dev/visual-maps-requirements.md
+docs/prompt-templates/sessionende.txt
+docs/sessions/session-001.md
+js/src/api/service.ts
+js/src/canvas/connection_geometry.ts
+js/src/canvas/icons.tsx
+js/src/canvas/interaction.ts
+js/src/canvas/svg_export.ts
+js/src/collab/apply_remote.ts
+js/src/components/CanvasView.tsx
+js/src/components/ColorField.tsx
+js/src/components/EditorApp.tsx
+js/src/components/NodeFormatToolbar.tsx
+js/src/mount.tsx
+js/src/store/reducer.ts
+js/src/types/index.ts
+js/tests/interaction.test.ts
+js/tests/svg_export.test.ts
+lang/de/vimipad.php
+lang/en/vimipad.php
+makefile
+mod_form.php
+package-lock.json
+package.json
+styles.css
+tests/backup_restore_test.php
+tests/import_service_test.php
+tests/reconstruction_service_test.php
+version.php
+```
+
+```bash
+git ls-files --others --exclude-standard   # in dieser Session neu
+```
+
+```
+amd/build/revision.min.js.map
+classes/event/map_updated.php
+classes/external/get_constraint_status.php
+classes/local/lock/workspace_writelock.php
+classes/local/policy/constraint_config.php
+classes/local/policy/constraint_policy.php
+classes/local/policy/constraint_report.php
+docs/design/template_constraint_policy.md
+docs/sessions/session-002.md
+docs/sessions/session-003-arbeitsplan.md
+docs/sessions/session-003.md
+js/src/canvas/container_geometry.ts
+js/src/canvas/drag_arm.ts
+js/src/canvas/editable_text.ts
+js/src/canvas/element_lock.ts
+js/src/canvas/viewport.ts
+js/src/components/ConstraintBanner.tsx
+js/src/components/LockPanel.tsx
+js/src/hooks/use_constraint_hints.ts
+js/tests/color_field.test.ts
+js/tests/connector_angles.test.ts
+js/tests/constraint_banner.test.ts
+js/tests/constraint_status_api.test.ts
+js/tests/container_apply_remote.test.ts
+js/tests/container_geometry.test.ts
+js/tests/container_membership.test.ts
+js/tests/container_reducer.test.ts
+js/tests/drag_arm.test.ts
+js/tests/editable_text.test.ts
+js/tests/element_lock.test.ts
+js/tests/lock_panel.test.ts
+js/tests/resize_corner.test.ts
+js/tests/use_constraint_hints.test.ts
+js/tests/viewport.test.ts
+tests/amd_string_keys_test.php
+tests/constraint_policy_test.php
+tests/container_operations_test.php
+tests/container_style_test.php
+tests/duedate_and_events_test.php
+tests/element_lock_test.php
+tests/get_constraint_status_test.php
+tests/get_workspace_containers_test.php
+tests/lockmode_for_learners_test.php
+tests/workspace_writelock_test.php
 ```
 
 ---
@@ -474,23 +592,35 @@ Behat:    SKIP hier (kein Browser); @javascript + visuelles Rendering in CI
 ### Auslieferung
 
 - [x] Version konsistent: version.php 2026072738 / 0.6.24, package.json + lock (inkl. Frontend).
-- [x] CHANGELOG-Eintrag 0.5.33 ergänzt.
-- [x] docs/sessions/session-003.md im Clean-Install-ZIP (Gate bestanden).
-- [x] amd/build/ + js/build/ eingecheckt.
+- [x] CHANGELOG-Eintraege bis 0.6.24 ergänzt (jede Version ein Block).
+- [x] docs/sessions/session-003.md vollstaendig ausgefuellt und im Clean-Install-ZIP (Gate bestanden).
+- [x] amd/build/ (init/revision/editor_lazy .min.js, +.map) eingecheckt und NICHT gitignored; AMD reproduzierbar. (Kein separates js/build/ — esbuild schreibt nach amd/build/editor_lazy.min.js.)
+- [x] CI + Release-CI gruen bestaetigt (Ralf).
 
 ---
 
 ### Für die nächste Session einfügen in sessionstart.txt
 
 **Aktueller Entwicklungsstand:**
-> 0.6.10 — Autoren-Backend (0.6.1–0.6.6); Release-CI-Fix (0.6.7); Frontend-Autoren
-> KOMPLETT: Constraint-Hinweise (0.6.8), Container (0.6.9), Template-Sperren (0.6.10).
-> PHP real auf Moodle 4.5.12 (204+97 grün); Frontend tsc/Jest 30/179, reproduzierbar.
+> 0.6.24 — 0.6.x inhaltlich abgeschlossen inkl. Autorenwerkzeuge (Container
+> zeichnen/bearbeiten/formatieren/beschriften, Templates/Sperren, SVG/PNG/PDF-
+> Export + SVG-Import) und des kompletten UI-/Bugfix-Satzes A1–A6 / T1–T6.
+> Real auf Moodle 4.5.12 + PG16 + PHP 8.3.6 verifiziert: 211 mod_vimipad + 97
+> vimipadassess PHPUnit gruen; phpcs/phpcpd/stylelint clean; Lang 435/435;
+> Frontend tsc 0, Jest 37/237, esbuild+AMD reproduzierbar. CI und Release-CI gruen.
 
 **Zuletzt abgeschlossen:**
-> 0.6.1–0.6.6 Autoren-Backend; 0.6.7 Release-CI-Fix; 0.6.8–0.6.10 Frontend-Autoren
-> (Hinweise/Container/Sperren) komplett. Konvention: 0.6.x ohne alpha-Suffix.
+> A1 (Zeiger-Mapping/preserveAspectRatio), A3 (Verbinderwinkel + parallele
+> Mehrfachverbinder + Labels), A6 (Enter=Zeile, Umbrueche gespeichert),
+> zweizeilige Add-Menues, Sticky-Node-Race-Fix; T3-Rest (lockmodeforlearners),
+> T5 (Re-Arrange erhaelt Container-Zugehoerigkeit), T4 (Container formatier-/
+> beschriftbar wie Nodes, Vier-Ecken-Resize). CI-Stylelint-Fix (kein !important).
+> Konvention: 0.6.x ohne alpha-Suffix; Version-Integer 2026072xxx laeuft mit.
 
 **Als nächstes geplant:**
-> 0.6.x-Frontend abgeschlossen. Offen in 0.6.x laut Roadmap: Verknuepfung der
-> Templates mit Import/Export (JSON/XML) und dedizierte Freigabe-Optionen.
+> 0.7.x — Hardening/Datenschutz/Persistenz: systematischer Security-Review aller
+> External-Functions (sesskey/Capability/Context/Group, kein PARAM_RAW ohne
+> Schema), Privacy-API-Vollstaendigkeit (inkl. lockmodeforlearners und aller
+> 0.6-Felder), Backup/Restore-Vollstaendigkeit. In der Sandbox voll verifizierbar.
+> Offen aus 0.6: A2 im Browser bestaetigen; visuelle Feinjustierung (SIBLING_
+> SPACING, Kruemmungsfaktor, CONTAINER_REFIT_PAD, nodeHeight-Textmessung).

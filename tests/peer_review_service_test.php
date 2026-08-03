@@ -205,4 +205,29 @@ final class peer_review_service_test extends \advanced_testcase {
         $this->assertNotEmpty($guidance);
         $this->assertArrayHasKey('reference', $guidance);
     }
+
+    /**
+     * Allocation does not issue a per-candidate existence query: the query
+     * count for a larger cohort must not grow with submissions x reviewers.
+     * We assert a modest, roughly submission-proportional bound rather than an
+     * exact number, which stays robust to incidental query changes.
+     *
+     * @return void
+     */
+    public function test_allocation_query_count_is_bounded(): void {
+        global $DB;
+        $this->resetAfterTest();
+        [$instance] = $this->setup_submissions(20, 3);
+
+        $before = $DB->perf_get_reads() + $DB->perf_get_writes();
+        (new peer_review_service())->allocate($instance);
+        $after = $DB->perf_get_reads() + $DB->perf_get_writes();
+        $queries = $after - $before;
+
+        // 20 submissions x 3 reviews = 60 inserts, plus a handful of setup
+        // reads. The old code added ~20x20 = 400 record_exists reads on top.
+        // A ceiling of 120 proves the N+1 existence probing is gone while
+        // leaving ample head-room for the necessary inserts and lookups.
+        $this->assertLessThan(120, $queries, "allocation issued $queries queries; expected the N+1 probes to be gone");
+    }
 }

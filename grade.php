@@ -33,6 +33,10 @@ $snapshotid = required_param('snapshotid', PARAM_INT);
 [$course, $cm] = get_course_and_cm_from_cmid($id, 'vimipad');
 require_login($course, false, $cm);
 
+// A grading entry point enforces its own contract even though the target tab
+// re-checks the capability: defense in depth, and an unambiguous error here.
+require_capability('mod/vimipad:grade', context_module::instance($cm->id));
+
 redirect(new moodle_url('/mod/vimipad/view.php', [
     'id' => $cm->id, 'tab' => 'grade', 'snapshotid' => $snapshotid,
 ]));

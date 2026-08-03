@@ -35,7 +35,8 @@ class layout_service {
      * positions and sizes are merged into the stored layout (other nodes are
      * preserved), so concurrent moves of different nodes do not clobber each
      * other. In 'replace' mode the layout is stored as-is. The read-merge-write
-     * is serialized per workspace/profile.
+     * is serialized per workspace/profile; if the serialization lock cannot be
+     * acquired the save fails closed (no unserialized write).
      *
      * @param int $workspaceid The workspace id.
      * @param string $profile The diagram profile.
@@ -44,6 +45,7 @@ class layout_service {
      * @param int $userid The acting user id.
      * @param string $mode 'replace' (default) or 'merge'.
      * @return void
+     * @throws \moodle_exception If the layout is being written concurrently and the lock times out.
      */
     public function save(
         int $workspaceid,
@@ -53,13 +55,28 @@ class layout_service {
         int $userid,
         string $mode = 'replace'
     ): void {
+        \mod_vimipad\local\policy\limits::check_bytes(
+            $layoutjson,
+            \mod_vimipad\local\policy\limits::MAX_LAYOUT_BYTES,
+            'layout'
+        );
+        \mod_vimipad\local\policy\limits::check_bytes(
+            $viewportjson,
+            \mod_vimipad\local\policy\limits::MAX_LAYOUT_BYTES,
+            'viewport'
+        );
+        // Enforce the structural layout/viewport schema at the service boundary,
+        // so every caller (external endpoint AND import path) is validated, not
+        // just the external endpoint.
+        \mod_vimipad\local\policy\layout_policy::validate_layout($layoutjson);
+        \mod_vimipad\local\policy\layout_policy::validate_viewport($viewportjson);
         $lockfactory = \core\lock\lock_config::get_lock_factory('mod_vimipad_layout');
         $lock = $lockfactory->get_lock($workspaceid . ':' . $profile, 5);
 
         if (!$lock) {
-            // Could not serialize; fall back to a direct write.
-            $this->write($workspaceid, $profile, $layoutjson, $viewportjson, $userid, $mode);
-            return;
+            // Fail closed: an unserialized write is exactly what the lock is
+            // there to prevent (lost read-merge-write updates).
+            throw new \moodle_exception('error:layoutbusy', 'mod_vimipad');
         }
         try {
             $this->write($workspaceid, $profile, $layoutjson, $viewportjson, $userid, $mode);
@@ -102,6 +119,12 @@ class layout_service {
             }
         }
 
+        // A strictly monotonic change token: never reuse a value (two saves in
+        // the same second must be distinguishable), and never fall below the
+        // wall clock so in-flight client tokens from the previous
+        // timestamp-based scheme stay comparable.
+        $revision = max((int) ($existing->layoutrevision ?? 0) + 1, $now);
+
         if ($existing) {
             $DB->update_record('vimipad_layout', (object) [
                 'id' => $existing->id,
@@ -109,6 +132,7 @@ class layout_service {
                 'layoutjson' => $layoutjson,
                 'modifiedby' => $userid,
                 'timemodified' => $now,
+                'layoutrevision' => $revision,
             ]);
             return;
         }
@@ -120,6 +144,7 @@ class layout_service {
             'layoutjson' => $layoutjson,
             'modifiedby' => $userid,
             'timemodified' => $now,
+            'layoutrevision' => $revision,
         ]);
     }
 
@@ -190,15 +215,18 @@ class layout_service {
             ['workspaceid' => $workspaceid, 'profile' => $profile]
         );
         if (!$record) {
-            return ['layoutjson' => '', 'timemodified' => 0, 'changed' => false];
+            return ['layoutjson' => '', 'revision' => 0, 'changed' => false];
         }
 
-        $timemodified = (int) $record->timemodified;
-        $changed = $timemodified > $since;
+        // The change token is the strictly monotonic layout revision (seeded
+        // from the former timestamp scheme on upgrade, so old client tokens
+        // remain comparable).
+        $revision = (int) ($record->layoutrevision ?? 0);
+        $changed = $revision > $since;
 
         return [
             'layoutjson' => ($changed && $record->layoutjson !== null) ? $record->layoutjson : '',
-            'timemodified' => $timemodified,
+            'revision' => $revision,
             'changed' => $changed,
         ];
     }

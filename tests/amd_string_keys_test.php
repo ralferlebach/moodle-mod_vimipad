@@ -28,37 +28,40 @@ namespace mod_vimipad;
  */
 final class amd_string_keys_test extends \advanced_testcase {
     /**
-     * Every string key requested by amd/src/init.js exists in lang/en.
+     * Every string key requested by the AMD sources exists in lang/en.
      *
      * @return void
      */
     public function test_amd_string_keys_exist_in_lang(): void {
         global $CFG;
 
-        $requested = $this->requested_keys();
-        $this->assertNotEmpty($requested, 'No STRING_KEYS parsed from amd/src/init.js');
-
         $string = [];
         require($CFG->dirroot . '/mod/vimipad/lang/en/vimipad.php');
+        $available = array_keys($string);
 
-        $missing = array_values(array_diff($requested, array_keys($string)));
-        $this->assertSame([], $missing, 'AMD requests string keys missing from lang/en: '
-            . implode(', ', $missing));
+        foreach (['amd/src/init.js', 'amd/src/revision.js'] as $module) {
+            $requested = $this->requested_keys($module);
+            $this->assertNotEmpty($requested, "No STRING_KEYS parsed from $module");
+            $missing = array_values(array_diff($requested, $available));
+            $this->assertSame([], $missing, "$module requests string keys missing from lang/en: "
+                . implode(', ', $missing));
+        }
     }
 
     /**
-     * Parse the STRING_KEYS array literal out of the AMD source.
+     * Parse the STRING_KEYS array literal out of an AMD source file.
      *
+     * @param string $module The module path relative to the plugin root.
      * @return string[] The requested string keys.
      */
-    private function requested_keys(): array {
+    private function requested_keys(string $module): array {
         global $CFG;
 
-        $source = file_get_contents($CFG->dirroot . '/mod/vimipad/amd/src/init.js');
-        $this->assertNotFalse($source, 'amd/src/init.js is not readable');
+        $source = file_get_contents($CFG->dirroot . '/mod/vimipad/' . $module);
+        $this->assertNotFalse($source, "$module is not readable");
 
         $start = strpos($source, 'const STRING_KEYS = [');
-        $this->assertNotFalse($start, 'STRING_KEYS not found in amd/src/init.js');
+        $this->assertNotFalse($start, "STRING_KEYS not found in $module");
         $end = strpos($source, '];', $start);
         $this->assertNotFalse($end, 'STRING_KEYS array is not terminated');
 

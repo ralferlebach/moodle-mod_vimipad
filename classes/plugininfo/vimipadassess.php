@@ -35,6 +35,12 @@ class vimipadassess extends base {
     /**
      * Whether a subplugin of this type may be uninstalled from the admin UI.
      *
+     * Uninstalling is deliberately always allowed: an activity whose configured
+     * scorer becomes unavailable simply produces no automatic score (the
+     * assess_service returns null when the scorer is absent) rather than
+     * breaking, and teacher grading is unaffected. This graceful degradation is
+     * covered by assess_uninstall_safety_test.
+     *
      * @return bool
      */
     public function is_uninstall_allowed() {

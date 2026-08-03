@@ -31,94 +31,8 @@ import {createRoot} from 'react-dom/client';
 import {ApiClient, createFetchTransport} from './api/service';
 import {EditorApp} from './components/EditorApp';
 import {RevisionViewer} from './components/RevisionViewer';
+import {RevisionPlayer} from './components/RevisionPlayer';
 import {MountConfig, RevisionConfig} from './types';
-
-const FALLBACK_STRINGS: Record<string, string> = {
-    'editor:add': 'Add',
-    'editor:addnode': 'Add concept',
-    'editor:addrelation': 'Add relation',
-    'editor:actions': 'Actions',
-    'editor:cancel': 'Cancel',
-    'editor:canvasaria': 'Map canvas with draggable concepts',
-    'editor:canvashint': 'Interactive diagram. To edit with the keyboard, switch to the list view.',
-    'editor:canvasview': 'Canvas',
-    'editor:canvasplaceholder': 'The graphical canvas will appear here in a later version.',
-    'editor:confirm': 'Confirm',
-    'editor:deleterelation': 'Delete relation',
-    'editor:dir_both': 'Double arrow',
-    'editor:dir_left': 'Arrow to source',
-    'editor:dir_none': 'No arrow',
-    'editor:dir_right': 'Arrow to target',
-    'editor:dragnodes': 'Drag a concept onto a subject or object cell to retarget a relation',
-    'editor:export': 'Export',
-    'editor:fmt_bigger': 'Larger text',
-    'editor:fmt_bold': 'Bold',
-    'editor:fmt_italic': 'Italic',
-    'editor:fmt_underline': 'Underline',
-    'editor:fullview': 'Full view',
-    'editor:import': 'Import',
-    'editor:importreplace': 'Replace existing map',
-    'editor:journal': 'Learning journal',
-    'editor:journalnew': 'Write a journal entry…',
-    'editor:journalsave': 'Save entry',
-    'editor:journalteachervisible': 'Visible to teacher',
-    'editor:fmt_delete': 'Delete node',
-    'editor:fmt_duplicate': 'Duplicate node',
-    'editor:fmt_ellipse': 'Ellipse',
-    'editor:fmt_fill': 'Fill colour',
-    'editor:fmt_font': 'Font',
-    'editor:fmt_fontdefault': 'Default font',
-    'editor:fmt_highlight': 'Highlight colour',
-    'editor:fmt_move': 'Move',
-    'editor:fmt_rect': 'Rectangle',
-    'editor:fmt_reset': 'Clear formatting',
-    'editor:fmt_roundrect': 'Rounded rectangle',
-    'editor:fmt_shape': 'Shape',
-    'editor:fmt_smaller': 'Smaller text',
-    'editor:fmt_text': 'Text',
-    'editor:fmt_textcolor': 'Text colour',
-    'editor:fmt_toolbar': 'Format node',
-    'editor:line_curved': 'Curved line',
-    'editor:line_orthogonal': 'Right-angle line',
-    'editor:line_straight': 'Straight line',
-    'editor:listview': 'List',
-    'editor:loading': 'Loading…',
-    'constraint:hintsheading': 'This map does not yet meet the requirements:',
-    'editor:containers': 'Containers',
-    'editor:containerdelete': 'Delete container',
-    'editor:drawcontainer': 'Draw container',
-    'editor:drawcontainerdone': 'Done drawing',
-    'editor:node': 'Node',
-    'editor:templatelocks': 'Template locks',
-    'editor:templatelockshint': 'Lock elements so learners cannot restructure or delete them.',
-    'editor:lockallowlabel': 'Allow renaming',
-    'editor:importnovimidata': 'This SVG does not contain an embedded ViMi map.',
-    'editor:authortools': 'Author tools',
-    'editor:lockmode': 'Lock mode',
-    'editor:lockelement': 'Lock this element',
-    'editor:unlockelement': 'Unlock this element',
-
-
-    'editor:locked': 'This map is locked and can no longer be edited.',
-    'editor:nodelabel': 'Concept label',
-    'editor:norelations': 'No relations yet. Add concepts, then connect them.',
-    'editor:normalview': 'Normal view',
-    'editor:object': 'Object',
-    'editor:readonly': 'You are viewing this map read-only. Edits are disabled.',
-    'editor:rearrange': 'Re-arrange layout',
-    'editor:redo': 'Redo',
-    'editor:relation': 'Relation',
-    'editor:relations': 'Relations',
-    'editor:reledit': 'Edit relation',
-    'editor:reverse': 'Reverse relation',
-    'editor:retarget': 'Retarget',
-    'editor:revision': 'Revision',
-    'editor:subject': 'Subject',
-    'editor:submit': 'Submit for grading',
-    'editor:submitconfirm': 'Once submitted, the map is locked and can no longer be edited. Continue?',
-    'editor:submitpending': 'Waiting for the other group members to submit.',
-    'editor:undo': 'Undo',
-};
 
 /**
  * Resolve a string, preferring Moodle's string store, falling back to English.
@@ -137,7 +51,10 @@ function resolveString(key: string): string {
     if (store && store[key] !== undefined) {
         return store[key];
     }
-    return FALLBACK_STRINGS[key] ?? key;
+    // No embedded fallback language layer: a missing Moodle language string
+    // surfaces as its raw key, so gaps are visible in CI and testing instead
+    // of silently rendering mixed-language UI.
+    return key;
 }
 
 /**
@@ -167,7 +84,7 @@ export function mount(element: HTMLElement, config: MountConfig): void {
 // The bundle is emitted as the AMD module mod_vimipad/editor_lazy. The init
 // module require()s it and calls mount() with an injected transport and string
 // resolver. On Moodle 5.3+ this can be replaced by the core React runtime.
-export default {mount, mountRevision};
+export default {mount, mountRevision, mountPlayer};
 
 /**
  * Mount the read-only revision viewer into the given element.
@@ -188,6 +105,28 @@ export function mountRevision(element: HTMLElement, config: RevisionConfig): voi
         api={api}
         workspaceid={config.workspaceid}
         revision={config.revision}
+        t={t}
+    />);
+}
+
+/**
+ * Mount the revision player (animated replay) into the given element.
+ *
+ * @param element The container element.
+ * @param config The revision configuration; `maxRevision` bounds the replay
+ *     (defaults to `revision`).
+ */
+export function mountPlayer(element: HTMLElement, config: RevisionConfig): void {
+    const transport = config.callService ?? createFetchTransport();
+    const api = new ApiClient(transport, config.cmid, true);
+    const provided = config.getString;
+    const t = provided ? (key: string): string => provided(key) ?? resolveString(key) : resolveString;
+
+    const root = createRoot(element);
+    root.render(<RevisionPlayer
+        api={api}
+        workspaceid={config.workspaceid}
+        maxRevision={config.maxRevision ?? config.revision}
         t={t}
     />);
 }

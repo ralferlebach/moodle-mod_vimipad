@@ -131,7 +131,7 @@ export function serializeCanvasSvg(svg: SVGSVGElement, bounds: Bounds, embedJson
     // Drop interaction-only overlays that should not appear in the export.
     clone.querySelectorAll(
         '.vimipad-canvas-seloutline, .vimipad-canvas-handle, .vimipad-canvas-connector, '
-        + '.vimipad-container-draw, .vimipad-container-delete, .vimipad-container-resize'
+        + '.vimipad-container-draw, .vimipad-container-resize'
     ).forEach((el) => el.remove());
 
     // Opaque background so the map is not transparent in viewers.

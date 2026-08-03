@@ -35,6 +35,15 @@ class snapshot_service {
     /** @var int Draft, not yet submitted. */
     public const STATUS_DRAFT = 0;
 
+    /**
+     * @var int Reopened for revision after a submission.
+     *
+     * Deliberately sorts below DRAFT: every "status >= STATUS_SUBMITTED"
+     * consumer (completion, listings) then naturally stops counting a reopened
+     * snapshot as submitted without needing an extra exclusion.
+     */
+    public const STATUS_REOPENED = -1;
+
     /** @var int Submitted by the learner. */
     public const STATUS_SUBMITTED = 1;
 
@@ -64,34 +73,6 @@ class snapshot_service {
         $containers = $DB->get_records('vimipad_container', ['workspaceid' => $wsid, 'deleted' => 0]);
         $layout = $DB->get_record('vimipad_layout', ['workspaceid' => $wsid, 'profile' => $profile]);
 
-        // Container memberships, keyed to container stable ids so the snapshot is
-        // self-contained and independent of database ids.
-        $containerstable = [];
-        foreach ($containers as $container) {
-            $containerstable[(int) $container->id] = $container->stableid;
-        }
-        $membershiprows = $DB->get_records_sql(
-            "SELECT m.*
-               FROM {vimipad_membership} m
-               JOIN {vimipad_container} c ON c.id = m.containerid
-              WHERE c.workspaceid = :wsid",
-            ['wsid' => $wsid]
-        );
-        $memberships = [];
-        foreach ($membershiprows as $membership) {
-            $cid = (int) $membership->containerid;
-            if (!isset($containerstable[$cid])) {
-                continue;
-            }
-            $memberships[] = [
-                'containerstableid' => $containerstable[$cid],
-                'itemtype' => $membership->itemtype,
-                'itemstableid' => $membership->itemstableid,
-                'role' => $membership->role,
-                'sortorder' => (int) $membership->sortorder,
-            ];
-        }
-
         $mapfields = static function (array $records, array $fields): array {
             $out = [];
             foreach ($records as $record) {
@@ -104,17 +85,31 @@ class snapshot_service {
             return $out;
         };
 
+        $nodedata = $mapfields($nodes, ['stableid', 'type', 'label', 'content', 'contentformat', 'metadatajson']);
+        $containerdata = $mapfields($containers, ['stableid', 'type', 'label', 'geometryjson', 'metadatajson']);
+        $layoutdata = $layout && $layout->layoutjson !== null ? json_decode($layout->layoutjson, true) : null;
+
+        // Membership truth is spatial: derive it from container geometry and the
+        // profile layout, mirroring the editor's centre-in-box rule, so the
+        // snapshot freezes exactly what the canvas shows. The vimipad_membership
+        // table (import/operation compatibility store) is not consulted here.
+        $memberships = \mod_vimipad\local\membership_resolver::derive(
+            $containerdata,
+            $nodedata,
+            is_array($layoutdata) ? $layoutdata : null
+        );
+
         return [
             'profile' => $profile,
             'revision' => (int) $workspace->currentrevision,
-            'nodes' => $mapfields($nodes, ['stableid', 'type', 'label', 'content', 'contentformat', 'metadatajson']),
+            'nodes' => $nodedata,
             'relations' => $mapfields(
                 $relations,
                 ['stableid', 'sourceid', 'targetid', 'type', 'label', 'direction', 'metadatajson']
             ),
-            'containers' => $mapfields($containers, ['stableid', 'type', 'label', 'geometryjson', 'metadatajson']),
+            'containers' => $containerdata,
             'memberships' => $memberships,
-            'layout' => $layout && $layout->layoutjson !== null ? json_decode($layout->layoutjson, true) : null,
+            'layout' => is_array($layoutdata) ? $layoutdata : null,
             'metadata' => [
                 'takenat' => time(),
             ],
@@ -251,6 +246,12 @@ class snapshot_service {
 
         $normalized = $this->build_normalized($fresh, $instance->defaultprofile);
 
+        // Freeze the grade-recipient cohort at submission time: group and
+        // course membership can change between submission and grading, and the
+        // grade belongs to those who submitted the work.
+        $cm = get_coursemodule_from_instance('vimipad', (int) $instance->id, 0, false, MUST_EXIST);
+        $cohort = (new grading_service())->resolve_recipients($fresh, \context_module::instance($cm->id));
+
         $transaction = $DB->start_delegated_transaction();
 
         $snapshot = (object) [
@@ -259,6 +260,7 @@ class snapshot_service {
             'snapshotjson' => json_encode($normalized),
             'submittedby' => $userid,
             'status' => self::STATUS_SUBMITTED,
+            'cohortjson' => json_encode(array_values($cohort)),
             'timecreated' => time(),
         ];
         $snapshot->id = $DB->insert_record('vimipad_snapshot', $snapshot);

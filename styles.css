@@ -1,4 +1,9 @@
-/* ViMi Pad editor styles. */
+/* ViMi Pad (mod_vimipad) editor styles.
+ *
+ * @package   mod_vimipad
+ * @copyright 2026 Ralf Erlebach
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 .vimipad-editor .vimipad-canvas {
     width: 100%;
@@ -314,18 +319,19 @@
 
 .vimipad-control-line {
     display: flex;
-    flex-flow: row wrap;
+    flex-flow: row nowrap;
     align-items: center;
     gap: 0.5rem;
 }
 
 .vimipad-control-line > .form-control {
-    flex: 1 1 auto;
-    min-width: 8rem;
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 .vimipad-control-line > .btn {
     flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 /* Controls row shown below the canvas / above the list. */
@@ -397,12 +403,39 @@
    Mobile / touch polish
    ------------------------------------------------------------------------- */
 
-/* Let the relation table scroll horizontally instead of overflowing on
-   narrow screens (the list view is the primary mobile editing surface). */
-.vimipad-relation-list {
-    display: block;
+/* List view: heading, a boxed concept list, then the relation table — all at
+   full width. */
+.vimipad-listview {
+    width: 100%;
+    margin-top: 0.75rem;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+}
+
+.vimipad-listview-heading {
+    margin-bottom: 0.5rem;
+}
+
+.vimipad-node-box {
+    width: 100%;
+    border: 1px solid var(--vimipad-border, #dee2e6);
+    border-radius: 0.375rem;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.75rem;
+    background: var(--vimipad-surface-muted, #f8f9fa);
+}
+
+.vimipad-node-box-label {
+    display: block;
+    margin-bottom: 0.35rem;
+}
+
+/* The relation table spans the full width. Horizontal scrolling on narrow
+   screens is handled by the .vimipad-listview container, so the table itself
+   stays a real full-width table (a display:block table would shrink to its
+   content width). */
+.vimipad-relation-list {
+    width: 100%;
 }
 
 /* Toolbars wrap rather than overflow on small viewports. */
@@ -437,6 +470,15 @@
         flex-direction: column;
         align-items: stretch;
     }
+
+    /* On phones the single-row controls may wrap so fields stay tappable. */
+    .vimipad-control-line {
+        flex-flow: row wrap;
+    }
+
+    .vimipad-control-line > .form-control {
+        flex: 1 1 8rem;
+    }
 }
 
 /* -------------------------------------------------------------------------
@@ -470,8 +512,7 @@
     right: 0.5rem;
 }
 
-/* The full view button now sits inside the right-hand group, so it no longer
-   positions itself. */
+/* Position the full-view button within the right-hand overlay group. */
 .vimipad-canvas-fullview {
     position: static;
 }
@@ -592,54 +633,94 @@
    Learner journal panel
    ------------------------------------------------------------------------- */
 
-.vimipad-journal {
-    margin-top: 1rem;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--vimipad-border, #ced4da);
-    border-radius: 0.4rem;
-}
-
-.vimipad-journal summary {
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.vimipad-journal-body {
+.vimipad-journal-control {
     margin-top: 0.75rem;
 }
 
-.vimipad-journal-controls {
+/* Header row: title on the left, revision reference on the right, with a real
+   gap between them (a <legend> cannot be a reliable flex container, so the
+   title and reference sit in a wrapping div instead). */
+.vimipad-journal-head {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
-    margin-top: 0.5rem;
+    gap: 0.75rem;
+    margin-bottom: 0.4rem;
+}
+
+.vimipad-journal-title {
+    margin: 0;
+}
+
+.vimipad-journal-ref {
+    font-size: 0.8rem;
+    font-weight: normal;
+}
+
+/* Body: textarea on the left, the save button (and optional private checkbox)
+   in a narrow column on the right, matching the two-column add-menu layout. */
+.vimipad-journal-body {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.75rem;
+    align-items: start;
+}
+
+.vimipad-journal-input {
+    margin: 0;
+}
+
+.vimipad-journal-side {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+.vimipad-journal-save {
+    white-space: nowrap;
 }
 
 .vimipad-journal-visibility {
     margin: 0;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
-.vimipad-journal-list {
-    margin-top: 1rem;
-    padding: 0;
-    list-style: none;
+.vimipad-journal-saved {
+    margin-top: 0.4rem;
 }
 
-.vimipad-journal-entry {
-    padding: 0.5rem 0;
-    border-top: 1px solid var(--vimipad-border, #ced4da);
+/* On narrow screens the button column drops below the textarea. */
+@media (max-width: 480px) {
+    .vimipad-journal-body {
+        grid-template-columns: 1fr;
+    }
 }
 
-.vimipad-journal-meta {
-    font-size: 0.8rem;
-    color: #6c757d;
+.vimipad-revision-player-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
 }
 
-.vimipad-journal-text {
-    white-space: pre-wrap;
+.vimipad-revision-scrubber {
+    flex: 1 1 200px;
+    min-width: 120px;
+}
+
+.vimipad-revision-player-stage {
+    position: relative;
+}
+
+.vimipad-revision-incomplete {
+    margin-bottom: 0.75rem;
+}
+
+.vimipad-revision-player-stage[aria-busy="true"] {
+    opacity: 0.6;
 }
 
 /* -------------------------------------------------------------------------
@@ -654,6 +735,10 @@
     display: flex;
     gap: 0.5rem;
     align-items: center;
+}
+
+.vimipad-tools-panel {
+    margin-top: 0.5rem;
 }
 
 .vimipad-import-replace {
@@ -694,6 +779,10 @@
     display: none;
 }
 
-.vimipad-showstate {
+.vimipad-revision-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
     margin-top: 0.5rem;
 }

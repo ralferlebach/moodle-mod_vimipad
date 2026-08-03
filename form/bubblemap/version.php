@@ -25,7 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'vimipadform_bubblemap';
-$plugin->version   = 2026072600;
+$plugin->version   = 2026072601;
 $plugin->requires  = 2024100700;   // Moodle 4.5.0.
 $plugin->maturity  = MATURITY_ALPHA;
 $plugin->release   = '0.1.0';
+$plugin->dependencies = [
+    // The stable public profile API landed in mod_vimipad 0.7.27.
+    'mod_vimipad' => 2026072766,
+];

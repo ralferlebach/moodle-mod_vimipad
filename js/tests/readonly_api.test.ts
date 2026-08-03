@@ -49,7 +49,7 @@ describe('ApiClient read-only mode', () => {
         const api = new ApiClient(transport, 7, true);
         await expect(api.applyOperation(1, 0, 'node_create', {type: 'concept'})).rejects.toThrow();
         await expect(api.createSnapshot(1)).rejects.toThrow();
-        await expect(api.addJournalEntry(1, 'hi', 0)).rejects.toThrow();
+        await expect(api.addJournalEntry(1, 'hi', false)).rejects.toThrow();
         expect(calls).not.toContain('mod_vimipad_apply_operation');
         expect(calls).not.toContain('mod_vimipad_create_snapshot');
         expect(calls).not.toContain('mod_vimipad_add_journal_entry');

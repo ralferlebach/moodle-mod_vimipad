@@ -4,25 +4,883 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.6.24** (2026072738).
+> release is **0.7.31** (2026072770).
 
-## 0.6.23 (2026072737) — T5: re-arrange keeps container membership
+## 0.7.31 (2026072770) — 0.7.x hardening close-out (final audit follow-ups)
 
-- Re-arrange laid out nodes by graph structure and ignored containers, so a
-  container's member nodes scattered and the box stayed put — the visual grouping
-  broke.
-- Now, before re-layout, the nodes spatially inside each container are recorded
-  (a node belongs to a container when its centre is within the box, matching what
-  the user sees — there is no separate assignment step). After the new layout each
-  non-empty container is refitted to the bounding box of its members' new
-  positions (plus padding), so members stay inside and the container follows them.
-  Empty containers are left where they are.
-- The refit rides in the same undo/redo entry as the layout change: one
-  re-arrange, one undo restores both node positions and container geometry.
-- New pure helpers `centerInBox` and `boundingBox` in `canvas/container_geometry`
-  (with a minimum-size clamp); 6 tests. Pure frontend — 210 `mod_vimipad` + 97
-  `vimipadassess` unchanged; phpcs clean; **Jest 36 suites / 230 tests**; bundle
-  reproducible. The felt result needs a browser.
+The final 0.7.x audit gives GO for controlled beta/pilot. This release folds in
+two small, non-blocking consistency follow-ups from that audit; the remaining
+items are tracked for 0.8.x.
+
+- **Layout schema is enforced at the service boundary.** `layout_policy`
+  validation now runs inside `layout_service::save()` rather than only in the
+  external endpoint, so the import path (which calls the service directly) is
+  validated too. The redundant endpoint check is removed (single source of
+  truth). A service-level test asserts an invalid payload is rejected there.
+- **security_review.md conclusion corrected.** The summary no longer lists the
+  layout schema and AI output limits as open — they are implemented and were
+  already documented as such earlier in the same file; the wording is now
+  consistent and reflects the 0.7.30 state.
+- Backlog updated to 0.7.30 state: the code-side 0.7.x hardening arc is closed;
+  remaining beta prerequisites are the empirical ones (concurrency/load tests,
+  replay benchmarks, accessibility, browser/DB and upgrade/backup-restore CI).
+  The heartbeat `renew()` full-CAS hardening, optional get_operations coverage
+  expansion, and the guest-access product decision are recorded as 0.8.x items.
+
+## 0.7.30 (2026072769) — Partial-history correctness, bounded checkpoints, AI & layout limits
+
+Addresses the 0.7.29 audit. Fixes a P0 where a protection-truncated revision
+history could be presented as complete, bounds the checkpoint model, and closes
+the remaining AI/layout resource limits and subplugin-versioning items.
+
+Revision player (P0):
+- **A truncated history is no longer shown as complete.** When op-log loading
+  stops at a protection limit, the player tracks `highestLoadedRevision`, builds
+  the replay engine only up to it, clamps the slider to it, and shows an explicit
+  truncation warning instead of implicitly treating unloaded revisions as empty
+  up to the workspace's real maxRevision.
+- **Completeness is checked by content fingerprint.** `isHistoryIncomplete` now
+  compares a per-element fingerprint over rendering fields (type, label, content,
+  endpoints, direction, geometry, metadata), not just stable-id sets, so a
+  missing update/retarget on existing elements (same ids, different content) is
+  detected. Tests cover truncation clamping, the warning, and content mismatch.
+
+Replay scaling (P1):
+- **Checkpoint count is bounded.** `ReplayEngine` now takes a `maxCheckpoints`
+  budget and spaces checkpoints `ceil(maxRevision / budget)` apart, so retained
+  checkpoints do not grow with history length. A test asserts a 2000-revision
+  history keeps ≤ budget+2 checkpoints while staying correct.
+- **No op-log rescan in stateAt.** Each checkpoint stores its op-array start
+  index and `nearestCheckpoint` uses binary search, so reconstructing a frame
+  starts at the checkpoint without a linear scan of the log.
+
+Concurrency (P2 from the audit reply):
+- **Owner-renewal is compare-and-swap too.** An owner extending its own lease now
+  updates conditionally on the row still matching; an owner whose lease had
+  expired is routed through the takeover CAS path, so it cannot overwrite a
+  concurrent taker. Covered by a dedicated test.
+
+Resource limits:
+- **AI limits** in `ai_feedback_service`: teacher notes and the overall prompt
+  are capped before the provider call; the generated draft and `providerinfo`
+  (to the char(255) column) and stored prompt context are bounded before
+  storage — no silent DB truncation. New `MAX_AI_*` limits.
+- **Central `layout_policy`** enforces the layout/viewport schema server-side:
+  object root, only known top-level fields, finite in-range coordinates,
+  positive sizes, and a bounded object count — rejecting payloads like `42`,
+  `true`, or `{"pos":{"n":{"x":"abc"}}}` that passed the JSON+byte checks.
+
+Subplugins:
+- **Concrete parent versions.** All assess (scorer) subplugins now depend on the
+  frozen assess API version instead of `ANY_VERSION`; the form and assess
+  subplugins that changed get a version bump so the Moodle upgrade contract is
+  clean.
+
+## 0.7.29 (2026072768) — Revision-player correctness & scaling, plus P1 follow-ups
+
+Addresses the 0.7.28 audit: the new revision player introduced a historical
+correctness bug and shifted scaling load unbounded onto the client. This release
+fixes both and closes the remaining P1 points.
+
+Revision player:
+- **Immutable historical frames (P0 fix).** Frame elements are now copied out of
+  the mutable accumulator, so a later node/relation/container update or a
+  relation retarget can no longer retroactively change an earlier frame. A
+  shallow copy is complete because element fields are primitives. Regression
+  tests assert frame immutability for updates, retargets and container changes,
+  and full deep-equality of `buildFrames(rev)` and `reconstructAt(rev)` — not
+  just element counts.
+- **Paginated `get_operations`.** The endpoint now takes `fromrevision` and
+  `limit`, caps the batch server-side (`MAX_BATCH = 500`), and returns `hasmore`
+  and `nextrevision`, so no single request pulls an unbounded op-log. A
+  dedicated PHP contract/IDOR test covers own/foreign workspace, revision
+  clamping, paging through all operations, and the cap.
+- **Bounded, checkpoint-based replay.** A new `ReplayEngine` keeps periodic
+  checkpoints plus a small LRU frame cache and reconstructs frames from the
+  nearest checkpoint forward, instead of retaining one full frame per revision
+  (which was O(N^2) in memory). The player pages the op-log in and reconstructs
+  on demand.
+- **Stronger history-completeness detection.** `isHistoryIncomplete` now compares
+  the sorted stable-id sets, not just element counts, so a same-count-but-
+  different-elements mismatch is detected.
+
+Resource limits, concurrency and CSRF:
+- **Byte-accurate payload limits.** New `limits::check_bytes` counts bytes (not
+  characters); layout and viewport payloads are checked against
+  `MAX_LAYOUT_BYTES` in bytes, so a multibyte payload cannot exceed the nominal
+  cap.
+- **Compare-and-swap lock takeover.** Taking over an expired lease now uses a
+  conditional update on the prior holder + expiry, so two concurrent callers
+  cannot both believe they acquired the lease. Covered by a concurrency test.
+- **POST-only state changes.** `runai` and `allocatereviews` moved from GET links
+  to POST forms with `sesskey` and a request-method check, so they cannot be
+  triggered by prefetch, history navigation or re-opening the URL.
+
+Correctness and packaging:
+- **Snapshot-based submission metrics.** The grading overview computes node and
+  relation counts from each submission's frozen snapshot JSON, not the live
+  tables, so a reopened-and-edited workspace no longer misreports the graded
+  submission's size.
+- **Separately installable scorers.** An assess (scorer) subplugin uninstall now
+  has a safety test: a missing scorer degrades to no automatic score rather than
+  a fatal, and the uninstall semantics are documented on both plugininfo classes.
+- `package-lock.json` regenerated so `jsdom` is a devDependency in the root
+  entry, matching `package.json` (so `npm ci --omit=dev` excludes it).
+- Documentation refreshed: `security_review.md` rewritten for 0.7.29, backlog
+  and README updated, remaining duplicate changelog headings disambiguated.
+
+## 0.7.28 (2026072767) — Pre-Beta hardening (security, performance, subplugin contract)
+
+Addresses the findings of the 0.7.27 security / coding-standard / productivity
+audit. No functional feature changes; hardening, performance and consistency.
+
+Security & integrity:
+- **Journal entries now require `mod/vimipad:comment`** (P0). `add_journal_entry`
+  previously enforced only edit access; a role with editown but without comment
+  could post entries. Covered by a role-matrix test.
+- **Free-text length limits enforced** at five service boundaries (journal,
+  peer-review comment, grade feedback, accepted AI feedback, annotation) using
+  the multibyte-safe `limits::check_text` with `MAX_TEXT`.
+- **Layout, viewport and revision validation.** `save_layout` now bounds the
+  viewport payload and rejects unknown modes; `get_revision_state` enforces a
+  valid revision range, and `api\map::state_at` rejects negative revisions.
+
+Performance (N+1 and unbounded queries):
+- **Peer-review allocation** loads existing pairs once instead of a
+  `record_exists` per candidate (was O(submissions x reviewers) queries).
+- **Privacy export** loads nodes/relations/journal for all of a user's
+  workspaces in three IN-queries instead of three per workspace (3N+1).
+- **Grading** loads existing grades for the whole cohort once and commits the
+  plugin-table writes in a transaction.
+- **Owner labels** in the overview and report pre-load group names instead of
+  an uncached `groups_get_group_name` per row.
+- **Expired lock cleanup** moved from a probabilistic branch in the poll request
+  to a deterministic `purge_expired_locks` scheduled task (every 15 minutes).
+- **Revision replay reduced from N server reconstructions to one op-log fetch.**
+  A new `get_operations` endpoint returns the op-log; the player reconstructs
+  frames on the client instead of one full server reconstruction per revision
+  across N web-service calls. (0.7.29 further bounds client memory with
+  checkpoints and a bounded frame cache; see below.)
+
+Subplugin contract (separately installable/uninstallable):
+- All five `vimipadform_*` subplugins now declare a concrete parent dependency
+  (`mod_vimipad => 2026072766`, the release that froze the public profile API).
+- **Uninstalling a form subplugin is safe:** it has no tables, the editor
+  degrades to the fallback form definition, the built-in profiles stay offered,
+  and a profile reaching a non-form path (backup/restore, web service) is
+  normalised to the safe default. Covered by a dedicated safety test.
+
+Release & documentation consistency:
+- `$plugin->supported` corrected to `[405, 502]` (Moodle 5.3 is not yet
+  released); package.json / package-lock.json / README / roadmap aligned to
+  0.7.28; duplicate 0.7.20 and 0.6.12 changelog sections removed; `drag_arm.ts`
+  module docblock completed; `amd/readme_moodle.txt` added for the bundled
+  third-party libraries. The local `make check` target now includes `lint-js`.
+
+## 0.7.27 (2026072766) — Stable public API for dependent plugins
+
+- **Context-free profile validation** (`\mod_vimipad\profile\profiles`): a
+  new stable facade to validate a profile and resolve its form configuration
+  without a Moodle activity context or a stored instance — `all()`, `exists()`,
+  `form_config()`, `is_shape_allowed()`, `clamp_shape()`. This is what a
+  dependent plugin (question type, database field) needs to reuse the ViMi
+  profiles standalone.
+- **Public map-state API** (`\mod_vimipad\api\map`): `state_at(workspaceid,
+  revision)` reconstructs the surviving nodes/relations/containers from the
+  operation log through a stable entrypoint, without exposing the internal
+  service layer. (Access control stays the caller's responsibility, as
+  documented.) Joins the existing `\mod_vimipad\api\ids` facade.
+- **Embeddable editor contract.** The `mount(element, config)` entrypoint (plus
+  `mountRevision`/`mountPlayer`) is now a tested public contract: the host
+  supplies a `callService` transport — the swappable persistence adapter
+  (`ServiceTransport`) — and an optional `getString` resolver, so the editor
+  mounts and renders with no Moodle service endpoint and no network fetch.
+- **API documentation.** The README's API section is updated (the surface is no
+  longer "not frozen"), and a new `docs/design/public-api.md` describes the full
+  stable contract. Everything under `\mod_vimipad\local\*` remains internal
+  with no stability guarantee.
+- **Test coverage:** `api_profiles_test`, `api_map_test` (PHP) and
+  `embed_mount.test.ts` (editor mounts with a caller-supplied in-memory
+  transport) lock the contract in.
+
+## 0.7.26 (2026072765) — Security review, external-function hardening, docs
+
+- **Documented security review** (`docs/design/security_review.md`) covering the
+  0.7.x hardening milestone: an access-control/IDOR matrix for all 17 external
+  functions, output sanitisation (stored XSS), parameter validation, and CSRF.
+  Result: no open finding. Every external function binds its `workspaceid` to
+  the current activity and enforces the correct capability; the frontend uses no
+  `dangerouslySetInnerHTML` (React auto-escapes), PHP output goes through
+  `format_text`/`s()`, and state-changing forms carry `sesskey()`.
+- **External-function hardening.** `apply_operation` and `save_layout` now route
+  their access checks through the shared `helper::validate_workspace_for_edit()`
+  instead of duplicating the context/workspace-binding/`require_edit` logic
+  inline — same checks, one tested path. `create_snapshot` and `get_workspace`
+  keep their bespoke checks by design (submit capability plus course/cm for
+  completion; group/target-user resolution respectively), now noted in code.
+- **Docs refreshed.** The test-environment baseline is updated to the current
+  counts (264 `mod_vimipad` + 97 `vimipadassess` backend tests, 277 Jest), and
+  `docs/design/backlog.md` is rewritten for the 0.7.x/0.8.x plan.
+
+## 0.7.25 (2026072764) — Canvas menu click-through fix, journal replay fallback, and polish
+
+- **Journal replay fallback for incomplete op-history.** The replay ("film")
+  reconstructs each state from the operation log. Maps whose elements were
+  created before the op-log existed (or via a legacy import path) have no create
+  operations to replay, so those elements never appeared — the reported symptom
+  where only containers showed. The player now detects this on mount by
+  comparing the live current map (`get_workspace`) with the reconstruction at
+  the final revision; when the live map has more elements, it shows the faithful
+  live current state with a hint ("Earlier editing steps for this map are not
+  recorded") instead of an unfaithful, partial animation, and hides the playback
+  controls. Complete histories play as before. The single-revision viewer
+  ("show editing state") deliberately does not fall back, since it must show the
+  exact historical revision the journal entry refers to.
+- **Fixed the misaligned journal buttons.** "Show editing state" and "Replay map
+  development" sat at different heights because a top margin was applied to only
+  one of them. They are now wrapped in a flex container that aligns both and
+  spaces them consistently.
+
+- **Fixed the recurring canvas menu click-through / z-order bug.** The floating
+  element menus (node, relation, container) sit in the topmost canvas layer and
+  their `foreignObject` boxes are deliberately larger than the visible toolbar.
+  The container menu wrapper carried an inline `pointer-events: auto` override
+  that made the whole box capture clicks, stealing them from the graph beneath.
+  All three menus now render through one shared `MenuOverlay` component that
+  enforces the invariant in a single place: the `foreignObject` and its
+  `.vimipad-node-dock-fo` wrapper are `pointer-events: none` (click-through) and
+  only the inner `.vimipad-node-dock` toolbar is `pointer-events: auto`. A
+  pointer-down on the toolbar is stopped from reaching the canvas so choosing a
+  menu button never pans or deselects.
+- **Continuous test coverage** so the bug cannot silently return: a behavioural
+  suite (`menu_overlay.test.ts`) renders the overlay and asserts the
+  click-through attributes and that a menu pointer-down does not propagate to
+  the canvas, and a structural guard (`canvas_menu_overlay_usage.test.ts`) fails
+  if `CanvasView` ever hand-writes a menu wrapper again or reintroduces an inline
+  `pointer-events: auto`.
+- **Fixed a phpcs violation** in `grading_service.php` (multi-line `get_record`
+  call formatting) reported by the project CI.
+
+## 0.7.24 (2026072762) — Assessed map in the feedback tab, data export moved to Tools
+
+Two workflow refinements: learners can now see the exact map that was graded
+alongside their feedback, and all data import/export lives together in the
+Tools tab.
+
+- **Assessed map in the feedback tab.** When a submission has been graded, the
+  learner's Feedback tab now offers a "View the assessed map" button that opens
+  the exact graded snapshot in the read-only revision viewer — the same viewer
+  the Journal tab uses, so no new viewer code. The snapshot is the stable
+  assessment target, so later edits to the working map do not change what is
+  shown. `grading_service::get_feedback_for_user()` now also resolves the
+  snapshot's revision and workspace; a new `feedback_panel::needs_viewer()`
+  lets `view.php` initialise the viewer JS only when the map is embedded.
+- **Data export moved to the Tools tab.** JSON and XML export have been removed
+  from the canvas export menu, which now offers only the graphical exports
+  (SVG, PNG, PDF). The Tools tab gains a "Export data" section with the JSON and
+  XML downloads, directly above the existing import — so data import and export
+  are found together in one place.
+- New strings `editor:exportdataheading` / `editor:exportjson` /
+  `editor:exportxml` / `editor:exportdatahint` and `feedback:mapheading` /
+  `feedback:showmap` (English and German).
+
+## 0.7.23 (2026072761) — Differentiated element locking (move / colour / text)
+
+Locks are no longer all-or-nothing. A teacher can now lock an element's
+**movement, size and shape**, its **colour**, and its **text** independently,
+and every part of the editor respects those groups so a locked action is never
+offered and then silently discarded.
+
+- **Semantic lock groups.** Lock state is stored as
+  `{"locked": true, "locks": {"move": …, "color": …, "text": …}}`. The three
+  groups cut across the database fields (shape, fill and text styling all live in
+  the metadata JSON), so the lock is defined semantically, not per field. A new
+  `\mod_vimipad\local\lock\element_lock` class is the single source of truth for
+  which change belongs to which group; the frontend mirrors it in
+  `element_lock.ts`. A legacy `{"locked": true}` with no `locks` map keeps its
+  old meaning: everything is locked.
+- **Server enforcement by group.** `operation_service` rejects an update only
+  when it would change a field or metadata key of a *locked* group, and blocks
+  deletion whenever any group is locked. Relation retargeting
+  (`newsource`/`newtarget`) counts as movement and is protected accordingly — it
+  previously slipped through.
+- **Teacher lock menu.** In lock mode the element toolbar shows three
+  independent toggles (move / colour / text) for nodes and containers, and the
+  two applicable ones (move / text) for relations.
+- **Locked actions are hidden, not discarded.** Outside lock mode the toolbar
+  only offers a control when its group is unlocked: the shape button, colour
+  field, text button and — for relations — the direction buttons disappear when
+  their group is locked.
+- **Re-arrange respects locks.** A move-locked node keeps its position; a node
+  inside a move-locked container is pinned so it cannot be pushed out of the
+  container's bounds; a move-locked container is neither moved nor resized.
+- **List view cannot bypass locks.** Retargeting (selects and drag), reversing,
+  renaming and deleting are each hidden in the relation table when the matching
+  group is locked.
+- New strings `editor:lockgroup_move` / `editor:lockgroup_color` /
+  `editor:lockgroup_text` (English and German).
+
+## 0.7.22 (2026072760) — CI lint fix and Tools tab moved to the far right
+
+- **Fix the CI AMD lint failure.** `amd/src/init.js` used a nested ternary to
+  pick the initial view (added in 0.7.14 for the tools view), which trips
+  eslint's `no-nested-ternary`. The CI runs `grunt amd` with
+  `--max-lint-warnings=0`, so that one warning aborted the build. The view is
+  now resolved with an explicit lookup (`knownViews.indexOf(...)`), no nested
+  ternary. Verified with the exact CI command
+  (`grunt amd --files=…init.js,…revision.js --max-lint-warnings=0`) exiting 0.
+- **Tools tab moved to the far right.** The `tools` tab now comes after
+  feedback, peer and grade in the tab bar (it was fourth, right after journal).
+  The default/auto-open tab stays canvas, so nothing routes to tools by
+  accident.
+- Verified: 254 backend tests green, 250 Jest tests green, tsc clean, esbuild
+  bundle rebuilt, `init.min.js` reproducible through Grunt, phpcs clean.
+
+## 0.7.21 (2026072759) — list view: full-width table, matched heading, merged double-arrow actions
+
+- **Relation table spans the full page width.** The table previously used
+  `display: block` (for mobile horizontal scrolling), which shrank it to its
+  content width. Scrolling now lives on the `vimipad-listview` container, so the
+  table itself is a real full-width table.
+- **"Concepts and relations" heading matched to the others.** It was an `h5`;
+  it now uses the same `h6` sizing/weight as the "Add concept" / "Add relation"
+  legends.
+- **Double-arrow rows render their buttons once.** For a double-arrow relation
+  (shown as two connected rows, A→B and B→A), the action buttons
+  (edit/reverse/delete) were rendered on both rows. They now span both rows with
+  `rowSpan=2` and render once — the same treatment the shared relation-label
+  cell already had. A single-direction relation is unaffected.
+- New Jest suite `relation_list_view` (a single-direction relation renders one
+  action cell; a double-arrow relation renders two rows but one action cell
+  spanning both, plus the label cell). Verified: 254 backend tests green, 250
+  Jest tests green, tsc clean, esbuild bundle rebuilt, `init.min.js`
+  reproducible through Grunt, phpcs clean.
+
+## 0.7.20 (2026072758) — test hygiene: remove duplicated test setup
+
+Removes the three clones reported by phpcpd (`--min-lines 5 --min-tokens 70`),
+all in test files, without changing any test's behaviour.
+
+- **Shared workspace fixture.** The identical `setUp()` (course + module + empty
+  workspace) in `element_lock_test`, `membership_integrity_test` and
+  `reconstruction_roundtrip_test`, plus the shared `op()` helper, moved into a
+  new `mod_vimipad\workspace_fixture` trait in `tests/fixtures/`. Each suite now
+  calls `set_up_workspace()` from its `setUp()`. The trait file is loaded with an
+  explicit `require_once` (it is not autoloaded) and is not itself a test class.
+- **Internal clone removed.** In `membership_integrity_test`, the two tests that
+  built the same two-nodes-plus-relation-plus-container scenario
+  (`test_node_delete_purges_memberships` /
+  `test_relation_delete_purges_memberships`) now share a
+  `seed_nodes_relation_container()` helper.
+- phpcpd now reports no clones. Verified: 254 backend tests green (unchanged —
+  no test lost: element_lock 5, membership_integrity 6, reconstruction_roundtrip
+  1), each test file green individually, phpcs / phpdoc / validate clean. No
+  functional change, no frontend change.
+
+## 0.7.19 (2026072757) — revision player: replay map development as a film
+
+Adds the animated replay requested in point 4. The single-revision viewer
+already existed (journal entries with a `revisionref` offer a "show editing
+state" button that mounts the read-only `RevisionViewer`); this adds the
+step-by-step film alongside it.
+
+- **New `RevisionPlayer` component.** Steps through the revisions from 1 up to a
+  target revision, reconstructing and rendering each state on the read-only
+  canvas via the existing `get_revision_state` service. Play/pause button, a
+  scrubber to jump to any step, a "revision N / total" counter, and an
+  in-memory cache so scrubbing back and forth (and the animation itself) does
+  not re-hit the service for a revision already seen. Restarts from the
+  beginning when play is pressed at the end.
+- **Wired into the journal tab.** Each journal entry that references a revision
+  now offers a "Replay map development" button next to "show editing state";
+  the `mod_vimipad/revision` AMD module mounts the player (new `mountPlayer`
+  entry point on the bundled editor) into the same host element. No backend
+  change — the player reuses the reconstruction service.
+- New strings `revision:play` / `revision:pause` / `revision:playtitle` /
+  `revision:scrubber` (EN/DE).
+- **Test hardening:** the `amd_string_keys` test now also checks
+  `amd/src/revision.js` (not just `init.js`), so a string requested by the
+  revision/player bootstrap but missing from `lang/en` is caught.
+- New Jest suite `revision_player` (loads the target revision on mount, the
+  scrubber jumps to a chosen revision, play advances over time and stops at the
+  end, using fake timers). Verified: 254 backend tests green, 248 Jest tests
+  green, tsc clean, both `init.min.js` and `revision.min.js` reproducible
+  through Grunt, phpcs / validate / savepoints clean.
+
+## 0.7.18 (2026072756) — learner feedback visibility (beta blocker)
+
+Closes the beta blocker from earlier analysis: participants had no reliable
+in-plugin view of their grading feedback (the grade reached the gradebook, but
+the feedback text was only visible to teachers behind `mod/vimipad:grade`).
+
+- **New learner-facing Feedback tab.** A `feedback` tab appears for a learner
+  once their own submission is graded (`get_feedback_for_user` returns a graded
+  row), and is hidden otherwise. It shows the grade (as `x / max`), the written
+  feedback text (rendered through `format_text` in the activity context) and
+  the grading date. Before grading, the tab is absent; the panel itself shows a
+  neutral "not graded yet" notice if reached directly.
+- **Service support.** `grading_service::get_feedback_for_user()` returns a
+  learner's grade, feedback text, graded snapshot id and grading date from the
+  `vimipad_grade` source-of-truth table (per-member in group mode). No schema
+  change — the fields already existed; this only surfaces them to the learner.
+- The annotated-map view for the graded snapshot is intentionally deferred to
+  the revision-viewer work (it reuses that renderer via the stored
+  `snapshotid`).
+- New strings `feedback:none` / `feedback:gradeheading` / `feedback:textheading`
+  / `feedback:dategraded` (EN/DE); the previously unused `tab:feedback` string
+  is now in use.
+- New PHPUnit suite `feedback_visibility_test` (no feedback before grading, full
+  feedback after grading, and the panel rendering both states). Verified: 254
+  backend tests green, each test file individually, phpcs / phpdoc / validate /
+  savepoints clean.
+
+## 0.7.17 (2026072755) — block G: list view restructured
+
+Restructures the list view from manual UI feedback.
+
+- **Journal moved to the bottom of the list view.** In the list view the
+  journal input (with its heading) now sits at the very end of the page, after
+  the relation table, instead of between the add controls and the table. (The
+  canvas view keeps the journal directly under the add controls.)
+- **Heading over the tabular list.** A "Concepts and relations" heading
+  (`editor:conceptsandrelations`) now sits above the list.
+- **Concepts presented in a box.** The concept (node) chips are wrapped in a
+  labelled full-width box above the relation table, instead of a bare inline
+  list.
+- **Full width.** The concept box and the relation table both span the full
+  page width.
+- New strings `editor:concepts` / `editor:conceptsandrelations` (EN/DE).
+- Verified: 245 Jest tests green, tsc clean, esbuild bundle rebuilt,
+  `init.min.js` reproducible through Grunt, phpcs clean, new strings resolve.
+
+## 0.7.16 (2026072754) — block G: journal save button matches the add buttons
+
+- The journal "Save entry" button dropped its `btn-sm` class, so it is now the
+  same size as the concept/relation "Add" buttons, matching the two-column
+  control layout. Frontend only: 245 Jest tests green, tsc clean, bundle
+  rebuilt, `init.min.js` reproducible through Grunt.
+
+## 0.7.15 (2026072753) — block G: journal layout corrected to the two-column design
+
+Corrects the journal layout from 0.7.13, which did not match the requested
+design.
+
+- **Header spacing fixed.** The title and the revision reference were rendered
+  inside a `<legend>` used as a flex container, which browsers do not lay out
+  reliably — so the two ran together ("Learning journal*Revision: 149*"). The
+  header is now a normal wrapping row (`vimipad-journal-head`) with the title on
+  the left and the muted italic reference on the right, with a real gap.
+- **Two-column body.** The textarea and the save button now sit side by side
+  (textarea on the left, the save button — and the optional private-note
+  checkbox — in a narrow column on the right) via a CSS grid, matching the
+  concept/relation add-menu layout, instead of the button dropping full-width
+  below the textarea. The columns collapse to a single column on narrow screens.
+- The `<legend>` is replaced by a heading span with an `aria-label` on the
+  fieldset, so removing the legend does not cost the accessible name.
+- Verified: 245 Jest tests green, tsc clean, esbuild bundle rebuilt,
+  `init.min.js` reproducible through Grunt, phpcs clean.
+
+## 0.7.15b (2026072753) — block G: keep the add-concept/relation controls on one line
+
+- **Fix: the add-concept and add-relation controls are two-line again** —
+  heading on the first line, all controls (fields and the Add button) on a
+  single row below it — instead of each field stacking onto its own line. The
+  control line no longer wraps (`flex-flow: row nowrap`) and the fields shrink
+  to share the row (`flex: 1 1 0; min-width: 0`) rather than forcing a wrap when
+  the column is narrow; the Add button keeps its intrinsic width. On very narrow
+  (phone) viewports the fields are allowed to wrap again so they stay tappable.
+- CSS-only change; no bundle rebuild required.
+
+## 0.7.14 (2026072752) — block G: import moved into a Tools tab
+
+- **Import now lives in its own "Tools" tab** instead of a strip permanently
+  shown beneath the editor. The server-side `tools` tab is re-enabled (edit
+  access only) and loads the editor bundle with `data-view="tools"`; the editor
+  renders only the tools section there (no canvas/list), keeping the group and
+  user context so an import targets the correct map. The import control gains a
+  heading and a short hint. This is the home for the bulk-export functions
+  planned next. New strings `editor:importheading` / `editor:importhint`
+  (EN/DE); the previously unused `tab:tools` string is now in use.
+- Verified: 251 backend tests green, 245 Jest tests green, tsc clean, esbuild
+  bundle rebuilt, `init.min.js` reproducible through Grunt, phpcs / phpdoc /
+  validate clean, all tab labels and import strings resolve.
+
+## 0.7.13 (2026072751) — block G: journal layout and re-arrange chain propagation
+
+- **Journal input restored to the two-column control layout.** The journal
+  input area now lines up in the same grid as the concept/relation add menus —
+  concept and relation side by side, journal below with its textarea and save
+  button — instead of appearing as a detached block. The journal legend shows
+  the current map revision as a muted italic reference number on the right, and
+  the redundant separate revision line beneath the editor is removed.
+- **Re-arrange size propagation confirmed child-to-parent.** Re-arrange already
+  processes containers deepest-child first and feeds each parent its children's
+  already-refitted boxes, so a node that enlarges the innermost container
+  propagates the growth outward through every ancestor to the root. Added a
+  three-level propagation test (`a node enlarging the innermost container
+  propagates out to the root`) that asserts each ancestor encloses its refitted
+  child after a node forces the inner box to grow.
+- Verified: 251 backend tests green, 245 Jest tests green, tsc clean, esbuild
+  bundle rebuilt, `init.min.js` reproducible through Grunt, phpcs clean.
+
+## 0.7.12 (2026072750) — block G: learning-journal rework and stable nested-container re-arrange
+
+Reworks the learning journal from manual UI feedback (point 3 of a batch).
+
+- **Journal is now an open input area**, placed directly under the
+  concept/relation controls in both the canvas and list views, instead of a
+  collapsed accordion at the bottom. The in-panel playback of past entries is
+  removed (entries are reviewed elsewhere); the save button uses a fountain-pen
+  icon (`fa-pen-fancy`) in the style of the concept/relation add buttons and
+  confirms with a saved message.
+- **Teachers can read the journal by default.** New activity setting
+  `journalallowprivate` (default off): when off, every entry is visible to
+  teachers; when on, learners may mark individual entries as a private note
+  ("not visible to teachers"). The checkbox meaning is inverted accordingly
+  (from "visible to teacher" to "private note"), and the private option only
+  appears when the activity allows it. The gate is enforced server-side in
+  `journal_service::add_entry()` — a client cannot hide an entry when the
+  activity forbids it.
+- **Visibility encoding made self-safe.** `journalentry.visibility` is now
+  `0 = teacher-visible (default), 1 = private`, so the safe state is the column
+  default; the service works through the `VISIBILITY_*` constants throughout, so
+  graders (`get_teacher_visible`) and privacy export are unaffected.
+- Backup/restore carries the new `journalallowprivate` setting (added to the
+  activity backup element and covered by the real backup/restore test). The
+  upgrade adds the field with a `field_exists` guard; a real 0.6.24 → 0.7.12
+  upgrade on a fresh site was run to confirm the field is created (default 0,
+  not null) and the journal visibility default is correct.
+- **Nested-container re-arrange made stable (no runaway growth, no hierarchy
+  flipping).** Re-arrange now builds an acyclic nesting forest from the current
+  container boxes — a container is a child of another only if the other is
+  *strictly larger* by area and encloses its centre — and refits inner
+  containers before outer ones, each around its member nodes plus its direct
+  children's already-refitted boxes. The previous centre-only rule treated two
+  overlapping same-size containers as mutual children, which made the relation
+  cyclic and caused both containers to inflate and swap inner/outer on each
+  pass. New pure helpers `nestingParents` / `nestingOrder` / `boxArea` with
+  tests for the tightest-encloser choice, the no-cycle case for equal boxes,
+  the deepest-first ordering, and convergence of repeated refits.
+- Verified: 251 backend tests green (journal service test rewritten for the new
+  signature and the private-requires-allowprivate contract; backup/restore test
+  extended and confirms `journalallowprivate` round-trips), 244 Jest tests green,
+  tsc clean, esbuild bundle rebuilt (old playback markup gone), `init.min.js`
+  reproducible through Grunt, phpcs / phpdoc / savepoints / validate clean.
+
+## 0.7.11 (2026072749) — block G: nested-container re-arrange and container locking
+
+- **Re-arrange keeps the container hierarchy.** Re-arrange refits each container
+  around its members; previously it only counted member *nodes*, so an outer
+  container holding an inner container (and the inner one's nodes) collapsed
+  onto the inner box, losing the visual nesting. A nested container whose centre
+  lies inside another now counts as a member of the outer one, and the outer
+  container's refit includes the inner container's box — so the outer keeps
+  enclosing the inner. (Containers are refitted, not moved, so a single pass
+  preserves ordinary one- and two-level nesting.) New geometry tests cover
+  `centerInBox` and the nested refit invariant (the outer box fully contains the
+  child box).
+- **Containers can be locked like nodes and relations.** The container format
+  menu now shows the lock toggle (for users who may lock: authors, or everyone
+  under cooperative lock mode). The server-side protection was already in place
+  — `container_update` and `container_delete` run through
+  `assert_element_editable` — and is now reachable from the UI: a locked
+  container hides its move/resize/rename handles and its geometry/style edits
+  and deletion are rejected with `error:elementlocked`, while an author
+  (bypass) can still change it. New backend test asserts the locked-container
+  contract for both the ordinary editor and the author.
+- Frontend verified: tsc clean, 240 Jest tests green, esbuild bundle rebuilt,
+  `init.min.js` reproducible through Grunt. Backend: 251 tests green.
+
+## 0.7.10 (2026072748) — block G: remove the redundant container × button
+
+- The small × delete button in the container title bar is removed: deleting a
+  container is done from the trash-can button in the container format menu
+  (reachable now that the menu sits in the top overlay, 0.7.9), so the title-bar
+  × was redundant. Cleaned up the now-unused `vimipad-container-delete` style
+  reference in the SVG export filter, the `editor:containerdelete` language
+  string (EN/DE) and its entry in the editor string-load list. The SVG export
+  chrome-stripping test now asserts against a still-present overlay class
+  (`vimipad-container-resize`) so it keeps testing the export filter.
+- Frontend verified: tsc clean, 238 Jest tests green, esbuild bundle rebuilt
+  (the delete-button markup is gone from the bundle), `init.min.js`
+  reproducible through Grunt.
+
+## 0.7.9 (2026072747) — block G: container menu z-order and interactivity
+
+Three UI defects reported from manual testing, all traced to a single root
+cause: the container format menu was rendered inside the bottom container
+layer, so any node overlapping the container drew on top of it.
+
+- **Container menu moved to the top overlay (Layer 4).** The SVG canvas draws
+  in DOM order (container → connectors → labels → nodes → menu overlay); the
+  selected container's format toolbar is now rendered in that top overlay
+  alongside the node and relation menus, instead of in the container layer
+  beneath every node. A node overlapping the container can no longer occlude
+  its menu — matching the intended stacking order.
+- **Cursor / click-through fixed as a consequence.** Because the menu is no
+  longer behind the node surface, pointer events reach the toolbar buttons
+  (which already carry `cursor: pointer`) instead of the node underneath (which
+  shows the grab cursor), so the buttons are recognised as buttons.
+- **Colour and shape changes now take effect.** Same root cause: the clicks
+  previously landed on the occluding node, not on the menu. The wiring itself
+  was already correct (`onUpdateContainerStyle` → `container_update` with
+  `metadatajson` → reducer/back end), and is now reachable. Added a Jest test
+  asserting a container style (`metadatajson`) change is forwarded as an
+  `updateContainer` action, closing the coverage gap for the colour/shape path.
+- Frontend verified: tsc clean, 238 Jest tests green, esbuild bundle rebuilt
+  with the license banner, `init.min.js` reproducible through Grunt.
+
+## 0.7.8 (2026072746) — block G: complete the group-mode quadrant coverage
+
+- Added an explicit test for the double-negative quadrant of the group-mode
+  coupling (no group mode + non-group map), for both the individual and course
+  map modes: this combination is already consistent and must be a strict no-op
+  (neither the map mode nor the course-module group mode is touched). The
+  enforcement logic already handled it correctly; this closes the test-coverage
+  gap so all four quadrants — the two inconsistent ones (repaired) and the two
+  consistent ones (untouched) — are asserted on the server side, matching the
+  form rule which already covered all four.
+
+## 0.7.7 (2026072745) — hardening block G: UI correctness
+
+First fix from manual UI testing. Block G addresses UI states that the backend
+could not actually support.
+
+- **Group map now requires (and implies) a Moodle group mode.** Previously a
+  "Group map" activity could be saved with the core group mode left at "No
+  groups"; learners then hit `error:nogroup` on first access because no group
+  could be resolved — a UI state with no working backend path. The coupling is
+  now enforced bidirectionally:
+  - **Form validation** blocks saving an inconsistent combination: a group map
+    without a group mode flags the group-mode field (or, when the course forces
+    the group mode, the map option), and a group mode without a group map flags
+    the map option. New strings `error:groupmapneedsgroupmode` /
+    `error:groupmodeneedsgroupmap` (EN/DE), pure decision function
+    `mod_vimipad_mod_form::group_mode_error()`.
+  - **Server-side reconciliation** in `vimipad_add_instance` /
+    `vimipad_update_instance` via `vimipad_enforce_group_consistency()` repairs
+    rather than rejects, so instances created by backup/restore, course import
+    or web services cannot end up inconsistent and a restore never aborts: a
+    group map without a group mode gets separate groups; a non-group map
+    carrying a group mode has it cleared, unless the course forces the group
+    mode, in which case the map is promoted to a group map instead.
+  - New PHPUnit suite `group_mode_consistency_test` (form rule in all
+    directions incl. the forced-mode case, and the three server-side repair
+    outcomes plus the no-op case).
+
+## 0.7.6 (2026072744) — hardening block F: limits, compliance, i18n
+
+- **Template protection separated from collaboration lock mode.** Enabling
+  `lockmodeforlearners` no longer bypasses teacher-authored element locks:
+  template locks are only bypassed by `manageprofiles` holders. The
+  cooperative lock mode remains a pure editing-lease feature. (The previous
+  coupling let learners edit locked template elements whenever the activity
+  used lock mode.)
+- **Resource limits.** New `\mod_vimipad\local\policy\limits` enforced on every
+  mutating operation (imports funnel through the same path): 1000 nodes /
+  2000 relations / 200 containers per map, label ≤ 255 (the column size),
+  content ≤ 50k, metadata JSON ≤ 20k, layout blob ≤ 1 MB, import documents
+  ≤ 5 MB, and container geometry must be finite, positively sized and within
+  the canvas envelope (protecting rendering, export and the spatial membership
+  derivation). New `limits_test` covers the policy and the service enforcement.
+- **XML import hardening.** Size cap before parsing and `LIBXML_NONET` on
+  `simplexml_load_string()` (defence in depth at the import trust boundary).
+- **No embedded fallback language layer.** The 80+ hard-coded English
+  `FALLBACK_STRINGS` are removed from the React bundle; a missing Moodle
+  language string now surfaces as its raw key, so gaps show up in testing
+  instead of silently rendering mixed-language UI. The font choices
+  (Sans/Serif/Mono) are localised (`editor:fmt_font*`) and loaded through
+  `core/str` like every other editor string.
+- **German language files for all five `vimipadform` subplugins** (previously
+  EN-only), plus the missing `subplugintype_vimipadassess(_plural)` strings;
+  the dead `editorplaceholder`/`editorpreview` strings are removed.
+- **Placeholder tabs removed.** The Feedback and Tools tabs (which rendered a
+  "coming soon" notice) are removed from the navigation together with the
+  `tab:comingsoon` string; unknown tab URLs render nothing instead of a stub.
+- **Third-party manifest completed.** `thirdpartylibs.xml` now declares React,
+  ReactDOM **and Scheduler** (all MIT) as bundled components, and the esbuild
+  bundle carries a preserved license banner listing them. `jsdom` moved to
+  `devDependencies`.
+- **Process comments cleaned.** The stale `workspace_service` docblock now
+  describes the actual fail-closed behaviour; roadmap-style comments in
+  `view.php`, `styles.css`, `drag_arm.ts` and `shape_catalog.ts` are replaced
+  by functional invariants; `RevisionViewer.tsx` gained its `@module` docblock;
+  `styles.css` and `build.mjs` carry proper license headers.
+- **Docs consolidated.** The duplicate 0.6.23 changelog section is merged and
+  the roadmap header reflects the 0.7.x feature-freeze state.
+- Frontend verified: tsc clean, 237 Jest tests green, esbuild bundle rebuilt
+  with the license banner, `init.min.js` rebuilt through Moodle's own Grunt
+  and byte-identical on a second run (reproducibility criterion).
+
+## 0.7.5 (2026072743) — hardening block E: grading lifecycle contracts
+
+- **Points-only grading.** ViMi Pad grades in points; the activity form now
+  rejects a Moodle scale selection (`error:scalesnotsupported`). The legacy
+  scale branch in `lib.php` stays for any pre-existing data, but no new scale
+  activity can be configured — resolving the half-implemented scale support.
+- **Server-side grade domain.** `grading_service::save_grade()` validates
+  `0 <= grade <= activity maximum` (and rejects any numeric grade when the
+  activity is ungraded), throwing `error:gradeoutofrange`. UI limits are no
+  longer the only guard; the advanced-grading path passes through the same
+  check.
+- **Grade recipients frozen at submission time.** The terminal submission step
+  stores the resolved recipient cohort on the snapshot (`cohortjson`), and
+  grading pays out to that cohort — group or course membership changes between
+  submission and grading no longer shift who receives the grade. Legacy
+  snapshots without a cohort fall back to resolving current membership. The
+  cohort is backed up with the snapshot and user-remapped on restore.
+- **Reopen lifecycle defined.** `STATUS_REOPENED` (deliberately `-1`, sorting
+  below draft so every `status >= submitted` consumer excludes it without
+  changes): reopening withdraws the submitted state of not-yet-graded
+  snapshots, so completion-on-submit reverts until a fresh submission; a
+  graded snapshot keeps its status and the awarded grade remains in the
+  gradebook as history until a regrade replaces it. The whole transition runs
+  under the workspace write lock.
+- New PHPUnit suite `grading_lifecycle_test` covering the domain check, the
+  frozen cohort under membership change, and the reopen contract.
+
+## 0.7.4 (2026072742) — hardening block D: privacy matrix, reference decoupling, real upgrade proof
+
+- **Privacy matrix completed.** Context discovery and userlist discovery now
+  cover peer reviewers (`vimipad_peerreview.reviewerid`) and advanced-grading
+  raters (`vimipad_gradeinstance.raterid`). `delete_data_for_users()` mirrors
+  the single-user path exactly (own grade records, peer reviews written, rater
+  links), so the deletion outcome no longer depends on which privacy pathway
+  Moodle chose. The export now covers every declared personal-data field:
+  node `content`, a new "Activity involvement" section (operations, submitted
+  snapshots, layout edits, element locks, submit intents) and a "Grading and
+  review activity" section (peer reviews, AI feedback authored, advanced
+  gradings, grades given with the authored feedback text). New PHPUnit suite
+  `privacy_matrix_test` (discovery, bulk/single parity, export completeness).
+- **Reference solution decoupled from learner data.** New activity field
+  `referencemapjson`: marking a snapshot as reference freezes its JSON on the
+  activity record. Scoring reads the frozen copy
+  (`assess_service::reference_submission()` / `has_reference()`, with a legacy
+  snapshot-pointer fallback), the peer-review guidance and the grading-panel
+  hints follow it, and workspace cleanup only clears the snapshot *pointer*.
+  Contract: the model solution is course configuration; its JSON carries no
+  user identifiers and deliberately survives (a) course backup **without user
+  info**, (b) privacy deletion of the source learner, and (c) deletion of the
+  source snapshot — all three proven in `reference_decoupling_test`. The
+  upgrade migrates existing references by copying the marked snapshot's JSON.
+- **Real upgrade path proven (0.6.24 → 0.7.4).** A fresh site install of the
+  0.6.24 release was seeded with legacy fixtures (duplicate membership rows, a
+  layout row with a plain timestamp, a marked reference snapshot) and upgraded
+  via CLI: membership rows deduplicated to the oldest, the unique index active
+  (a duplicate insert is rejected), `layoutrevision` seeded from
+  `timemodified`, `referencemapjson` migrated — and the upgraded schema is
+  **column- and index-identical** to a fresh install of the same version.
+
+## 0.7.3 (2026072741) — hardening block C: correctness contracts
+
+- **`relation_retarget` reconstruction fixed.** The historical reconstruction
+  read `sourceid`/`targetid` while the operation payload carries
+  `newsource`/`newtarget`, so revision views could show a retargeted relation
+  with its old endpoints. New `reconstruction_roundtrip_test` proves for
+  **every operation type** that applying operations and reconstructing at the
+  final revision yields the identical normalized state. Memberships are
+  intentionally not reconstructed: membership truth is spatial (0.7.2) and
+  layout is not versioned, so membership exists only at materialization points.
+- **Layout save is fail-closed with a monotonic revision.** When the
+  per-workspace/profile serialization lock cannot be acquired, `save()` now
+  throws `error:layoutbusy` instead of writing unserialized (lost-update risk).
+  Layout change detection moves from the second-granular `timemodified` to a
+  strictly monotonic `layoutrevision` (new field, upgrade seeds it from the
+  existing timestamp so in-flight client tokens stay comparable; each save
+  takes `max(revision + 1, now)`), so two saves within the same second can no
+  longer be missed by a polling client. No frontend change needed: the client
+  already treats the token as an opaque growing number.
+- **Course-workspace read authorization fixed.** In course mode the single
+  shared workspace is everyone's map: any enrolled user with `view` may read
+  it (constraint/revision APIs included). Inspecting another learner's map
+  still requires `grade`. Covered by a read-access matrix test.
+- **Import `replace` replaces the whole map.** Previously only nodes were
+  deleted, so containers, memberships and stale layout survived a "replace"
+  import. Replace now deletes containers too (their memberships cascade via
+  the 0.7.2 cleanup) and replaces the stored layout entirely (an import
+  without layout clears it).
+- **Import format version and mode are enforced.** `formatversion` > 1 (or
+  malformed) is rejected with `error:importversion` for both JSON and XML;
+  an unknown import mode string raises an error instead of silently acting
+  as `append`.
+- **Import stays idempotent against layout contention.** The semantic import
+  commits as one transaction; the post-commit layout apply catches a layout
+  lock timeout and logs it via `debugging()` instead of failing the request,
+  because a user retry after commit would duplicate content in append mode.
+
+## 0.7.2 (2026072740) — hardening block B: one membership truth (spatial)
+
+**Architecture decision:** container membership truth is **spatial**. A node
+belongs to a container when its centre lies inside the container's box — the
+same rule the editor uses. Membership is derived server-side at the
+materialization points (snapshot creation and export) from container geometry
+plus the profile layout, so assessment and export always contain exactly what
+the canvas shows. Previously the snapshot copied the `vimipad_membership`
+table, which the editor never writes, so visually contained nodes were
+invisible to the submap assessment (dual-truth P0 from the 0.6.24 review).
+
+- New `\mod_vimipad\local\membership_resolver`: pure, unit-tested derivation
+  mirroring `container_geometry.ts::centerInBox` (edges inclusive), reading
+  both layout formats (versioned envelope and legacy bare position map),
+  skipping non-finite positions and malformed geometry, deterministic output
+  order. Only nodes participate; container nesting stays visual.
+- `snapshot_service::build_normalized()` now derives memberships spatially and
+  no longer consults the `vimipad_membership` table. Export inherits this via
+  `build_envelope()`.
+- The `vimipad_membership` table remains as a compatibility store for the
+  import round-trip and the membership operations, with hardened integrity:
+  - `membership_add` validates that the referenced item exists live in the
+    workspace (node/relation/container) and rejects container self-membership.
+  - `node_delete` purges membership rows of the node and of its soft-deleted
+    attached relations; `relation_delete` purges the relation's rows;
+    `container_delete` also purges rows where the container was itself a
+    member of another container.
+  - New **unique index** on (containerid, itemtype, itemstableid) replacing the
+    non-unique (containerid, itemtype) index; the upgrade step deduplicates
+    existing rows first (keeping the oldest).
+- New PHPUnit suites: `membership_resolver_test` (pure derivation: rule, both
+  layout formats, overlap, degenerate inputs) and `membership_integrity_test`
+  (existence checks, self-membership rejection, delete cleanup in all three
+  directions, and end-to-end proof that a snapshot contains the spatially
+  contained node while a stale table row for an outside node does not leak in).
+- Historical revisions (reconstruction) intentionally carry no membership:
+  layout is not versioned, so spatial membership exists only at materialization
+  points. The revision viewer does not display membership.
+
+## 0.7.1 (2026072739) — hardening block A: capability contracts
+
+Feature freeze: 0.7.x is the hardening line towards beta. This release closes
+the capability gaps found in the 0.6.24 security audit.
+
+- **AI scorer authorisation enforced at the service boundary.**
+  `assess_service::score_ai()` now requires `mod/vimipad:useai` for the acting
+  user, checks `ai_feedback_service::is_available()` (core AI present, site
+  setting, activity `aienabled`) and the user's AI policy acceptance before
+  building any prompt. Previously the on-demand "Run AI scorer" link in the
+  grading panel bypassed all of these, so a non-editing teacher with `grade`
+  but without `useai` could trigger AI calls.
+- **AI scorer UI hidden when unavailable.** The grading panel no longer renders
+  the AI scorer block for users without `useai` or when AI is disabled
+  site-wide or on the activity.
+- **`is_available()` accepts an acting user.** New optional `$userid` parameter
+  (defaults to the current user) so service-side checks can evaluate the actual
+  actor.
+- **Submission paths in `view.php` require `mod/vimipad:submit`.** The direct
+  `dosubmit` handler, all three consensus actions (start/confirm/cancel) and
+  the submission UI block now require the `submit` capability in addition to
+  edit access, matching the `create_snapshot` external function. Previously a
+  role with edit access but without `submit` (e.g. a teacher) could submit via
+  the page path.
+- **`grade.php` enforces its own contract.** The legacy grading entry point now
+  requires `mod/vimipad:grade` itself (defense in depth; the target tab already
+  filtered).
+- **`grading_panel::handle_action()` requires `mod/vimipad:grade`.** The
+  mutating POST handler enforces its central precondition instead of relying on
+  the calling page.
+- New PHPUnit suite `ai_authorization_test` covering: teacher without `useai`
+  rejected, activity AI off rejected, site AI off rejected, policy not accepted
+  rejected, fully authorised call passes the gates, and `handle_action` rejects
+  users without `grade`.
 
 ## 0.6.24 (2026072738) — T4: containers format and label like nodes
 
@@ -321,31 +1179,6 @@ existed (it serializes the live SVG, so containers have been drawn into it since
   `svg_export`); esbuild bundle rebuilt and **byte-reproducible**;
   **205 `mod_vimipad`** + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd
   clean. Actual download/upload flows run in the browser / CI.
-
-## 0.6.12 (2026072726) — SVG/PNG export with containers + SVG round-trip import
-
-Rounds out image output and adds a lossless SVG round-trip. No PHP logic change
-(one lang string); the round-trip rides on the existing JSON export/import.
-
-- **Containers in image output.** `computeContentBounds` now frames container
-  geometry as well as nodes, so SVG/PNG/PDF exports no longer clip a container
-  drawn beyond the nodes. Container interaction chrome (draw overlay, delete and
-  resize handles) is stripped from the exported SVG.
-- **SVG round-trip.** An exported SVG embeds the map's semantic JSON in a
-  `<metadata id="vimipad-data">` element (plain text node — jsdom-safe and
-  XML-escaped, no CDATA). The Import button now also accepts `.svg`: on import the
-  embedded JSON is extracted and fed through the existing `importMap`, so an
-  exported SVG re-imports exactly like a JSON export. An SVG without embedded data
-  is rejected with a clear message.
-- Pure, tested helpers: `extractMapData`, `MAP_DATA_ID`, extended
-  `serializeCanvasSvg(embedJson?)` and `computeContentBounds(containers)`.
-- Lang: `editor:importnovimidata` (en/de, 429/429 parity) + init.js key + fallback.
-- **Verification:** the JSON export/import round-trip incl. containers is covered
-  by existing `test_export_import_roundtrip` + `test_container_roundtrip`
-  (PHPUnit); embed/extract and container bounds by Jest. `tsc` clean; **Jest 30
-  suites / 185 tests**; esbuild bundle rebuilt and **byte-reproducible**; **205
-  `mod_vimipad`** + **97 `vimipadassess`** green; whole-plugin phpcs + phpcpd clean.
-  Browser download/upload and `@javascript` Behat run in CI.
 
 ## 0.6.11 (2026072725) — containers: move, resize, rename, lock + undo/redo
 
@@ -1292,7 +2125,7 @@ Initial installable plugin shell with full project infrastructure.
 - README.md auf das Moodle-an-Hochschulen-README-Template umgestellt;
   Template gilt verbindlich für alle künftigen READMEs des Projekts.
 
-## 0.2.0 (2026072600) — Session 002 start: phpcs-Fix + M1 (Datenmodell)
+## 0.2.0-start (2026072600) — Session 002 start: phpcs-Fix + M1 (Datenmodell)
 
 ### Fixed
 - Alle 12 CI-gemeldeten phpcs-Verstöße behoben: Leerzeile nach
@@ -1367,7 +2200,7 @@ Initial installable plugin shell with full project infrastructure.
 ### Verified
 - moodlehq/moodle-cs (Standard "moodle"): 0 Fehler, 0 Warnungen.
 
-## 0.5.0 (2026072603) — Session 002: M2 Frontend (Editor-Grundgerüst)
+## 0.5.0-pre (2026072603) — Session 002: M2 Frontend (Editor-Grundgerüst)
 
 ### Added
 - React/TypeScript-Editor als einbettbare Komponente mit stabilem

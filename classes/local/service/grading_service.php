@@ -55,17 +55,61 @@ class grading_service {
         global $DB, $CFG;
         require_once($CFG->dirroot . '/mod/vimipad/lib.php');
 
+        \mod_vimipad\local\policy\limits::check_text(
+            $feedback,
+            \mod_vimipad\local\policy\limits::MAX_TEXT,
+            'gradefeedback'
+        );
+
+        // Server-side grade domain: 0 <= grade <= activity maximum (points
+        // grading only). UI limits are not a contract.
+        if ($grade !== null) {
+            $max = (float) $instance->grade;
+            if ($max <= 0 || $grade < 0 || $grade > $max) {
+                throw new \moodle_exception('error:gradeoutofrange', 'mod_vimipad', '', format_float($max, 2));
+            }
+        }
+
         $cm = get_coursemodule_from_instance('vimipad', $instance->id, 0, false, MUST_EXIST);
         $context = \context_module::instance($cm->id);
 
-        $recipients = $this->resolve_recipients($workspace, $context);
+        // The grade goes to the cohort frozen at submission time; membership
+        // changes after submitting do not shift it. Legacy snapshots without a
+        // stored cohort fall back to resolving the current membership.
+        $recipients = null;
+        $cohortjson = $DB->get_field('vimipad_snapshot', 'cohortjson', ['id' => $snapshotid]);
+        if ($cohortjson !== false && $cohortjson !== null && $cohortjson !== '') {
+            $decoded = json_decode($cohortjson, true);
+            if (is_array($decoded) && $decoded !== []) {
+                $recipients = array_map('intval', array_values($decoded));
+            }
+        }
+        if ($recipients === null) {
+            $recipients = $this->resolve_recipients($workspace, $context);
+        }
         $now = time();
 
+        // Load existing plugin-grades for all recipients once, instead of a
+        // get_record() per recipient (the former N+1). Wrap the plugin-table
+        // writes in a transaction so a large cohort commits atomically.
+        $existingby = [];
+        if ($recipients !== []) {
+            [$insql, $inparams] = $DB->get_in_or_equal($recipients, SQL_PARAMS_NAMED, 'u');
+            $inparams['vid'] = $instance->id;
+            foreach (
+                $DB->get_records_select(
+                    'vimipad_grade',
+                    "vimipadid = :vid AND userid $insql",
+                    $inparams
+                ) as $g
+            ) {
+                $existingby[(int) $g->userid] = $g;
+            }
+        }
+
+        $transaction = $DB->start_delegated_transaction();
         foreach ($recipients as $userid) {
-            $existing = $DB->get_record(
-                'vimipad_grade',
-                ['vimipadid' => $instance->id, 'userid' => $userid]
-            );
+            $existing = $existingby[(int) $userid] ?? null;
             $record = (object) [
                 'vimipadid' => $instance->id,
                 'userid' => $userid,
@@ -83,7 +127,13 @@ class grading_service {
                 $record->timecreated = $now;
                 $DB->insert_record('vimipad_grade', $record);
             }
+        }
+        $transaction->allow_commit();
 
+        // Push to the gradebook after the plugin-table writes are committed.
+        // (Gradebook updates are Moodle-side and cannot be safely batched into
+        // the same transaction.)
+        foreach ($recipients as $userid) {
             vimipad_update_grades($instance, $userid);
         }
 
@@ -104,7 +154,7 @@ class grading_service {
      * @param \context_module $context The activity context.
      * @return int[] The recipient user ids.
      */
-    private function resolve_recipients(stdClass $workspace, \context_module $context): array {
+    public function resolve_recipients(stdClass $workspace, \context_module $context): array {
         if (!empty($workspace->userid)) {
             return [(int) $workspace->userid];
         }
@@ -148,5 +198,53 @@ class grading_service {
             ];
         }
         return $grades;
+    }
+
+    /**
+     * The grade and feedback shown to a learner for their own submission.
+     *
+     * Returns the learner's grade row (grade, feedback text, the graded
+     * snapshot id — with its revision and workspace so the assessed map can be
+     * shown — and when it was graded), or null when the learner has no graded
+     * submission yet. In group mode the grade is stored per member, so the
+     * member's own row is returned.
+     *
+     * @param stdClass $instance The activity instance.
+     * @param int $userid The learner.
+     * @return stdClass|null The feedback record, or null if not graded.
+     */
+    public function get_feedback_for_user(stdClass $instance, int $userid): ?stdClass {
+        global $DB;
+
+        $row = $DB->get_record('vimipad_grade', ['vimipadid' => $instance->id, 'userid' => $userid]);
+        if (!$row || $row->grade === null) {
+            return null;
+        }
+        // If the graded snapshot is known, resolve its revision and workspace so
+        // the learner can view the exact map that was assessed.
+        $snapshotrevision = null;
+        $snapshotworkspaceid = null;
+        if ($row->snapshotid !== null) {
+            $snap = $DB->get_record(
+                'vimipad_snapshot',
+                ['id' => (int) $row->snapshotid],
+                'id, revision, workspaceid',
+                IGNORE_MISSING
+            );
+            if ($snap) {
+                $snapshotrevision = (int) $snap->revision;
+                $snapshotworkspaceid = (int) $snap->workspaceid;
+            }
+        }
+        return (object) [
+            'grade' => (float) $row->grade,
+            'grademax' => (float) $instance->grade,
+            'feedback' => (string) $row->feedback,
+            'feedbackformat' => (int) $row->feedbackformat,
+            'snapshotid' => $row->snapshotid !== null ? (int) $row->snapshotid : null,
+            'snapshotrevision' => $snapshotrevision,
+            'snapshotworkspaceid' => $snapshotworkspaceid,
+            'dategraded' => (int) $row->timemodified,
+        ];
     }
 }

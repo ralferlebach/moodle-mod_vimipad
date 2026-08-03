@@ -67,11 +67,19 @@ class get_revision_state extends external_api {
             $workspace
         );
 
-        $state = (new reconstruction_service())->reconstruct((int) $workspace->id, (int) $params['revision']);
+        // Enforce a valid revision range: 0 <= revision <= current revision.
+        // Out-of-range values are a broken API contract and would trigger
+        // pointless reconstruction work.
+        $revision = (int) $params['revision'];
+        if ($revision < 0 || $revision > (int) $workspace->currentrevision) {
+            throw new \invalid_parameter_exception('revision out of range');
+        }
+
+        $state = (new reconstruction_service())->reconstruct((int) $workspace->id, $revision);
 
         return [
             'workspaceid' => (int) $workspace->id,
-            'revision' => (int) $params['revision'],
+            'revision' => $revision,
             'locked' => 1,
             'profile' => $instance->defaultprofile,
             'formconfig' => registry::for_profile($instance->defaultprofile)->to_array(),

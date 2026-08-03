@@ -322,6 +322,22 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
         $data->workspaceid = $this->get_new_parentid('vimipad_workspace');
         $data->submittedby = $this->get_mappingid('user', $data->submittedby) ?: null;
 
+        // Remap the frozen grade-recipient cohort onto the restored user ids,
+        // dropping members that were not included in the backup.
+        if (!empty($data->cohortjson)) {
+            $cohort = json_decode($data->cohortjson, true);
+            if (is_array($cohort)) {
+                $mapped = [];
+                foreach ($cohort as $olduserid) {
+                    $newuserid = $this->get_mappingid('user', (int) $olduserid);
+                    if ($newuserid) {
+                        $mapped[] = (int) $newuserid;
+                    }
+                }
+                $data->cohortjson = json_encode($mapped);
+            }
+        }
+
         $newid = $DB->insert_record('vimipad_snapshot', $data);
         $this->set_mapping('vimipad_snapshot', $oldid, $newid);
     }

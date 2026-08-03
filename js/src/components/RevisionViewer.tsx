@@ -43,8 +43,16 @@ const noop = (): void => {
  * The state comes from the get_revision_state web service (op-log replay) and
  * carries no stored positions, so the graph is laid out automatically.
  *
+ * Unlike RevisionPlayer, this viewer shows one specific historical revision on
+ * purpose, so it does NOT fall back to the live current state when the op-log
+ * is incomplete: substituting today's map would misrepresent the moment the
+ * journal entry was written. It faithfully shows whatever that revision
+ * reconstructs to.
+ *
  * @param props Component props.
  * @returns The rendered viewer.
+ *
+ * @module mod_vimipad/components/RevisionViewer
  */
 export function RevisionViewer(props: Props): React.ReactElement {
     const {api, workspaceid, revision, t} = props;

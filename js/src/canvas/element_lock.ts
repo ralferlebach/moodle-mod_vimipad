@@ -33,6 +33,19 @@ export interface LockState {
     editable: string[];
 }
 
+/** The three independent lock groups. */
+export type LockGroup = 'move' | 'color' | 'text';
+
+/** All lock groups, in menu order. */
+export const LOCK_GROUPS: LockGroup[] = ['move', 'color', 'text'];
+
+/** Per-group lock flags carried in an element's metadata. */
+export interface GroupLocks {
+    move: boolean;
+    color: boolean;
+    text: boolean;
+}
+
 /**
  * Parse the raw metadata JSON into a plain object (or empty on failure).
  *
@@ -97,6 +110,82 @@ export function writeLock(metadatajson: string | undefined, state: LockState): s
         }
     } else {
         delete meta.locked;
+        delete meta.editable;
+    }
+    return JSON.stringify(meta);
+}
+
+/**
+ * Read the per-group lock flags from an element's metadata.
+ *
+ * A locked element with no `locks` map is a legacy/global lock: every group is
+ * locked. An unlocked element locks nothing. This mirrors the server's
+ * \mod_vimipad\local\lock\element_lock so the UI and the server agree.
+ *
+ * @param metadatajson The element's metadata JSON.
+ * @returns The per-group lock flags.
+ */
+export function readGroupLocks(metadatajson?: string): GroupLocks {
+    const meta = parseMeta(metadatajson);
+    if (!meta.locked) {
+        return {move: false, color: false, text: false};
+    }
+    const locks = meta.locks;
+    if (!locks || typeof locks !== 'object') {
+        // Legacy global lock: everything locked.
+        return {move: true, color: true, text: true};
+    }
+    const l = locks as Record<string, unknown>;
+    return {
+        move: Boolean(l.move),
+        color: Boolean(l.color),
+        text: Boolean(l.text),
+    };
+}
+
+/**
+ * Whether a specific group is locked on the element.
+ *
+ * @param metadatajson The element's metadata JSON.
+ * @param group The lock group.
+ * @returns True if that group is locked.
+ */
+export function isGroupLocked(metadatajson: string | undefined, group: LockGroup): boolean {
+    return readGroupLocks(metadatajson)[group];
+}
+
+/**
+ * Whether the element has any group locked at all.
+ *
+ * @param metadatajson The element's metadata JSON.
+ * @returns True if any group is locked.
+ */
+export function isAnyLocked(metadatajson?: string): boolean {
+    const g = readGroupLocks(metadatajson);
+    return g.move || g.color || g.text;
+}
+
+/**
+ * Write per-group lock flags into metadata JSON, preserving all other keys.
+ *
+ * If every group is false the element is fully unlocked (`locked`/`locks`
+ * removed). Otherwise `locked: true` is set together with the explicit `locks`
+ * map, so partial locks are represented precisely.
+ *
+ * @param metadatajson The existing metadata JSON (may be empty).
+ * @param groups The desired per-group lock flags.
+ * @returns The updated metadata JSON.
+ */
+export function writeGroupLocks(metadatajson: string | undefined, groups: GroupLocks): string {
+    const meta = parseMeta(metadatajson);
+    const anyLocked = groups.move || groups.color || groups.text;
+    if (!anyLocked) {
+        delete meta.locked;
+        delete meta.locks;
+        delete meta.editable;
+    } else {
+        meta.locked = true;
+        meta.locks = {move: groups.move, color: groups.color, text: groups.text};
         delete meta.editable;
     }
     return JSON.stringify(meta);

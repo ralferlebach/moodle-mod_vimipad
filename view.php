@@ -54,6 +54,7 @@ $cangrade = has_capability('mod/vimipad:grade', $context);
 $canview = has_capability('mod/vimipad:view', $context);
 $canedit = has_capability('mod/vimipad:editown', $context)
     || has_capability('mod/vimipad:editgroup', $context);
+$cansubmit = has_capability('mod/vimipad:submit', $context);
 
 $isgroup = (int) $instance->collaborationmode === \mod_vimipad\local\service\workspace_service::MODE_GROUP;
 
@@ -92,14 +93,18 @@ if ($showuserselector) {
 
 // Server-rendered, role-gated tabs. The active tab travels in the URL so it is
 // shareable and persists alongside the group selection.
+// A learner sees the feedback tab once their own submission is graded.
+$hasfeedback = $canview && (new \mod_vimipad\local\service\grading_service())
+    ->get_feedback_for_user($instance, (int) $USER->id) !== null;
+
 $tabgates = [
     'canvas' => $canview,
     'list' => $canview,
     'journal' => $canview,
+    'feedback' => $hasfeedback,
     'peer' => !empty($instance->peerreviewmode) && has_capability('mod/vimipad:peerreview', $context),
     'grade' => $cangrade,
-    'feedback' => $canview,
-    'tools' => $cangrade,
+    'tools' => $canedit,
 ];
 $availabletabs = array_keys(array_filter($tabgates));
 
@@ -113,7 +118,7 @@ if (!in_array($tab, $availabletabs, true)) {
 }
 
 // Load the editor bundle only on the tabs that render it.
-$editortabs = ['canvas', 'list'];
+$editortabs = ['canvas', 'list', 'tools'];
 if ($canedit && in_array($tab, $editortabs, true)) {
     $PAGE->requires->js_call_amd('mod_vimipad/init', 'init', [$cm->id]);
 }
@@ -128,8 +133,10 @@ if ($targetuserid) {
 }
 
 // Handle a submission started from the Journal & submission tab (own map).
+// Submitting requires mod/vimipad:submit in addition to edit access, matching
+// the create_snapshot external function.
 if (
-    $tab === 'journal' && $canedit && !$readonly
+    $tab === 'journal' && $canedit && $cansubmit && !$readonly
         && optional_param('dosubmit', 0, PARAM_BOOL) && confirm_sesskey()
 ) {
     $journalurl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']);
@@ -161,7 +168,7 @@ if (
 // Handle group-consensus actions (start / confirm / cancel) from the same tab.
 $consensusaction = optional_param('consensus', '', PARAM_ALPHA);
 if (
-    $tab === 'journal' && $canedit && !$readonly
+    $tab === 'journal' && $canedit && $cansubmit && !$readonly
         && in_array($consensusaction, ['start', 'confirm', 'cancel'], true) && confirm_sesskey()
 ) {
     $journalurl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']);
@@ -235,8 +242,13 @@ if ($gradesnapshotid && $cangrade) {
     );
 }
 
-// Peer review: a teacher allocating reviews for all submitted maps.
-if ($tab === 'grade' && $cangrade && optional_param('allocatereviews', 0, PARAM_BOOL) && confirm_sesskey()) {
+// Peer review: a teacher allocating reviews for all submitted maps. This is a
+// state-changing action, so it must be a POST with a valid sesskey.
+if (
+    $tab === 'grade' && $cangrade
+    && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
+    && optional_param('allocatereviews', 0, PARAM_BOOL) && confirm_sesskey()
+) {
     $allocated = (new \mod_vimipad\local\service\peer_review_service())->allocate($instance);
     redirect(
         new moodle_url('/mod/vimipad/view.php', ['id' => $cm->id, 'tab' => 'grade']),
@@ -266,6 +278,7 @@ echo $OUTPUT->tabtree($tabtree, $tab);
 switch ($tab) {
     case 'canvas':
     case 'list':
+    case 'tools':
         // Companion channel (optional forum/chat/BBB link).
         if (!empty($instance->channelurl)) {
             echo html_writer::div(html_writer::link(
@@ -350,14 +363,24 @@ switch ($tab) {
         ), 'mb-3');
 
         if (!empty($instance->peerreviewmode)) {
-            $allocateurl = new moodle_url('/mod/vimipad/view.php', [
-                'id' => $cm->id, 'tab' => 'grade', 'allocatereviews' => 1, 'sesskey' => sesskey(),
+            // POST form (not a GET link): allocation is state-changing.
+            $allocateform = html_writer::start_tag('form', [
+                'method' => 'post',
+                'action' => new moodle_url('/mod/vimipad/view.php'),
+                'class' => 'vimipad-allocate-form',
             ]);
-            echo html_writer::div(html_writer::link(
-                $allocateurl,
-                get_string('peerreviewallocate', 'mod_vimipad'),
-                ['class' => 'btn btn-outline-secondary']
-            ), 'mb-3');
+            $allocateform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
+            $allocateform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'tab', 'value' => 'grade']);
+            $allocateform .= html_writer::empty_tag(
+                'input',
+                ['type' => 'hidden', 'name' => 'allocatereviews', 'value' => 1]
+            );
+            $allocateform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+            $allocateform .= html_writer::tag('button', get_string('peerreviewallocate', 'mod_vimipad'), [
+                'type' => 'submit', 'class' => 'btn btn-outline-secondary',
+            ]);
+            $allocateform .= html_writer::end_tag('form');
+            echo html_writer::div($allocateform, 'mb-3');
         }
 
         $sql = "SELECT s.id AS snapshotid, s.status, s.timecreated, ws.id AS workspaceid, ws.userid, ws.groupid
@@ -367,24 +390,32 @@ switch ($tab) {
               ORDER BY s.timecreated DESC";
         $submissions = $DB->get_records_sql($sql, ['vid' => $instance->id]);
 
-        // Structure metrics (nodes/relations per workspace) as a grading aid,
-        // batched in two grouped queries. The workspace is locked on submission,
-        // so the live tables reflect the submitted state.
+        // Structure metrics (nodes/relations) computed from the frozen snapshot
+        // of each submission, not the live tables: after a reopen the workspace
+        // can change while the graded/submitted snapshot stays fixed, so the
+        // live counts would misreport the actually-submitted size. Snapshot ids
+        // are loaded once and the JSON is decoded per row.
         $nodecounts = [];
         $relationcounts = [];
         if (!empty($submissions)) {
-            $wsids = array_map(static fn($sub) => (int) $sub->workspaceid, $submissions);
-            [$insql, $inparams] = $DB->get_in_or_equal($wsids, SQL_PARAMS_NAMED);
-            $nodecounts = $DB->get_records_sql_menu(
-                "SELECT workspaceid, COUNT(*) FROM {vimipad_node}
-                  WHERE workspaceid $insql AND deleted = 0 GROUP BY workspaceid",
-                $inparams
+            $snapids = array_map(static fn($sub) => (int) $sub->snapshotid, $submissions);
+            [$insql, $inparams] = $DB->get_in_or_equal($snapids, SQL_PARAMS_NAMED);
+            $snaprows = $DB->get_records_select(
+                'vimipad_snapshot',
+                "id $insql",
+                $inparams,
+                '',
+                'id, workspaceid, snapshotjson'
             );
-            $relationcounts = $DB->get_records_sql_menu(
-                "SELECT workspaceid, COUNT(*) FROM {vimipad_relation}
-                  WHERE workspaceid $insql AND deleted = 0 GROUP BY workspaceid",
-                $inparams
-            );
+            foreach ($snaprows as $row) {
+                $wsid = (int) $row->workspaceid;
+                $decoded = json_decode((string) $row->snapshotjson, true);
+                $nodecounts[$wsid] = is_array($decoded) && isset($decoded['nodes']) && is_array($decoded['nodes'])
+                    ? count($decoded['nodes']) : 0;
+                $relationcounts[$wsid] = is_array($decoded) && isset($decoded['relations'])
+                    && is_array($decoded['relations'])
+                    ? count($decoded['relations']) : 0;
+            }
         }
 
         if (empty($submissions)) {
@@ -404,11 +435,22 @@ switch ($tab) {
                 }
             }
             $users = empty($userids) ? [] : $DB->get_records_list('user', 'id', array_keys($userids));
+            // Pre-load group names once, instead of a groups_get_group_name()
+            // (an uncached DB read) per submission row.
+            $groupids = [];
+            foreach ($submissions as $sub) {
+                if (empty($sub->userid) && !empty($sub->groupid)) {
+                    $groupids[(int) $sub->groupid] = true;
+                }
+            }
+            $groupnames = empty($groupids)
+                ? []
+                : $DB->get_records_list('groups', 'id', array_keys($groupids), '', 'id, name');
             foreach ($submissions as $sub) {
                 if (!empty($sub->userid)) {
                     $who = isset($users[$sub->userid]) ? fullname($users[$sub->userid]) : '';
                 } else if (!empty($sub->groupid)) {
-                    $who = groups_get_group_name($sub->groupid);
+                    $who = isset($groupnames[$sub->groupid]) ? $groupnames[$sub->groupid]->name : '';
                 } else {
                     $who = get_string('mode_course', 'mod_vimipad');
                 }
@@ -427,6 +469,14 @@ switch ($tab) {
                 ];
             }
             echo html_writer::table($table);
+        }
+        break;
+
+    case 'feedback':
+        echo $OUTPUT->heading(get_string('tab:feedback', 'mod_vimipad'), 3);
+        echo \mod_vimipad\local\output\feedback_panel::render($context, $instance, (int) $USER->id);
+        if (\mod_vimipad\local\output\feedback_panel::needs_viewer($instance, (int) $USER->id)) {
+            $PAGE->requires->js_call_amd('mod_vimipad/revision', 'init', [$cm->id]);
         }
         break;
 
@@ -450,8 +500,8 @@ switch ($tab) {
             $ws = $wsservice->get_or_create_for_user($instance, $context, (int) $USER->id, $activegroupid ?: null);
         }
 
-        // Submission block (own map only).
-        if (!$readonly && $canedit && $ws !== null) {
+        // Submission block (own map only, and only for users allowed to submit).
+        if (!$readonly && $canedit && $cansubmit && $ws !== null) {
             echo $OUTPUT->heading(get_string('submission', 'mod_vimipad'), 4);
             $formaction = (new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']))->out(false);
             $isconsensus = $isgroup && (int) $instance->requireallteamsubmit === 1 && !empty($ws->groupid);
@@ -582,12 +632,20 @@ switch ($tab) {
                 }
                 echo html_writer::div(format_text($entry->entrytext, FORMAT_PLAIN), 'vimipad-journal-text');
                 if (!empty($entry->revisionref) && $ws !== null) {
+                    echo html_writer::start_div('vimipad-revision-buttons');
                     echo html_writer::tag('button', get_string('journal:showstate', 'mod_vimipad'), [
                         'type' => 'button',
                         'class' => 'btn btn-sm btn-outline-secondary vimipad-showstate',
                         'data-vimipad-revision' => (int) $entry->revisionref,
                         'data-workspaceid' => (int) $ws->id,
                     ]);
+                    echo html_writer::tag('button', get_string('revision:playtitle', 'mod_vimipad'), [
+                        'type' => 'button',
+                        'class' => 'btn btn-sm btn-outline-secondary vimipad-playstate',
+                        'data-vimipad-play-revision' => (int) $entry->revisionref,
+                        'data-workspaceid' => (int) $ws->id,
+                    ]);
+                    echo html_writer::end_div();
                     $hasrevisionbuttons = true;
                 }
                 echo html_writer::end_tag('div');
@@ -602,8 +660,8 @@ switch ($tab) {
         break;
 
     default:
-        // Feedback and tools content follows in later steps.
-        echo html_writer::tag('p', get_string('tab:comingsoon', 'mod_vimipad'), ['class' => 'text-muted']);
+        // Unknown tab parameter: nothing to render (the navigation only offers
+        // implemented tabs; direct URLs with stale tab names land here).
         break;
 }
 

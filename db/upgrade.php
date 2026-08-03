@@ -316,5 +316,120 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072736, 'vimipad');
     }
 
+    if ($oldversion < 2026072740) {
+        // Membership integrity: the operation contract assumes at most one row
+        // per (container, itemtype, item). Deduplicate any existing extras
+        // (keeping the oldest row), then enforce the invariant with a unique
+        // index replacing the previous non-unique one.
+        $duplicates = $DB->get_records_sql(
+            "SELECT MIN(id) AS keepid, containerid, itemtype, itemstableid
+               FROM {vimipad_membership}
+           GROUP BY containerid, itemtype, itemstableid
+             HAVING COUNT(id) > 1"
+        );
+        foreach ($duplicates as $duplicate) {
+            $DB->delete_records_select(
+                'vimipad_membership',
+                'containerid = :containerid AND itemtype = :itemtype
+                    AND itemstableid = :itemstableid AND id <> :keepid',
+                [
+                    'containerid' => $duplicate->containerid,
+                    'itemtype' => $duplicate->itemtype,
+                    'itemstableid' => $duplicate->itemstableid,
+                    'keepid' => $duplicate->keepid,
+                ]
+            );
+        }
+
+        $table = new xmldb_table('vimipad_membership');
+        $oldindex = new xmldb_index('containerid-itemtype', XMLDB_INDEX_NOTUNIQUE, ['containerid', 'itemtype']);
+        if ($dbman->index_exists($table, $oldindex)) {
+            $dbman->drop_index($table, $oldindex);
+        }
+        $newindex = new xmldb_index(
+            'containerid-itemtype-itemstableid',
+            XMLDB_INDEX_UNIQUE,
+            ['containerid', 'itemtype', 'itemstableid']
+        );
+        if (!$dbman->index_exists($table, $newindex)) {
+            $dbman->add_index($table, $newindex);
+        }
+
+        upgrade_mod_savepoint(true, 2026072740, 'vimipad');
+    }
+
+    if ($oldversion < 2026072741) {
+        // Layout change detection moves from a second-granular timestamp to a
+        // strictly monotonic revision, so two saves within the same second can
+        // no longer be missed by a polling client. Seed the revision from the
+        // existing timestamp so in-flight client tokens (old timestamps) stay
+        // comparable.
+        $table = new xmldb_table('vimipad_layout');
+        $field = new xmldb_field('layoutrevision', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'timemodified');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+            $DB->execute('UPDATE {vimipad_layout} SET layoutrevision = timemodified');
+        }
+
+        upgrade_mod_savepoint(true, 2026072741, 'vimipad');
+    }
+
+    if ($oldversion < 2026072742) {
+        // Decouple the reference (model) solution from learner data: freeze it
+        // as a JSON copy on the activity record, so it survives backups without
+        // user info, privacy deletion of the source learner, and workspace
+        // cleanup. Existing references are migrated by copying the snapshot
+        // JSON of the currently marked snapshot.
+        $table = new xmldb_table('vimipad');
+        $field = new xmldb_field('referencemapjson', XMLDB_TYPE_TEXT, null, null, null, null, null, 'referencesnapshotid');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+
+            $instances = $DB->get_records_select(
+                'vimipad',
+                'referencesnapshotid IS NOT NULL',
+                [],
+                '',
+                'id, referencesnapshotid'
+            );
+            foreach ($instances as $instance) {
+                $json = $DB->get_field('vimipad_snapshot', 'snapshotjson', ['id' => $instance->referencesnapshotid]);
+                if ($json !== false && $json !== null && $json !== '') {
+                    $DB->set_field('vimipad', 'referencemapjson', $json, ['id' => $instance->id]);
+                }
+            }
+        }
+
+        upgrade_mod_savepoint(true, 2026072742, 'vimipad');
+    }
+
+    if ($oldversion < 2026072743) {
+        // Grade recipients are frozen at submission time (group / course
+        // membership may change before grading). Legacy snapshots keep a null
+        // cohort and fall back to resolving the current membership.
+        $table = new xmldb_table('vimipad_snapshot');
+        $field = new xmldb_field('cohortjson', XMLDB_TYPE_TEXT, null, null, null, null, null, 'status');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026072743, 'vimipad');
+    }
+
+    if ($oldversion < 2026072750) {
+        // New activity setting: allow learners to mark journal entries as
+        // private (hidden from teachers). Default 0 keeps every entry visible
+        // to teachers, matching the new "teachers can always read the journal"
+        // baseline. The journalentry.visibility encoding is now
+        // 0=teacher-visible (default), 1=private; no data migration is needed.
+        $table = new xmldb_table('vimipad');
+        $field = new xmldb_field('journalallowprivate', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'peerreviewmode');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2026072750, 'vimipad');
+    }
+
     return true;
 }

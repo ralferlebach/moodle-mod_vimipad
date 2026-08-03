@@ -42,9 +42,10 @@ class ai_feedback_service {
      *
      * @param context_module $context The module context.
      * @param stdClass $instance The vimipad instance.
+     * @param int|null $userid The acting user id (defaults to the current user).
      * @return bool
      */
-    public static function is_available(context_module $context, stdClass $instance): bool {
+    public static function is_available(context_module $context, stdClass $instance, ?int $userid = null): bool {
         if (!class_exists('\core_ai\manager')) {
             return false;
         }
@@ -54,7 +55,7 @@ class ai_feedback_service {
         if ((int) $instance->aienabled !== 1) {
             return false;
         }
-        return has_capability('mod/vimipad:useai', $context);
+        return has_capability('mod/vimipad:useai', $context, $userid);
     }
 
     /**
@@ -119,12 +120,25 @@ class ai_feedback_service {
             );
         }
         if (trim($notes) !== '') {
-            $parts[] = get_string('ai:promptnotes', 'mod_vimipad') . "\n" . trim($notes);
+            // Bound the teacher notes fed into the prompt (truncate rather than
+            // reject, so the workflow is not interrupted).
+            $trimmednotes = trim($notes);
+            if (\core_text::strlen($trimmednotes) > \mod_vimipad\local\policy\limits::MAX_AI_NOTES) {
+                $trimmednotes = \core_text::substr($trimmednotes, 0, \mod_vimipad\local\policy\limits::MAX_AI_NOTES);
+            }
+            $parts[] = get_string('ai:promptnotes', 'mod_vimipad') . "\n" . $trimmednotes;
         }
         $parts[] = get_string('ai:promptformat', 'mod_vimipad');
         $parts[] = get_string('ai:promptnohallucinate', 'mod_vimipad');
 
-        return implode("\n\n", $parts);
+        $prompt = implode("\n\n", $parts);
+        // Cap the overall prompt so a very large map cannot produce an unbounded
+        // provider request. The map section is the variable part, so truncating
+        // the assembled prompt bounds the total deterministically.
+        if (\core_text::strlen($prompt) > \mod_vimipad\local\policy\limits::MAX_AI_PROMPT) {
+            $prompt = \core_text::substr($prompt, 0, \mod_vimipad\local\policy\limits::MAX_AI_PROMPT);
+        }
+        return $prompt;
     }
 
     /**
@@ -158,10 +172,21 @@ class ai_feedback_service {
         }
 
         $data = $response->get_response_data();
-        $text = $data['generatedcontent'] ?? ($data['content'] ?? '');
-        $providerinfo = $data['model'] ?? ($data['provider'] ?? '');
+        $text = (string) ($data['generatedcontent'] ?? ($data['content'] ?? ''));
+        $providerinfo = (string) ($data['model'] ?? ($data['provider'] ?? ''));
 
-        return ['text' => (string) $text, 'providerinfo' => (string) $providerinfo];
+        // Bound the provider's output before it reaches storage: cap the draft
+        // length and clamp providerinfo to the char(255) column so a large or
+        // malformed provider response cannot bloat the DB or be silently
+        // truncated by the database.
+        if (\core_text::strlen($text) > \mod_vimipad\local\policy\limits::MAX_AI_DRAFT) {
+            $text = \core_text::substr($text, 0, \mod_vimipad\local\policy\limits::MAX_AI_DRAFT);
+        }
+        if (\core_text::strlen($providerinfo) > \mod_vimipad\local\policy\limits::MAX_AI_PROVIDERINFO) {
+            $providerinfo = \core_text::substr($providerinfo, 0, \mod_vimipad\local\policy\limits::MAX_AI_PROVIDERINFO);
+        }
+
+        return ['text' => $text, 'providerinfo' => $providerinfo];
     }
 
     /**
@@ -188,10 +213,27 @@ class ai_feedback_service {
         $storeprompts = get_config('mod_vimipad', 'storeprompts') === '1';
         $now = time();
 
+        // Defensive bounds at the storage boundary, so a direct caller cannot
+        // exceed the column sizes or bloat the row (generate_text already caps
+        // its output, but store_draft is a public entry point too).
+        if (\core_text::strlen($drafttext) > \mod_vimipad\local\policy\limits::MAX_AI_DRAFT) {
+            $drafttext = \core_text::substr($drafttext, 0, \mod_vimipad\local\policy\limits::MAX_AI_DRAFT);
+        }
+        if (\core_text::strlen($providerinfo) > \mod_vimipad\local\policy\limits::MAX_AI_PROVIDERINFO) {
+            $providerinfo = \core_text::substr($providerinfo, 0, \mod_vimipad\local\policy\limits::MAX_AI_PROVIDERINFO);
+        }
+        $promptcontextjson = null;
+        if ($storeprompts) {
+            $storedprompt = \core_text::strlen($prompt) > \mod_vimipad\local\policy\limits::MAX_AI_PROMPT
+                ? \core_text::substr($prompt, 0, \mod_vimipad\local\policy\limits::MAX_AI_PROMPT)
+                : $prompt;
+            $promptcontextjson = json_encode(['prompt' => $storedprompt]);
+        }
+
         return $DB->insert_record('vimipad_aifeedback', (object) [
             'snapshotid' => $snapshotid,
             'graderid' => $graderid,
-            'promptcontextjson' => $storeprompts ? json_encode(['prompt' => $prompt]) : null,
+            'promptcontextjson' => $promptcontextjson,
             'drafttext' => $drafttext,
             'draftformat' => FORMAT_PLAIN,
             'acceptedtext' => null,
@@ -248,6 +290,12 @@ class ai_feedback_service {
      */
     public function accept_draft(int $aifeedbackid, int $snapshotid, string $acceptedtext): void {
         global $DB;
+
+        \mod_vimipad\local\policy\limits::check_text(
+            $acceptedtext,
+            \mod_vimipad\local\policy\limits::MAX_TEXT,
+            'aiacceptedtext'
+        );
 
         // Verify the draft belongs to the already access-checked snapshot.
         $record = $DB->get_record(

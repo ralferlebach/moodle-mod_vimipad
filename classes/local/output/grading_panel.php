@@ -83,6 +83,10 @@ class grading_panel {
     ): void {
         global $DB, $USER;
 
+        // A mutating grading handler enforces its own core requirement rather
+        // than relying on the calling page to have filtered access already.
+        require_capability('mod/vimipad:grade', $context);
+
         $snapshotid = (int) $snapshot->id;
         $pageurl = self::detail_url($cm, $snapshotid);
 
@@ -98,6 +102,11 @@ class grading_panel {
                 }
             }
             $commenttext = required_param('commenttext', PARAM_TEXT);
+            \mod_vimipad\local\policy\limits::check_text(
+                $commenttext,
+                \mod_vimipad\local\policy\limits::MAX_TEXT,
+                'annotation'
+            );
             if (trim($commenttext) !== '') {
                 $DB->insert_record('vimipad_annotation', (object) [
                     'snapshotid' => $snapshotid,
@@ -116,7 +125,16 @@ class grading_panel {
         if (optional_param('setreference', 0, PARAM_BOOL) && confirm_sesskey()) {
             require_capability('mod/vimipad:grade', $context);
             $makeref = optional_param('makeref', 0, PARAM_BOOL);
+            // The reference is frozen as a JSON copy on the activity record,
+            // decoupled from the source workspace: it survives userinfo-less
+            // backups, privacy deletion of the author and workspace cleanup.
             $DB->set_field('vimipad', 'referencesnapshotid', $makeref ? $snapshotid : null, ['id' => $instance->id]);
+            $DB->set_field(
+                'vimipad',
+                'referencemapjson',
+                $makeref ? $snapshot->snapshotjson : null,
+                ['id' => $instance->id]
+            );
             redirect(
                 $pageurl,
                 get_string($makeref ? 'referenceset' : 'referencecleared', 'mod_vimipad')
@@ -411,7 +429,7 @@ class grading_panel {
             echo self::reference_button($pageurl, false);
         } else {
             echo self::reference_button($pageurl, true);
-            if ($referenceid === 0) {
+            if (!(new assess_service())->has_reference($instance)) {
                 echo html_writer::div(get_string('noreference', 'mod_vimipad'), 'text-muted small mt-2');
             }
         }
@@ -451,19 +469,38 @@ class grading_panel {
             return;
         }
 
+        // Hide the AI scorer entirely when AI is unavailable to this user
+        // (missing useai, or AI disabled site-wide / on the activity). The
+        // execution path below is additionally enforced inside score_ai().
+        if (!ai_feedback_service::is_available($context, $instance)) {
+            return;
+        }
+
         echo html_writer::tag('h5', $scorer->get_name(), ['class' => 'mt-3']);
 
         if (!optional_param('runai', 0, PARAM_BOOL)) {
-            $runurl = new moodle_url($pageurl, ['runai' => 1, 'sesskey' => sesskey()]);
-            echo html_writer::link(
-                $runurl,
-                get_string('runai', 'mod_vimipad'),
-                ['class' => 'btn btn-sm btn-outline-info']
-            );
+            // A state-changing, cost-incurring action: use a POST form with
+            // sesskey rather than a GET link, so it cannot be triggered by
+            // prefetch, history navigation or re-opening the URL.
+            echo html_writer::start_tag('form', [
+                'method' => 'post',
+                'action' => $pageurl->out(false),
+                'class' => 'vimipad-runai-form',
+            ]);
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+            echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'runai', 'value' => 1]);
+            echo html_writer::tag('button', get_string('runai', 'mod_vimipad'), [
+                'type' => 'submit', 'class' => 'btn btn-sm btn-outline-info',
+            ]);
+            echo html_writer::end_tag('form');
             echo html_writer::div(get_string('runaihint', 'mod_vimipad'), 'text-muted small mt-1');
             return;
         }
 
+        // Only act on a POST with a valid sesskey (reject GET-triggered runs).
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+            return;
+        }
         if (!confirm_sesskey()) {
             return;
         }

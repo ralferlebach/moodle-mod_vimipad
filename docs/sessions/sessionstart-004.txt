@@ -1,0 +1,181 @@
+## SESSION-START: ViMi Pad — mod_vimipad · Session 004
+
+> Konkreter Startprompt fuer Session 004. Kopf = Kurzfassung des Stands aus
+> Session 003 (docs/sessions/session-003.md ist der vollstaendige, versionierte
+> Report und wird als Kontext-Dokument angehaengt). Der generische Ablauf (A–F)
+> folgt darunter aus docs/prompt-templates/sessionstart.txt.
+
+---
+
+### Kontext der Vorsitzung (Session 003) — Kurzfassung
+
+**Aktueller Entwicklungsstand:**
+0.6.24 — 0.6.x inhaltlich abgeschlossen inkl. Autorenwerkzeuge (Container
+zeichnen/bearbeiten/formatieren/beschriften, Templates/Sperren, SVG/PNG/PDF-
+Export + SVG-Import) und des kompletten UI-/Bugfix-Satzes A1–A6 / T1–T6.
+Real auf Moodle 4.5.12 + PostgreSQL 16 + PHP 8.3.6 verifiziert: 211 mod_vimipad
++ 97 vimipadassess PHPUnit gruen; phpcs/phpcpd/stylelint clean; Lang 435/435;
+Frontend tsc 0, Jest 37/237, esbuild+AMD reproduzierbar. CI UND Release-CI gruen.
+
+**Zuletzt abgeschlossen (Session 003, Auszug):**
+- A1 Zeiger-Mapping (getScreenCTM / preserveAspectRatio=meet), A3 Verbinderwinkel
+  + parallele Mehrfachverbinder + Labels, A6 Enter=Zeile (Umbrueche gespeichert),
+  zweizeilige Add-Menues, Sticky-Node-Race-Fix (Drag synchron armen).
+- T3-Rest: Aktivitaets-Setting lockmodeforlearners (aus=gebunden, an=kooperativ).
+- T5: Re-Arrange erhaelt Container-Zugehoerigkeit (raeumlich, Refit auf Mitglieder).
+- T4: Container formatier-/beschriftbar wie Nodes (Stil-Model + NodeFormatToolbar),
+  Vier-Ecken-Resize.
+- CI-Stylelint-Fix (kein !important). Konvention 0.6.x ohne alpha-Suffix.
+
+**Als naechstes geplant — 0.7.x (Hardening, Datenschutz, Persistenz):**
+- Systematischer Security-Review ALLER External-Functions: sesskey-, Capability-,
+  Context- und Group-Pruefung; kein PARAM_RAW ohne Schema-Validierung;
+  XSS beim Label-Rendering. (Schluessel-Entscheidung 7.)
+- Privacy-API-Vollstaendigkeit: Metadaten/Export/Loeschung fuer ALLE Nutzerdaten,
+  inkl. der 0.6-Felder (u. a. lockmodeforlearners) und aller Subplugins
+  (null_provider je Subplugin). 
+- Backup/Restore-Vollstaendigkeit inkl. Kurs-Import/-Duplizierung; Roundtrip-Test.
+- Allgemeines Code-Hardening (Fehlerbehandlung, Performance, Determinismus).
+Alles davon ist in der Sandbox VOLL verifizierbar ("ehrliche" Arbeit).
+
+**Offene Punkte aus 0.6.x (mitnehmen):**
+- A2 im Browser bestaetigen (toter Klickbereich unter selektierten Nodes; Fix in
+  0.6.15 via foreignObject pointer-events:none, nie im Browser gegengeprueft).
+- Visuelle Feinjustierung ohne Browser-Sicht offen: SIBLING_SPACING=16,
+  Kruemmungsfaktor k=max(16, span*0.4), CONTAINER_REFIT_PAD=24, nodeHeight-
+  Schaetzung ~7px/Zeichen (echte Textmessung waere sauber).
+
+---
+
+---
+
+### A) Lastenheft, Pflichtenheft und Blueprint
+
+**Zentrales, versioniertes Planungsdokument (zuerst lesen, führend bei
+Reihenfolge und Versionsvergabe):**
+  docs/design/roadmap.md
+
+Weitere Planungs-/Entwurfsdokumente:
+  docs/design/backlog.md
+  docs/design/connector-styles.md
+
+Fach-, Technik- und Strategiedokumente liegen im Plugin-Repo:
+  docs/materials/pflicht_lastenheft_knowledgemap.md
+  docs/materials/technisches_blueprint_knowledgemap.md
+  docs/materials/roadmap_zusatzplugins_knowledgemap.md
+  docs/materials/erweiterungsideen_bewertung.md
+  docs/materials/knowledgemap_konzeption_businessmodel.pdf
+
+Bei Konflikten zur Versionsreihenfolge ist docs/design/roadmap.md führend;
+die materials/-Dokumente liefern Strategie, Machbarkeit und Fachanforderungen.
+
+---
+
+### B) Kontext-Dokument der letzten Sitzung
+
+Das aktuelle Kontext-Dokument (sessionende der Vorsitzung) ist im Anhang
+zu finden. Ältere Kontext-Dokumente zwecks Referenz: docs/sessions/
+
+---
+
+### C) Aktueller Code
+
+Der aktuelle Plugin-Stand liegt als ZIP im Anhang, einzuspielen
+in die Moodle-Installation unter mod/vimipad/.
+
+PHP: >= 8.1 (Moodle 4.5) bzw. >= 8.3 (Moodle 5.3)
+Moodle: >= 4.5 (2024100700); Zielspanne 4.5–5.3.
+Ab Moodle 5.3 bringt der Core die React-Runtime mit (react_autoinit);
+4.5–5.2 nutzen den mitgelieferten Editor-Bundle.
+KEINE Abwärtskompatibilität < 4.5.
+
+Haupt-Dependencies:
+  KEINE. KI läuft ausschließlich über das Moodle-AI-Subsystem und wird
+  zur Laufzeit erkannt/gegated (Capability + Provider-Verfügbarkeit).
+  Nicht in version.php deklariert.
+
+---
+
+### D) Schlüssel-Entwurfsentscheidungen (nicht ohne explizite Diskussion ändern)
+
+  1. Gemeinsames Domänenmodell (Nodes, Relations, Container, Memberships,
+     Revisionen, Snapshots, Annotationen, Grading, AI Drafts); Diagrammtypen
+     als Profile darüber.
+  2. Kein Zusatzserver: Operation Log + serverautorisierte Operationen +
+     AJAX/Webservices + Polling. Kein CRDT/WebSocket im MVP.
+  3. Snapshot ist unveränderliche Bewertungsbasis; Bewertung und KI-Feedback
+     referenzieren immer snapshotid.
+  4. KI nur als Assistenz für Lehrende (Teacher-in-the-loop); Entwurf wird
+     erst nach aktiver Übernahme zu Feedback. Nur Moodle-AI-API.
+  5. React/TypeScript-first: Ab Moodle 5.3 stellt der Core die React-Runtime
+     bereit (react_autoinit, core/import, core/component appendToDom/
+     prependToDom). Für 4.5–5.2 wird React separat per esbuild gebündelt
+     (js/build/) und über ein dünnes ES6/AMD-Modul (amd/src/init.js, geladen
+     via js_call_amd) geladen, das Strings via core/str und Transport via
+     core/ajax auflöst und den Bundle montiert. AMD für ALLE Nicht-React-Teile.
+     Keine Build-Tools auf Produktion (nur amd/build/ und js/build/ im Release).
+  6. Listenansicht ist gleichberechtigte Editoroberfläche mit Drag-and-drop
+     und vollständiger Tastaturalternative.
+  7. Capability-, Context-, Group- und sesskey-Prüfung in allen External
+     Functions; keine PARAM_RAW ohne Schema-Validierung.
+  8. KEINE local-Architektur: Gemeinsamer Code kommt aus mod_vimipad
+     per Namespace. \mod_vimipad\api\* + \mod_vimipad\profile\* =
+     stabile öffentliche API für abhängige Plugins (qtype, datafield,
+     Review); \mod_vimipad\local\* = intern. Satelliten deklarieren
+     dependency auf mod_vimipad.
+  9. Alle READMEs folgen dem Template von Moodle an Hochschulen e.V.:
+     https://github.com/moodle-an-hochschulen/moodle-readmetemplate
+
+---
+
+### E) Verifikationsumgebung ZUERST aufsetzen (verpflichtend)
+
+Bevor du inhaltlich arbeitest, richtest du eine echte, lauffähige
+Moodle-4.5-Umgebung ein und verifizierst den mitgelieferten Code REAL
+(nicht nur statisch). Das ist Pflicht, weil mehrere Fehlerklassen
+(PHPUnit-Fails, AMD-Grunt-Diff, Editor-Loading, Backup/Restore) sich
+ausschließlich in einer laufenden Instanz zeigen.
+
+Folge dabei Schritt für Schritt der Anleitung im Repo:
+  docs/dev/moodle-test-environment-setup.md
+
+Kurzfassung des Ablaufs (Details in der Anleitung):
+  1. Systempakete (php-pgsql/mbstring/curl/intl/zip/gd/soap, postgresql, locales)
+  2. PHP konfigurieren (max_input_vars=5000, locale en_AU.UTF-8)
+  3. PostgreSQL starten + Moodle-DB/-User anlegen
+  4. Moodle klonen (git, MOODLE_405_STABLE) und Plugin nach mod/vimipad spiegeln
+  5. config.php mit PHPUnit- und Behat-Blöcken schreiben
+  6. PHPUnit-Env initialisieren -> vendor/bin/phpunit --filter mod_vimipad
+  7. moodle-cs (aktuell) via Composer -> phpcs --severity=1 (Ziel 0/0)
+  8. moodle-plugin-ci PHAR -> phplint/phpmd/phpcpd/phpdoc/validate/savepoints/mustache
+  9. Moodles Grunt-Toolchain (npm ci) -> npx grunt amd (AMD reproduzierbar bauen)
+ 10. Behat init + dry-run (Steps validieren; @javascript nur in CI)
+ 11. Frontend: ./node_modules/.bin/tsc --noEmit, node build.mjs, ./node_modules/.bin/jest
+
+WICHTIGE FALLSTRICKE (siehe Anleitung, Abschnitt 0):
+  - PostgreSQL schläft ein -> vor JEDEM DB-Kommando: service postgresql start; sleep 3
+  - Nach Plugin-Sync mit NEUEN Dateien: PHPUnit-Env re-initialisieren (init.php)
+  - init.php macht ein Composer-Self-Update -> bricht bei getcomposer.org 503 ab
+    (Env bleibt auf alter Version). Immer: init.php --no-composer-self-update
+  - PHPUnit-init baut das Schema nur bei VERSIONSSPRUNG neu -> bei install.xml-
+    Aenderung version.php ZUERST hochziehen, dann re-initialisieren
+  - NIE 'npx tsc' (zieht Fremdpaket tsc@2.0.4) -> immer ./node_modules/.bin/tsc
+  - php -S ist instabil -> @javascript-Behat nur in der Projekt-CI, nicht hier
+  - AMD-Build MUSS reproduzierbar sein (zweiter grunt-Lauf == erster), sonst CI rot
+
+Zielzustand vor Beginn der eigentlichen Arbeit:
+  PHPUnit grün, phpcs 0/0, AMD identisch, tsc/Jest grün,
+  phpdoc/validate/savepoints/mustache ohne Fehlerzeilen.
+
+Wenn ein Schritt in der Sandbox nicht stabil läuft (z. B. voller Site-Install
+wegen instabilem PostgreSQL), dokumentiere das ehrlich und stütze die
+Verifikation auf die stabile PHPUnit-Env, statt Erfolg vorzutäuschen.
+
+---
+
+### F) Ziel dieser Sitzung
+
+Wir knüpfen an die Arbeiten an, die im aktuellen Kontext-Dokument
+und in der angehängten Code-Base vorliegen, und gehen, wenn der letzte
+Arbeitsschritt als vollumfänglich erfüllt angesehen wird, zum nächsten
+vorgesehenen Schritt in der Umsetzung über.

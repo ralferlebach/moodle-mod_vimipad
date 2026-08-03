@@ -27,6 +27,7 @@
  */
 
 import {ConstraintStatus, JournalEntry, Lease, PolledOperation, ServiceTransport, WorkspaceState} from '../types';
+import {Operation} from '../graph/reconstruct';
 import {AdaptiveConfig} from '../collab/adaptive';
 import {PollClient} from '../collab/poll_client';
 import {LockClient} from '../collab/lock_client';
@@ -117,6 +118,44 @@ export class ApiClient {
             revision,
         });
         return result as WorkspaceState;
+    }
+
+    /**
+     * Fetch a page of the operation log for a workspace, so a client can
+     * reconstruct frames incrementally. Paginated and server-capped so no
+     * single request is unbounded.
+     *
+     * @param workspaceid The workspace id.
+     * @param torevision The highest revision to include (inclusive).
+     * @param fromrevision The lowest revision to include (inclusive), default 1.
+     * @param limit Requested maximum (the server caps this).
+     */
+    async getOperations(
+        workspaceid: number,
+        torevision: number,
+        fromrevision = 1,
+        limit?: number
+    ): Promise<{
+        workspaceid: number;
+        fromrevision: number;
+        torevision: number;
+        operations: Operation[];
+        hasmore: boolean;
+        nextrevision: number;
+    }> {
+        const args: Record<string, unknown> = {cmid: this.cmid, workspaceid, torevision, fromrevision};
+        if (limit !== undefined) {
+            args.limit = limit;
+        }
+        const result = await this.transport('mod_vimipad_get_operations', args);
+        return result as {
+            workspaceid: number;
+            fromrevision: number;
+            torevision: number;
+            operations: Operation[];
+            hasmore: boolean;
+            nextrevision: number;
+        };
     }
 
     /**
@@ -240,13 +279,13 @@ export class ApiClient {
     async addJournalEntry(
         workspaceid: number,
         entrytext: string,
-        visibility: number
+        priv: boolean
     ): Promise<{id: number}> {
         const result = await this.transport('mod_vimipad_add_journal_entry', {
             cmid: this.cmid,
             workspaceid,
             entrytext,
-            visibility,
+            private: priv ? 1 : 0,
         });
         return result as {id: number};
     }

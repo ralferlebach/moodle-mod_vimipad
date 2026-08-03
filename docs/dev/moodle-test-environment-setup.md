@@ -167,9 +167,10 @@ php admin/tool/phpunit/cli/util.php --buildconfig
 vendor/bin/phpunit --filter mod_vimipad
 ```
 
-Erwartung: grün. Aktuelle Baseline (0.5.32): 176 `mod_vimipad` + 97
-`vimipadassess` Tests (real auf Moodle 4.5.12 und 5.0.8 verifiziert). Die frühere
-Angabe "47 Tests / 809 Assertions" war der MVP-Stand.
+Erwartung: grün. Aktuelle Baseline (0.7.25): 264 `mod_vimipad` + 97
+`vimipadassess` Backend-Tests plus 277 Jest-Tests (real auf Moodle 4.5.12 und
+5.0.8 verifiziert). Die frühere Angabe "47 Tests / 809 Assertions" war der
+MVP-Stand.
 **Wichtig:** Nach jedem Plugin-Sync mit NEUEN Dateien vorher
 `php admin/tool/phpunit/cli/init.php` erneut ausführen.
 

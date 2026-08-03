@@ -30,7 +30,10 @@ import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} fr
 import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
 import {nodeHeight, nodeWidth} from '../canvas/node_geometry';
-import {boundingBox, centerInBox, ContainerBox, parseGeometry, serializeGeometry} from '../canvas/container_geometry';
+import {
+    boundingBox, centerInBox, ContainerBox, nestingOrder, nestingParents,
+    parseGeometry, serializeGeometry, isNodePinnedForRearrange,
+} from '../canvas/container_geometry';
 import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg, extractMapData} from '../canvas/svg_export';
 import {EditorState, reduce} from '../store/reducer';
 import {History, HistoryEntry, OpSpec} from '../store/history';
@@ -40,6 +43,7 @@ import {RelationListView} from './RelationListView';
 import {FA, Icon} from '../canvas/icons';
 import {LayoutMap, Point, PolledOperation, Size, SizeMap, VimiNode, VimiRelation} from '../types';
 import {decodeLayout, encodeLayout} from '../canvas/layout_codec';
+import {isGroupLocked} from '../canvas/element_lock';
 import {useCollaboration} from '../collab/use_collaboration';
 import {useConstraintHints} from '../hooks/use_constraint_hints';
 import {ConstraintBanner} from './ConstraintBanner';
@@ -92,7 +96,7 @@ interface Props {
     targetUserid?: number;
 }
 
-type ViewMode = 'canvas' | 'list';
+type ViewMode = 'canvas' | 'list' | 'tools';
 
 const EMPTY: EditorState = {
     workspaceid: 0, revision: 0, locked: 0, profile: 'conceptmap', layoutjson: '', nodes: [], relations: [],
@@ -727,13 +731,42 @@ export function EditorApp(props: Props): React.ReactElement {
     // persisting the result so collaborators receive it too.
     const reArrangeLayout = useCallback(async () => {
         const prevPos = stored;
-        const auto = computeLayout(state.nodes, {}, state.relations, state.profile);
+        const autoRaw = computeLayout(state.nodes, {}, state.relations, state.profile);
+        const containers = state.containers ?? [];
+
+        // Lock handling for re-arrange:
+        //  - a move-locked node keeps its current position (never repositioned);
+        //  - a node inside a move-locked container is pinned to its current
+        //    position too, so it cannot be pushed out of the locked container.
+        // Both are achieved by overriding the computed position with the stored
+        // one before anything else uses the layout.
+        const moveLockedContainerBoxes: ContainerBox[] = [];
+        for (const c of containers) {
+            if (isGroupLocked(c.metadatajson, 'move')) {
+                const b = parseGeometry(c.geometryjson);
+                if (b) {
+                    moveLockedContainerBoxes.push(b);
+                }
+            }
+        }
+        const isPinned = (n: {stableid: string; metadatajson?: string}): boolean =>
+            isNodePinnedForRearrange(
+                n.metadatajson,
+                stored[n.stableid],
+                moveLockedContainerBoxes,
+                (m) => isGroupLocked(m, 'move')
+            );
+        const auto: LayoutMap = {...autoRaw};
+        for (const n of state.nodes) {
+            if (isPinned(n) && stored[n.stableid]) {
+                auto[n.stableid] = stored[n.stableid];
+            }
+        }
 
         // T5: keep container membership across re-arrange. Snapshot which nodes
         // sit inside each container now, then, after the new layout, refit each
         // container around its members' new positions so a node that was inside
         // stays inside (and the container follows its members).
-        const containers = state.containers ?? [];
         const CONTAINER_REFIT_PAD = 24;
         const boxOf = (id: string, at: LayoutMap): ContainerBox => {
             const pos = at[id] ?? {x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2};
@@ -742,26 +775,65 @@ export function EditorApp(props: Props): React.ReactElement {
             const size = sizes[id] ?? {w: w0, h: node ? nodeHeight(node.label, w0) : 40};
             return {x: pos.x - size.w / 2, y: pos.y - size.h / 2, w: size.w, h: size.h};
         };
-        const refits: Array<{stableid: string; oldgeom: string; newgeom: string}> = [];
+        // Build an acyclic nesting forest from the current boxes, then refit
+        // inner containers before outer ones. A container refits around its
+        // member nodes plus the (already refitted) boxes of its *direct* nested
+        // children only. This removes the previous runaway growth and hierarchy
+        // flipping, which came from treating overlapping same-size containers as
+        // mutual children.
+        const nestingItems: Array<{stableid: string; box: ContainerBox}> = [];
         for (const c of containers) {
-            const box = parseGeometry(c.geometryjson);
-            if (!box) {
+            const b = parseGeometry(c.geometryjson);
+            if (b) {
+                nestingItems.push({stableid: c.stableid, box: b});
+            }
+        }
+        const parents = nestingParents(nestingItems);
+        const order = nestingOrder(nestingItems, parents);
+
+        // Working boxes, updated as we go so a parent sees refitted child boxes.
+        const workingBox = new Map<string, ContainerBox>();
+        for (const it of nestingItems) {
+            workingBox.set(it.stableid, it.box);
+        }
+
+        const refits: Array<{stableid: string; oldgeom: string; newgeom: string}> = [];
+        for (const cid of order) {
+            const container = containers.find(c => c.stableid === cid);
+            const box = workingBox.get(cid);
+            if (!container || !box) {
                 continue;
             }
-            const members = state.nodes
+            // A move-locked container keeps its geometry: it is neither moved nor
+            // resized by re-arrange.
+            if (isGroupLocked(container.metadatajson, 'move')) {
+                continue;
+            }
+            const memberBoxes = state.nodes
                 .filter(n => stored[n.stableid] && centerInBox(stored[n.stableid], box))
-                .map(n => n.stableid);
-            if (members.length === 0) {
+                .map(n => boxOf(n.stableid, auto));
+            // Only direct children count, and only their current working boxes.
+            const childBoxes: ContainerBox[] = [];
+            for (const it of nestingItems) {
+                if (parents.get(it.stableid) === cid) {
+                    const cb = workingBox.get(it.stableid);
+                    if (cb) {
+                        childBoxes.push(cb);
+                    }
+                }
+            }
+            if (memberBoxes.length === 0 && childBoxes.length === 0) {
                 continue; // Empty container: leave it where it is.
             }
-            const fit = boundingBox(members.map(id => boxOf(id, auto)), CONTAINER_REFIT_PAD);
+            const fit = boundingBox([...memberBoxes, ...childBoxes], CONTAINER_REFIT_PAD);
             if (!fit) {
                 continue;
             }
+            workingBox.set(cid, fit);
             const newgeom = serializeGeometry(fit);
-            const oldgeom = c.geometryjson ?? serializeGeometry(box);
+            const oldgeom = container.geometryjson ?? serializeGeometry(box);
             if (newgeom !== oldgeom) {
-                refits.push({stableid: c.stableid, oldgeom, newgeom});
+                refits.push({stableid: cid, oldgeom, newgeom});
             }
         }
 
@@ -925,7 +997,7 @@ export function EditorApp(props: Props): React.ReactElement {
             <ConstraintBanner status={constraintStatus} t={t} />
 
             <div className="vimipad-viewpanel">
-            {view === 'canvas' ? (
+            {view === 'tools' ? null : view === 'canvas' ? (
                 <>
                     <CanvasView
                         state={state}
@@ -952,8 +1024,6 @@ export function EditorApp(props: Props): React.ReactElement {
                         onExportSvg={exportSvg}
                         onExportPng={exportPng}
                         onExportPdf={exportPdf}
-                        exportJsonUrl={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
-                        exportXmlUrl={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
                         t={t}
                         isLockedByOther={collab.isLockedByOther}
                         beginEdit={collab.beginEdit}
@@ -976,6 +1046,13 @@ export function EditorApp(props: Props): React.ReactElement {
                         {addNodeControls}
                         {addRelationControls}
                     </div>
+                    <JournalPanel
+                        api={api}
+                        workspaceid={state.workspaceid}
+                        allowPrivate={state.journalallowprivate === true}
+                        revision={state.revision}
+                        t={t}
+                    />
                 </>
             ) : (
                 <>
@@ -991,40 +1068,69 @@ export function EditorApp(props: Props): React.ReactElement {
                         onRenameRelation={renameRelation}
                         t={t}
                     />
+                    <JournalPanel
+                        api={api}
+                        workspaceid={state.workspaceid}
+                        allowPrivate={state.journalallowprivate === true}
+                        revision={state.revision}
+                        t={t}
+                    />
                 </>
             )}
             </div>
 
-            <div className="vimipad-tools mt-2">
-                <input
-                    ref={importInputRef}
-                    type="file"
-                    accept="application/json,application/xml,text/xml,image/svg+xml,.json,.xml,.svg"
-                    className="vimipad-hidden-input"
-                    onChange={(e) => void onImportFile(e)}
-                />
-                <button
-                    type="button"
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={() => importInputRef.current?.click()}
-                    disabled={state.locked === 1 || readonly}
-                >
-                    {t('editor:import')}
-                </button>
-                <label className="vimipad-import-replace">
-                    <input
-                        type="checkbox"
-                        checked={importReplace}
-                        onChange={(e) => setImportReplace(e.target.checked)}
-                        disabled={state.locked === 1 || readonly}
-                    />{' '}
-                    {t('editor:importreplace')}
-                </label>
-            </div>
-
-            <JournalPanel api={api} workspaceid={state.workspaceid} t={t} />
-
-            <p className="text-muted small mt-2">{t('editor:revision')}: {state.revision}</p>
+            {view === 'tools' && (
+                <div className="vimipad-tools-panel">
+                    <fieldset className="vimipad-control">
+                        <legend className="h6">{t('editor:exportdataheading')}</legend>
+                        <div className="vimipad-tools mt-2">
+                            <a
+                                className="btn btn-outline-secondary btn-sm"
+                                href={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=json`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >{t('editor:exportjson')}</a>
+                            <a
+                                className="btn btn-outline-secondary btn-sm"
+                                href={`${exportBase}?cmid=${api.getCmid()}&workspaceid=${state.workspaceid}&format=xml`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >{t('editor:exportxml')}</a>
+                        </div>
+                        <p className="text-muted small mt-1">{t('editor:exportdatahint')}</p>
+                    </fieldset>
+                    <fieldset className="vimipad-control">
+                        <legend className="h6">{t('editor:importheading')}</legend>
+                        <div className="vimipad-tools mt-2">
+                            <input
+                                ref={importInputRef}
+                                type="file"
+                                accept="application/json,application/xml,text/xml,image/svg+xml,.json,.xml,.svg"
+                                className="vimipad-hidden-input"
+                                onChange={(e) => void onImportFile(e)}
+                            />
+                            <button
+                                type="button"
+                                className="btn btn-outline-secondary btn-sm"
+                                onClick={() => importInputRef.current?.click()}
+                                disabled={state.locked === 1 || readonly}
+                            >
+                                {t('editor:import')}
+                            </button>
+                            <label className="vimipad-import-replace">
+                                <input
+                                    type="checkbox"
+                                    checked={importReplace}
+                                    onChange={(e) => setImportReplace(e.target.checked)}
+                                    disabled={state.locked === 1 || readonly}
+                                />{' '}
+                                {t('editor:importreplace')}
+                            </label>
+                        </div>
+                        <p className="text-muted small mt-1">{t('editor:importhint')}</p>
+                    </fieldset>
+                </div>
+            )}
         </div>
     );
 }

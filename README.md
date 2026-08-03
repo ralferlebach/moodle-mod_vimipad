@@ -8,7 +8,7 @@ trees, semantic networks and word maps — individually or in groups, with
 snapshot-based grading, teacher annotations at the artefact and AI-assisted
 feedback drafting via the Moodle AI subsystem.
 
-**Development status: 0.6.24 — containers are now formattable and labellable like nodes (shape, fill, text, same format toolbar, four-corner resize). This closes the A1–A6 / T1–T6 issue set. 211 mod_vimipad + 97 vimipadassess green; tsc + Jest (37 suites/237) green.**
+**Development status: 0.7.31 — close-out of the 0.7.x hardening arc. The final audit gives GO for controlled beta/pilot: partial revision histories are no longer shown as complete, replay is bounded and revision-indexed, layout/viewport are structurally validated at the service boundary, AI prompts and outputs are bounded, and lock takeover incl. expired owner leases use compare-and-swap. 307 mod_vimipad + 97 vimipadassess green; tsc + Jest (43 suites/297) green.**
 The 0.5.x line adds import (JSON & XML, append or replace, including layout),
 reopening a submitted map for revision, internal canvas refactoring and polling
 scalability.
@@ -129,13 +129,21 @@ infrastructure). Grading always references an immutable snapshot. AI feedback
 is generated exclusively through the Moodle AI subsystem and remains a draft
 until a teacher actively reviews and approves it.
 
-**Shared code for satellite plugins:** mod_vimipad is intended to expose a
-public PHP API under the namespace `\mod_vimipad\api\*` (and, later, a
-`\mod_vimipad\profile\*` namespace, not yet present) for use by dependent
-plugins (e.g. a question type or database field reusing the ViMi editor and
-profiles). **This API is not frozen yet:** stabilisation is a 0.7.x goal (see
-`docs/design/roadmap.md`); until then the surface may still change. Everything
-under `\mod_vimipad\local\*` is internal implementation without any stability
+**Shared code for satellite plugins:** mod_vimipad exposes a public,
+stable API for use by dependent plugins (e.g. a question type or database field
+reusing the ViMi editor and profiles):
+
+- PHP: `\mod_vimipad\api\*` (stable ids, map-state reconstruction) and
+  `\mod_vimipad\profile\*` (context-free profile validation and form config).
+- JavaScript: the AMD module `mod_vimipad/editor_lazy` exports
+  `mount(element, config)` (plus `mountRevision`/`mountPlayer`). The host
+  supplies a `callService` transport — the swappable persistence adapter — and
+  an optional `getString` i18n resolver, so the editor can be embedded without
+  Moodle's own service endpoint.
+
+These signatures are treated as stable across minor releases; see
+`docs/design/public-api.md` for the full surface. Everything under
+`\mod_vimipad\local\*` is internal implementation without any stability
 guarantee — do not depend on it.
 Satellite plugins must declare `$plugin->dependencies = ['mod_vimipad' => ...]`
 in their version.php. There is deliberately no separate local_* core plugin.

@@ -17,6 +17,7 @@
 namespace mod_vimipad;
 
 use mod_vimipad\local\service\ai_feedback_service;
+use mod_vimipad\local\policy\limits;
 
 /**
  * Tests for AI feedback prompt building and draft storage/acceptance.
@@ -145,5 +146,63 @@ final class ai_feedback_test extends \advanced_testcase {
         $record2 = $DB->get_record('vimipad_aifeedback', ['id' => $id2]);
         $this->assertNotNull($record2->promptcontextjson);
         $this->assertStringContainsString('PROMPT2', $record2->promptcontextjson);
+    }
+
+    /**
+     * AI resource limits: over-long notes are truncated in the prompt, the
+     * overall prompt is capped, and store_draft bounds draft/providerinfo to
+     * their column sizes.
+     *
+     * @return void
+     */
+    public function test_ai_resource_limits(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $instance = (object) ['intro' => 'Task.', 'defaultprofile' => 'conceptmap', 'grade' => 100];
+        $service = new ai_feedback_service();
+
+        // Over-long notes are truncated, and the whole prompt stays within cap.
+        $hugenotes = str_repeat('x', limits::MAX_AI_NOTES + 5000);
+        $prompt = $service->build_prompt(
+            $instance,
+            ['profile' => 'conceptmap', 'nodes' => [], 'relations' => []],
+            $hugenotes,
+            null
+        );
+        $this->assertLessThanOrEqual(limits::MAX_AI_PROMPT, \core_text::strlen($prompt));
+        // The notes portion is bounded (not the full 10k of x's).
+        $this->assertLessThan(limits::MAX_AI_NOTES + 2000, substr_count($prompt, 'x'));
+
+        // A huge map produces a prompt bounded to MAX_AI_PROMPT.
+        $nodes = [];
+        $relations = [];
+        for ($i = 0; $i < 5000; $i++) {
+            $nodes[] = ['stableid' => 'node_' . $i, 'label' => 'Concept number ' . $i];
+        }
+        for ($i = 0; $i < 4999; $i++) {
+            $relations[] = ['sourceid' => 'node_' . $i, 'targetid' => 'node_' . ($i + 1),
+                'type' => 'link', 'label' => 'relates to'];
+        }
+        $bigprompt = $service->build_prompt($instance, ['profile' => 'conceptmap',
+            'nodes' => $nodes, 'relations' => $relations], '', null);
+        $this->assertLessThanOrEqual(limits::MAX_AI_PROMPT, \core_text::strlen($bigprompt));
+
+        // The store_draft call bounds an over-long draft and provider info.
+        $course = $this->getDataGenerator()->create_course();
+        $module = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
+        $ws = (object) ['vimipadid' => $module->id, 'userid' => 0, 'groupid' => 0,
+            'currentrevision' => 0, 'timecreated' => time(), 'timemodified' => time()];
+        $ws->id = $DB->insert_record('vimipad_workspace', $ws);
+        $snapid = (int) $DB->insert_record('vimipad_snapshot', (object) [
+            'workspaceid' => $ws->id, 'status' => 0, 'revision' => 0,
+            'snapshotjson' => '{"nodes":[],"relations":[],"containers":[]}', 'cohortjson' => '', 'timecreated' => time(),
+        ]);
+        $hugedraft = str_repeat('d', limits::MAX_AI_DRAFT + 5000);
+        $hugeinfo = str_repeat('p', limits::MAX_AI_PROVIDERINFO + 100);
+        $id = $service->store_draft($snapid, 1, 'P', $hugedraft, $hugeinfo);
+        $rec = $DB->get_record('vimipad_aifeedback', ['id' => $id]);
+        $this->assertLessThanOrEqual(limits::MAX_AI_DRAFT, \core_text::strlen($rec->drafttext));
+        $this->assertLessThanOrEqual(limits::MAX_AI_PROVIDERINFO, \core_text::strlen($rec->providerinfo));
     }
 }

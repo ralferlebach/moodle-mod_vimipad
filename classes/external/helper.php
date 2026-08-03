@@ -209,8 +209,14 @@ class helper {
             MUST_EXIST
         );
 
-        // A user may read their own map; inspecting another's needs grading.
-        $isown = ((int) $workspace->userid === (int) $USER->id)
+        // A user may read their own map (individual: owner; group: member). In
+        // course mode the single shared workspace is everyone's map, so any
+        // enrolled user with view may read it. Inspecting another learner's map
+        // needs grading.
+        $iscourseworkspace = empty($workspace->userid) && empty($workspace->groupid)
+            && (int) $instance->collaborationmode === \mod_vimipad\local\service\workspace_service::MODE_COURSE;
+        $isown = $iscourseworkspace
+            || ((int) $workspace->userid === (int) $USER->id)
             || (!empty($workspace->groupid) && groups_is_member((int) $workspace->groupid, (int) $USER->id));
         if (!$isown) {
             require_capability('mod/vimipad:grade', $context);

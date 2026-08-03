@@ -112,6 +112,10 @@ Kurzfassung des Ablaufs (Details in der Anleitung):
 WICHTIGE FALLSTRICKE (siehe Anleitung, Abschnitt 0):
   - PostgreSQL schläft ein -> vor JEDEM DB-Kommando: service postgresql start; sleep 3
   - Nach Plugin-Sync mit NEUEN Dateien: PHPUnit-Env re-initialisieren (init.php)
+  - init.php macht ein Composer-Self-Update -> bricht bei getcomposer.org 503 ab
+    (Env bleibt auf alter Version). Immer: init.php --no-composer-self-update
+  - PHPUnit-init baut das Schema nur bei VERSIONSSPRUNG neu -> bei install.xml-
+    Aenderung version.php ZUERST hochziehen, dann re-initialisieren
   - NIE 'npx tsc' (zieht Fremdpaket tsc@2.0.4) -> immer ./node_modules/.bin/tsc
   - php -S ist instabil -> @javascript-Behat nur in der Projekt-CI, nicht hier
   - AMD-Build MUSS reproduzierbar sein (zweiter grunt-Lauf == erster), sonst CI rot

@@ -206,4 +206,51 @@ final class container_operations_test extends \advanced_testcase {
         $node = $DB->get_record('vimipad_node', ['workspaceid' => $this->workspaceid], '*', MUST_EXIST);
         $this->assertSame($node->stableid, $membership->itemstableid, 'membership should point at the imported node');
     }
+
+    /**
+     * A locked container is protected against update and delete for ordinary
+     * editors, while an author (bypass) can still change it — the same lock
+     * contract nodes and relations already have.
+     *
+     * @return void
+     */
+    public function test_locked_container_is_protected(): void {
+        $service = new operation_service();
+        $rev = 0;
+
+        $r = $service->apply($this->workspaceid, $rev, 'container_create', ['type' => 'group', 'label' => 'Box'], 1);
+        $rev = $r['revision'];
+        $cid = $r['stableid'];
+
+        // Lock it (metadatajson carries the lock flag).
+        $locked = json_encode(['locked' => true, 'editable' => []]);
+        $r = $service->apply($this->workspaceid, $rev, 'container_update', [
+            'stableid' => $cid, 'metadatajson' => $locked,
+        ], 1);
+        $rev = $r['revision'];
+
+        // An ordinary editor (no bypass) cannot move/resize or delete it.
+        try {
+            $service->apply($this->workspaceid, $rev, 'container_update', [
+                'stableid' => $cid, 'geometryjson' => json_encode(['x' => 5, 'y' => 5, 'w' => 200, 'h' => 150]),
+            ], 1);
+            $this->fail('Expected error:elementlocked on geometry change.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('error:elementlocked', $e->errorcode);
+        }
+        try {
+            $service->apply($this->workspaceid, $rev, 'container_delete', ['stableid' => $cid], 1);
+            $this->fail('Expected error:elementlocked on delete.');
+        } catch (\moodle_exception $e) {
+            $this->assertSame('error:elementlocked', $e->errorcode);
+        }
+
+        // An author (bypasslocks) can still change and delete it.
+        $author = new operation_service(true);
+        $r = $author->apply($this->workspaceid, $rev, 'container_update', [
+            'stableid' => $cid, 'geometryjson' => json_encode(['x' => 5, 'y' => 5, 'w' => 200, 'h' => 150]),
+        ], 1);
+        $rev = $r['revision'];
+        $author->apply($this->workspaceid, $rev, 'container_delete', ['stableid' => $cid], 1);
+    }
 }

@@ -20,7 +20,6 @@ use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
-use mod_vimipad\local\access;
 use mod_vimipad\local\service\layout_service;
 
 /**
@@ -63,7 +62,7 @@ class save_layout extends external_api {
         string $viewportjson = '',
         string $mode = 'replace'
     ): array {
-        global $USER, $DB;
+        global $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'cmid' => $cmid,
@@ -73,19 +72,14 @@ class save_layout extends external_api {
             'mode' => $mode,
         ]);
 
-        [, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
-        $context = \context_module::instance($cm->id);
-        self::validate_context($context);
-
-        $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
-        $workspace = $DB->get_record(
-            'vimipad_workspace',
-            ['id' => $params['workspaceid'], 'vimipadid' => $instance->id],
-            '*',
-            MUST_EXIST
+        $instance = null;
+        $workspace = null;
+        helper::validate_workspace_for_edit(
+            (int) $params['cmid'],
+            (int) $params['workspaceid'],
+            $instance,
+            $workspace
         );
-
-        access::require_edit($instance, $context, $workspace, (int) $USER->id);
 
         // Validate that the payloads are well-formed JSON before storing.
         if (json_decode($params['layoutjson']) === null && trim($params['layoutjson']) !== 'null') {
@@ -96,6 +90,15 @@ class save_layout extends external_api {
             throw new \invalid_parameter_exception('viewportjson must be valid JSON');
         }
 
+        // Reject unknown modes rather than silently treating them as 'replace'.
+        if (!in_array($params['mode'], ['merge', 'replace'], true)) {
+            throw new \invalid_parameter_exception('mode must be one of: merge, replace');
+        }
+
+        // The structural layout/viewport schema is enforced inside
+        // layout_service::save() (the service boundary), so every caller —
+        // including the import path — is validated, not just this endpoint.
+
         $service = new layout_service();
         $service->save(
             (int) $workspace->id,
@@ -103,7 +106,7 @@ class save_layout extends external_api {
             $params['layoutjson'],
             $viewport,
             (int) $USER->id,
-            $params['mode'] === 'merge' ? 'merge' : 'replace'
+            $params['mode']
         );
 
         return ['status' => true];

@@ -33,6 +33,7 @@ import React, {useState} from 'react';
 import {EditorState, labelFor} from '../store/reducer';
 import {VimiRelation} from '../types';
 import {FA, Icon} from '../canvas/icons';
+import {isGroupLocked, isAnyLocked} from '../canvas/element_lock';
 
 interface Props {
     state: EditorState;
@@ -87,19 +88,23 @@ export function RelationListView(props: Props): React.ReactElement {
     };
 
     return (
-        <>
-            <ul className="vimipad-node-chips list-inline mb-2" aria-label={t('editor:dragnodes')}>
-                {state.nodes.map(n => (
-                    <li
-                        key={n.stableid}
-                        className="list-inline-item badge badge-secondary"
-                        draggable={!disabled}
-                        onDragStart={e => e.dataTransfer.setData(DND_MIME, n.stableid)}
-                    >
-                        {n.label}
-                    </li>
-                ))}
-            </ul>
+        <div className="vimipad-listview">
+            <h3 className="h6 vimipad-listview-heading">{t('editor:conceptsandrelations')}</h3>
+            <div className="vimipad-node-box" aria-label={t('editor:concepts')}>
+                <span className="vimipad-node-box-label text-muted small">{t('editor:concepts')}</span>
+                <ul className="vimipad-node-chips list-inline mb-0" aria-label={t('editor:dragnodes')}>
+                    {state.nodes.map(n => (
+                        <li
+                            key={n.stableid}
+                            className="list-inline-item badge badge-secondary"
+                            draggable={!disabled}
+                            onDragStart={e => e.dataTransfer.setData(DND_MIME, n.stableid)}
+                        >
+                            {n.label}
+                        </li>
+                    ))}
+                </ul>
+            </div>
 
             <table className="table table-sm vimipad-relation-list">
                 <caption className="vimipad-sr-only">{t('editor:relations')}</caption>
@@ -125,13 +130,21 @@ export function RelationListView(props: Props): React.ReactElement {
                         const doubled = rel.direction === 2;
                         const relSpan = doubled && !reversed;
                         const relSkip = doubled && reversed;
+                        // Locks must not be bypassable from the list view. A
+                        // move-locked relation cannot be retargeted or reversed;
+                        // a text-locked one cannot be renamed; a relation with
+                        // any lock cannot be deleted here.
+                        const moveLocked = isGroupLocked(rel.metadatajson, 'move');
+                        const textLocked = isGroupLocked(rel.metadatajson, 'text');
+                        const anyLocked = isAnyLocked(rel.metadatajson);
+                        const canEdit = isEd && !textLocked;
                         return (
                             <tr key={`${rel.stableid}-${reversed ? 'r' : 'f'}`}>
                                 <td
-                                    onDragOver={allowDrop}
-                                    onDrop={e => handleDrop(e, onSrc)}
+                                    onDragOver={moveLocked ? undefined : allowDrop}
+                                    onDrop={moveLocked ? undefined : (e => handleDrop(e, onSrc))}
                                 >
-                                    {isEd ? (
+                                    {isEd && !moveLocked ? (
                                         <select
                                             className="form-control form-control-sm"
                                             aria-label={t('editor:subject')}
@@ -146,7 +159,7 @@ export function RelationListView(props: Props): React.ReactElement {
                                         rowSpan={relSpan ? 2 : undefined}
                                         className={relSpan ? 'align-middle' : undefined}
                                     >
-                                        {isEd ? (
+                                        {canEdit ? (
                                             <input
                                                 key={rel.stableid}
                                                 type="text"
@@ -165,10 +178,10 @@ export function RelationListView(props: Props): React.ReactElement {
                                     </td>
                                 )}
                                 <td
-                                    onDragOver={allowDrop}
-                                    onDrop={e => handleDrop(e, onTgt)}
+                                    onDragOver={moveLocked ? undefined : allowDrop}
+                                    onDrop={moveLocked ? undefined : (e => handleDrop(e, onTgt))}
                                 >
-                                    {isEd ? (
+                                    {isEd && !moveLocked ? (
                                         <select
                                             className="form-control form-control-sm"
                                             aria-label={t('editor:object')}
@@ -178,7 +191,11 @@ export function RelationListView(props: Props): React.ReactElement {
                                         >{nodeOptions}</select>
                                     ) : labelFor(state, tgtId)}
                                 </td>
-                                <td className="text-right vimipad-relation-actions">
+                                {!relSkip && (
+                                <td
+                                    className="text-right vimipad-relation-actions"
+                                    rowSpan={relSpan ? 2 : undefined}
+                                >
                                     {isEd ? (
                                         <button
                                             type="button"
@@ -190,7 +207,7 @@ export function RelationListView(props: Props): React.ReactElement {
                                         >
                                             <Icon name={FA.confirm} />
                                         </button>
-                                    ) : (
+                                    ) : (!textLocked && (
                                         <button
                                             type="button"
                                             className="btn btn-sm btn-outline-secondary mr-1"
@@ -201,7 +218,8 @@ export function RelationListView(props: Props): React.ReactElement {
                                         >
                                             <Icon name={FA.edit} />
                                         </button>
-                                    )}
+                                    ))}
+                                    {!moveLocked && (
                                     <button
                                         type="button"
                                         className="btn btn-sm btn-outline-secondary mr-1"
@@ -213,6 +231,8 @@ export function RelationListView(props: Props): React.ReactElement {
                                     >
                                         <Icon name={FA.reverse} />
                                     </button>
+                                    )}
+                                    {!anyLocked && (
                                     <button
                                         type="button"
                                         className="btn btn-sm btn-outline-danger"
@@ -222,12 +242,14 @@ export function RelationListView(props: Props): React.ReactElement {
                                     >
                                         &times;
                                     </button>
+                                    )}
                                 </td>
+                                )}
                             </tr>
                         );
                     })}
                 </tbody>
             </table>
-        </>
+        </div>
     );
 }

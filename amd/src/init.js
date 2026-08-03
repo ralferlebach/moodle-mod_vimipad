@@ -39,17 +39,21 @@ import Notification from 'core/notification';
 /** @type {string[]} Editor string keys, kept in sync with lang/en/vimipad.php. */
 const STRING_KEYS = [
     'constraint:hintsheading',
-    'editor:containers', 'editor:containerdelete', 'editor:drawcontainer', 'editor:drawcontainerdone',
+    'editor:concepts', 'editor:conceptsandrelations',
+    'editor:containers', 'editor:drawcontainer', 'editor:drawcontainerdone',
     'editor:node', 'editor:templatelocks', 'editor:templatelockshint', 'editor:lockallowlabel',
     'editor:importnovimidata', 'editor:authortools',
     'editor:lockmode', 'editor:lockelement', 'editor:unlockelement',
+    'editor:lockgroup_move', 'editor:lockgroup_color', 'editor:lockgroup_text',
+    'editor:fmt_fontsans', 'editor:fmt_fontserif', 'editor:fmt_fontmono',
     'editor:add', 'editor:addnode', 'editor:addrelation', 'editor:actions',
     'editor:beingedited', 'editor:cancel', 'editor:canvasaria', 'editor:canvashint',
     'editor:canvasview', 'editor:canvasplaceholder',
     'editor:confirm', 'editor:deleterelation', 'editor:fmt_bold', 'editor:fmt_italic', 'editor:fmt_underline', 'editor:fullview',
     'editor:dir_both', 'editor:dir_left', 'editor:dir_none', 'editor:dir_right',
-    'editor:import', 'editor:importreplace',
-    'editor:journal', 'editor:journalnew', 'editor:journalsave', 'editor:journalteachervisible',
+    'editor:import', 'editor:importheading', 'editor:importhint', 'editor:importreplace',
+    'editor:exportdataheading', 'editor:exportdatahint', 'editor:exportjson', 'editor:exportxml',
+    'editor:journal', 'editor:journalnew', 'editor:journalprivate', 'editor:journalsave', 'editor:journalsaved',
     'editor:dragnodes', 'editor:export', 'editor:line_curved', 'editor:line_orthogonal',
     'editor:line_straight', 'editor:listview', 'editor:loading',
     'editor:locked', 'editor:nodelabel', 'editor:norelations', 'editor:normalview', 'editor:object',
@@ -124,10 +128,13 @@ export const init = async(cmid, selector = 'vimipad-editor-root') => {
 
     try {
         const [strings, editor] = await Promise.all([loadStrings(), loadEditor()]);
+        const requestedView = element.dataset.view;
+        const knownViews = ['list', 'tools'];
+        const initialView = knownViews.indexOf(requestedView) !== -1 ? requestedView : 'canvas';
         editor.mount(element, {
             cmid,
             groupid: parseInt(element.dataset.groupid || '0', 10),
-            initialView: element.dataset.view === 'list' ? 'list' : 'canvas',
+            initialView,
             readonly: element.dataset.readonly === '1',
             targetUserid: parseInt(element.dataset.targetuserid || '0', 10),
             callService: buildTransport(),

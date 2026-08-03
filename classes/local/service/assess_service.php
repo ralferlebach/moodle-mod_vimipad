@@ -65,10 +65,10 @@ class assess_service {
      * @return result|null The suggestion, or null if scoring is not possible.
      */
     public function score(stdClass $instance, int $snapshotid, string $scorerkey = 'reference'): ?result {
-        if (empty($instance->referencesnapshotid)) {
+        if (!$this->has_reference($instance)) {
             return null;
         }
-        if ((int) $instance->referencesnapshotid === $snapshotid) {
+        if ((int) ($instance->referencesnapshotid ?? 0) === $snapshotid) {
             // The reference is not scored against itself.
             return null;
         }
@@ -77,7 +77,7 @@ class assess_service {
             return null;
         }
         $submission = $this->submission_from_snapshot($snapshotid);
-        $reference = $this->submission_from_snapshot((int) $instance->referencesnapshotid);
+        $reference = $this->reference_submission($instance);
         if ($submission === null || $reference === null) {
             return null;
         }
@@ -104,8 +104,8 @@ class assess_service {
             return [];
         }
         $referenceid = (int) ($instance->referencesnapshotid ?? 0);
-        $reference = ($referenceid > 0 && $referenceid !== $snapshotid)
-            ? $this->submission_from_snapshot($referenceid)
+        $reference = ($referenceid !== $snapshotid)
+            ? $this->reference_submission($instance)
             : null;
         $matcher = matcher_factory::create((int) ($instance->matchmode ?? 0));
 
@@ -155,7 +155,8 @@ class assess_service {
      * @param int $userid The acting teacher's user id.
      * @param string $scorerkey The AI scorer key.
      * @return result|null The suggestion, or null if the scorer or map is unavailable.
-     * @throws \moodle_exception If the AI subsystem is unavailable or the call fails.
+     * @throws \required_capability_exception If the acting user lacks mod/vimipad:useai.
+     * @throws \moodle_exception If AI is disabled, the user policy is not accepted, or the call fails.
      */
     public function score_ai(
         \context $context,
@@ -164,6 +165,21 @@ class assess_service {
         int $userid,
         string $scorerkey = 'llm'
     ): ?result {
+        // Enforce the AI authorisation contract at the service boundary: the
+        // acting user needs useai, AI must be enabled site-wide and on the
+        // activity, and the user must have accepted the AI policy. Callers may
+        // hide UI on the same conditions, but must not be relied upon for it.
+        require_capability('mod/vimipad:useai', $context, $userid);
+        if (
+            !$context instanceof \context_module
+                || !ai_feedback_service::is_available($context, $instance, $userid)
+        ) {
+            throw new \moodle_exception('error:aiunavailable', 'mod_vimipad');
+        }
+        if (!ai_feedback_service::policy_accepted($userid)) {
+            throw new \moodle_exception('ai:policyrequired', 'mod_vimipad');
+        }
+
         $scorer = registry::get($scorerkey);
         if (!$scorer instanceof prompt_scorer || !$this->scorer_enabled($instance, $scorerkey)) {
             return null;
@@ -173,12 +189,43 @@ class assess_service {
             return null;
         }
         $referenceid = (int) ($instance->referencesnapshotid ?? 0);
-        $references = ($referenceid > 0 && $referenceid !== $snapshotid)
-            ? array_filter([$this->submission_from_snapshot($referenceid)])
+        $references = ($referenceid !== $snapshotid)
+            ? array_filter([$this->reference_submission($instance)])
             : [];
 
         $prompt = $scorer->build_prompt($submission, $references);
         $airesponse = (new ai_feedback_service())->generate_text($context, $userid, $prompt);
         return $scorer->interpret($airesponse['text'], $submission, $references);
+    }
+
+    /**
+     * Whether the activity has a reference (model) solution configured.
+     *
+     * @param stdClass $instance The activity instance.
+     * @return bool
+     */
+    public function has_reference(stdClass $instance): bool {
+        return !empty($instance->referencemapjson) || !empty($instance->referencesnapshotid);
+    }
+
+    /**
+     * Build the reference submission for an activity.
+     *
+     * The reference lives as a frozen JSON copy on the activity record
+     * (referencemapjson), decoupled from learner workspaces. When only the
+     * legacy snapshot pointer is present (pre-migration data), the snapshot is
+     * read as a fallback.
+     *
+     * @param stdClass $instance The activity instance.
+     * @return submission|null The reference submission, or null if none/invalid.
+     */
+    public function reference_submission(stdClass $instance): ?submission {
+        $json = (string) ($instance->referencemapjson ?? '');
+        if ($json !== '') {
+            $data = json_decode($json, true);
+            return is_array($data) ? submission::from_snapshot_data($data) : null;
+        }
+        $referenceid = (int) ($instance->referencesnapshotid ?? 0);
+        return $referenceid > 0 ? $this->submission_from_snapshot($referenceid) : null;
     }
 }

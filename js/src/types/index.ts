@@ -81,6 +81,8 @@ export interface WorkspaceState {
     canmanage?: boolean;
     /** Whether learners may also toggle lock mode in this activity. */
     lockmodeforlearners?: boolean;
+    /** Whether learners may mark journal entries as private (hidden from teachers). */
+    journalallowprivate?: boolean;
     collab?: CollabConfig;
 }
 
@@ -205,6 +207,8 @@ export interface RevisionConfig {
     workspaceid: number;
     /** The revision to reconstruct. */
     revision: number;
+    /** For the player: the highest revision to replay up to. */
+    maxRevision?: number;
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */

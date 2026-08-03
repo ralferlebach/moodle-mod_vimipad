@@ -241,3 +241,119 @@ export function boundingBox(boxes: ContainerBox[], pad: number): ContainerBox | 
         h: Math.max(MIN_CONTAINER_SIZE, (maxy - miny) + 2 * pad),
     });
 }
+
+/** A container identified for nesting: its id and current box. */
+export interface NestingItem {
+    stableid: string;
+    box: ContainerBox;
+}
+
+/**
+ * The area of a box.
+ *
+ * @param box The box.
+ * @returns Its area.
+ */
+export function boxArea(box: ContainerBox): number {
+    return box.w * box.h;
+}
+
+/**
+ * Assign each container its single nesting parent, acyclically.
+ *
+ * A container B is a child of A only if A is *strictly larger* than B (by area)
+ * and B's centre lies inside A. Using strict area breaks the symmetry of two
+ * overlapping same-size containers (where each centre lies in the other), which
+ * previously made the nesting relation cyclic — the root cause of the
+ * re-arrange runaway growth and the flipping hierarchy. Among all qualifying
+ * ancestors, the *smallest* is chosen as the direct parent (the tightest
+ * encloser). The result is a forest: every container has at most one parent and
+ * no container is its own ancestor.
+ *
+ * @param items The containers with their current boxes.
+ * @returns A map from container id to its parent id (absent = a root).
+ */
+export function nestingParents(items: NestingItem[]): Map<string, string> {
+    const parent = new Map<string, string>();
+    for (const child of items) {
+        let best: NestingItem | null = null;
+        const centre = {x: child.box.x + child.box.w / 2, y: child.box.y + child.box.h / 2};
+        for (const cand of items) {
+            if (cand.stableid === child.stableid) {
+                continue;
+            }
+            // Strict-larger area guarantees asymmetry and acyclicity; ties
+            // (equal area) never nest, so two equal boxes stay siblings.
+            if (boxArea(cand.box) <= boxArea(child.box)) {
+                continue;
+            }
+            if (!centerInBox(centre, cand.box)) {
+                continue;
+            }
+            if (best === null || boxArea(cand.box) < boxArea(best.box)) {
+                best = cand;
+            }
+        }
+        if (best !== null) {
+            parent.set(child.stableid, best.stableid);
+        }
+    }
+    return parent;
+}
+
+/**
+ * Order containers so that every child comes before its parent (deepest first).
+ *
+ * Re-arrange must refit inner containers before outer ones, so an outer
+ * container refits around the *already refitted* inner box. Processing in
+ * arbitrary order is what let sizes ping-pong between passes.
+ *
+ * @param items The containers.
+ * @param parents The nesting parent map from {@link nestingParents}.
+ * @returns The ids ordered deepest-child first.
+ */
+export function nestingOrder(items: NestingItem[], parents: Map<string, string>): string[] {
+    const depth = (id: string): number => {
+        let d = 0;
+        let cur = parents.get(id);
+        const seen = new Set<string>([id]);
+        while (cur !== undefined && !seen.has(cur)) {
+            d++;
+            seen.add(cur);
+            cur = parents.get(cur);
+        }
+        return d;
+    };
+    return items
+        .map(i => i.stableid)
+        .sort((a, b) => depth(b) - depth(a));
+}
+
+/**
+ * Whether a node must keep its current position during a re-arrange.
+ *
+ * A node is pinned if it is itself move-locked, or if it currently sits inside
+ * any move-locked container (so re-arrange cannot push it out of that
+ * container's bounds). This is the pure decision behind the re-arrange lock
+ * handling, kept here so it can be unit-tested in isolation.
+ *
+ * @param nodeMetadatajson The node's metadata JSON.
+ * @param currentCenter The node's current centre point (or undefined).
+ * @param moveLockedContainerBoxes The boxes of all move-locked containers.
+ * @param isNodeMoveLocked Predicate: is the given metadata move-locked?
+ * @returns True if the node must not be repositioned.
+ */
+export function isNodePinnedForRearrange(
+    nodeMetadatajson: string | undefined,
+    currentCenter: Point | undefined,
+    moveLockedContainerBoxes: ContainerBox[],
+    isNodeMoveLocked: (metadatajson?: string) => boolean
+): boolean {
+    if (isNodeMoveLocked(nodeMetadatajson)) {
+        return true;
+    }
+    if (!currentCenter) {
+        return false;
+    }
+    return moveLockedContainerBoxes.some(box => centerInBox(currentCenter, box));
+}

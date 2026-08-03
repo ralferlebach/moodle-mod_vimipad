@@ -18,6 +18,10 @@ namespace mod_vimipad;
 
 use mod_vimipad\local\service\operation_service;
 
+defined('MOODLE_INTERNAL') || die();
+
+require_once(__DIR__ . '/fixtures/workspace_fixture.php');
+
 /**
  * Tests for template structural locks enforced in the operation service.
  *
@@ -27,8 +31,7 @@ use mod_vimipad\local\service\operation_service;
  * @covers     \mod_vimipad\local\service\operation_service
  */
 final class element_lock_test extends \advanced_testcase {
-    /** @var int The workspace id. */
-    private int $workspaceid;
+    use \mod_vimipad\workspace_fixture;
 
     /**
      * Create a course, module and empty workspace.
@@ -38,14 +41,7 @@ final class element_lock_test extends \advanced_testcase {
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
-        global $DB;
-        $course = $this->getDataGenerator()->create_course();
-        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
-        $now = time();
-        $this->workspaceid = (int) $DB->insert_record('vimipad_workspace', (object) [
-            'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
-            'currentrevision' => 0, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
-        ]);
+        $this->set_up_workspace();
     }
 
     /**
@@ -106,21 +102,54 @@ final class element_lock_test extends \advanced_testcase {
      *
      * @return void
      */
-    public function test_locked_node_respects_editable_whitelist(): void {
+    public function test_locked_node_respects_group_locks(): void {
         global $DB;
-        $id = $this->make_node('node_lockedbbbbb', json_encode(['locked' => true, 'editable' => ['label']]));
+        // Lock only the move and colour groups; text stays editable.
+        $id = $this->make_node('node_lockedbbbbb', json_encode([
+            'locked' => true,
+            'locks' => ['move' => true, 'color' => true, 'text' => false],
+        ]));
         $service = new operation_service();
 
-        // Label is whitelisted: allowed.
+        // Label is a text change and text is unlocked: allowed.
         $service->apply($this->workspaceid, $this->rev(), 'node_update', ['stableid' => $id, 'label' => 'Renamed'], 1);
         $this->assertSame('Renamed', $DB->get_field('vimipad_node', 'label', ['stableid' => $id]));
 
-        // Type is not whitelisted: rejected.
+        // Changing the fill colour is a colour change and colour is locked: rejected.
         try {
-            $service->apply($this->workspaceid, $this->rev(), 'node_update', ['stableid' => $id, 'type' => 'goal'], 1);
-            $this->fail('Changing a non-whitelisted field should be rejected.');
+            $service->apply($this->workspaceid, $this->rev(), 'node_update', [
+                'stableid' => $id,
+                'metadatajson' => json_encode([
+                    'locked' => true,
+                    'locks' => ['move' => true, 'color' => true, 'text' => false],
+                    'fill' => '#ff0000',
+                ]),
+            ], 1);
+            $this->fail('Changing a locked colour group should be rejected.');
         } catch (\moodle_exception $e) {
             $this->assertStringContainsString('elementlocked', $e->errorcode);
+        }
+    }
+
+    /**
+     * A legacy global lock ({"locked":true} without a locks map) locks every
+     * group, so any change is rejected.
+     *
+     * @return void
+     */
+    public function test_legacy_global_lock_blocks_all_groups(): void {
+        $id = $this->make_node('node_legacyglobal', json_encode(['locked' => true]));
+        $service = new operation_service();
+
+        foreach (['label' => 'X', 'content' => 'Y'] as $field => $value) {
+            try {
+                $service->apply($this->workspaceid, $this->rev(), 'node_update', [
+                    'stableid' => $id, $field => $value,
+                ], 1);
+                $this->fail("Legacy global lock should reject changing $field.");
+            } catch (\moodle_exception $e) {
+                $this->assertStringContainsString('elementlocked', $e->errorcode);
+            }
         }
     }
 

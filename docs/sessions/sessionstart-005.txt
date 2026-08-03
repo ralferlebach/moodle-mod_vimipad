@@ -1,0 +1,192 @@
+## SESSION-START: ViMi Pad — mod_vimipad · Session 005
+
+> Konkreter Startprompt fuer Session 005. Kopf = Kurzfassung des Stands aus
+> Session 004 (docs/sessions/session-004.md ist der vollstaendige, versionierte
+> Report und wird als Kontext-Dokument angehaengt). Der generische Ablauf (A–F)
+> folgt darunter aus docs/prompt-templates/sessionstart.txt.
+
+---
+
+### Kontext der Vorsitzung (Session 004) — Kurzfassung
+
+**Aktueller Entwicklungsstand:**
+0.7.31 — der code-seitige 0.7.x-Hardening-Arc ist abgeschlossen. Das finale
+externe Audit gibt GO fuer kontrollierten Beta-/Pilotbetrieb; MATURITY_BETA ist
+sachlich vertretbar, sofern die gruene GitHub-CI die volle Moodle-/PHPUnit-/
+Behat-/Build-Matrix abbildet. Real auf Moodle 4.5 + PostgreSQL 16 + PHP 8.3.6
+verifiziert: 307 mod_vimipad + 97 vimipadassess PHPUnit gruen; phpcs/phpdoc/
+validate/savepoints/phpcpd clean; Lang 477/477 EN/DE-paritaetisch, byte-sortiert;
+Frontend tsc 0, Jest 297/43 Suiten, AMD (init/revision) byte-reproduzierbar.
+
+**Zuletzt abgeschlossen (Session 004 — fuenf Audit-Runden 0.7.28→0.7.31):**
+- P0 unvollstaendige Revisionshistorie: Player fuehrt highestLoadedRevision,
+  baut die ReplayEngine nur bis dahin, clampt den Slider und zeigt ein
+  Truncation-Warnbanner; isHistoryIncomplete prueft per Content-Fingerprint
+  (type/label/content/endpoints/direction/geometry/metadata), erkennt also
+  fehlende Aenderungen an bestehenden Elementen.
+- P0 Frame-Aliasing (0.7.29): survivors() pusht Kopien -> historische Frames
+  unveraenderlich.
+- Replay-Skalierung: ReplayEngine mit begrenztem maxCheckpoints-Budget,
+  revisionsindizierten Checkpoints (kein Op-Log-Re-Scan) und bounded LRU-Cache;
+  get_operations paginiert + serverseitig gekappt (MAX_BATCH).
+- layout_policy (Objekt-Root, erlaubte Felder, endliche In-Range-Koordinaten,
+  positive Groessen, Objektanzahl-Kappe) an der Service-Grenze (deckt Importpfad).
+- AI-Grenzen: MAX_AI_NOTES/PROMPT/DRAFT/PROVIDERINFO in ai_feedback_service.
+- Lock-CAS: acquire() inkl. Owner-Renewal-Randfall CAS-abgesichert.
+- Subplugin-Vertrag: Assess-Scorer auf konkrete Parent-Version, geaenderte
+  Form-/Assess-Subplugins mit Version-Bump; Uninstall-Safety-Tests.
+- Weitere Haertung: Journal-comment-Capability, GET->POST-Mutationen,
+  check_bytes (Byte- statt Zeichengrenze), N+1-Beseitigung, Lock-Cleanup-Task.
+
+**Offene Punkte fuer 0.8.x (mitnehmen, KEINE Beta-Blocker):**
+- Heartbeat renew() vollstaendig CAS-sicher machen: acquire() ist korrekt, aber
+  renew() nutzt nach dem Read noch ein unbedingtes set_field() nach ID. Enges
+  Ablauf-/Takeover-Interleaving koennte dem alten Client faelschlich
+  acquired=true geben. Betrifft NUR den advisory Presence-Lock, nicht die
+  semantische Datenintegritaet (Workspace-Lock + Revision sichern diese ab).
+- Empirischer Reifenachweis Richtung MATURITY_STABLE (kein Code-Befund):
+  Concurrency-/Last-Tests, Replay-Benchmarks (1k/5k/10k/20k/100k Ops, kleine/
+  grosse Maps, sequentielles Scrubbing vs. Spruenge), Accessibility-Durchgang,
+  Browser-/DB-Matrix, Upgrade-/Backup-Restore-Tests in der CI.
+- Optionale get_operations-Testabdeckung (Gruppen/Course/Cross-Activity/Guest/
+  unenrolled/suspended). Grundlegender Contract-/Zugriffstest ist vorhanden.
+- Gastzugriff auf Course-Workspaces als Produkt-/Datenschutzentscheidung.
+
+**Als naechstes geplant — 0.8.x (Feldtests & weitere Darstellungsformen):**
+- Feldtestungen in echten Kursen.
+- Ausweitung auf weitere bereits erfasste Formen (argument, process/flow,
+  fishbone, timeline, vennsets, systems, affinity) je als vimipadform-Subplugin.
+- Parallel: der empirische Reifenachweis oben und die kleinen 0.8.x-Restpunkte.
+
+---
+
+### A) Lastenheft, Pflichtenheft und Blueprint
+
+**Zentrales, versioniertes Planungsdokument (zuerst lesen, führend bei
+Reihenfolge und Versionsvergabe):**
+  docs/design/roadmap.md
+
+Weitere Planungs-/Entwurfsdokumente:
+  docs/design/backlog.md
+  docs/design/connector-styles.md
+
+Fach-, Technik- und Strategiedokumente liegen im Plugin-Repo:
+  docs/materials/pflicht_lastenheft_knowledgemap.md
+  docs/materials/technisches_blueprint_knowledgemap.md
+  docs/materials/roadmap_zusatzplugins_knowledgemap.md
+  docs/materials/erweiterungsideen_bewertung.md
+  docs/materials/knowledgemap_konzeption_businessmodel.pdf
+
+Bei Konflikten zur Versionsreihenfolge ist docs/design/roadmap.md führend;
+die materials/-Dokumente liefern Strategie, Machbarkeit und Fachanforderungen.
+
+---
+
+### B) Kontext-Dokument der letzten Sitzung
+
+Das aktuelle Kontext-Dokument (sessionende der Vorsitzung) ist im Anhang
+zu finden. Ältere Kontext-Dokumente zwecks Referenz: docs/sessions/
+
+---
+
+### C) Aktueller Code
+
+Der aktuelle Plugin-Stand liegt als ZIP im Anhang, einzuspielen
+in die Moodle-Installation unter mod/vimipad/.
+
+PHP: >= 8.1 (Moodle 4.5) bzw. >= 8.3 (Moodle 5.3)
+Moodle: >= 4.5 (2024100700); Zielspanne 4.5–5.3.
+Ab Moodle 5.3 bringt der Core die React-Runtime mit (react_autoinit);
+4.5–5.2 nutzen den mitgelieferten Editor-Bundle.
+KEINE Abwärtskompatibilität < 4.5.
+
+Haupt-Dependencies:
+  KEINE. KI läuft ausschließlich über das Moodle-AI-Subsystem und wird
+  zur Laufzeit erkannt/gegated (Capability + Provider-Verfügbarkeit).
+  Nicht in version.php deklariert.
+
+---
+
+### D) Schlüssel-Entwurfsentscheidungen (nicht ohne explizite Diskussion ändern)
+
+  1. Gemeinsames Domänenmodell (Nodes, Relations, Container, Memberships,
+     Revisionen, Snapshots, Annotationen, Grading, AI Drafts); Diagrammtypen
+     als Profile darüber.
+  2. Kein Zusatzserver: Operation Log + serverautorisierte Operationen +
+     AJAX/Webservices + Polling. Kein CRDT/WebSocket im MVP.
+  3. Snapshot ist unveränderliche Bewertungsbasis; Bewertung und KI-Feedback
+     referenzieren immer snapshotid.
+  4. KI nur als Assistenz für Lehrende (Teacher-in-the-loop); Entwurf wird
+     erst nach aktiver Übernahme zu Feedback. Nur Moodle-AI-API.
+  5. React/TypeScript-first: Ab Moodle 5.3 stellt der Core die React-Runtime
+     bereit (react_autoinit, core/import, core/component appendToDom/
+     prependToDom). Für 4.5–5.2 wird React separat per esbuild gebündelt
+     (js/build/) und über ein dünnes ES6/AMD-Modul (amd/src/init.js, geladen
+     via js_call_amd) geladen, das Strings via core/str und Transport via
+     core/ajax auflöst und den Bundle montiert. AMD für ALLE Nicht-React-Teile.
+     Keine Build-Tools auf Produktion (nur amd/build/ und js/build/ im Release).
+  6. Listenansicht ist gleichberechtigte Editoroberfläche mit Drag-and-drop
+     und vollständiger Tastaturalternative.
+  7. Capability-, Context-, Group- und sesskey-Prüfung in allen External
+     Functions; keine PARAM_RAW ohne Schema-Validierung.
+  8. KEINE local-Architektur: Gemeinsamer Code kommt aus mod_vimipad
+     per Namespace. \mod_vimipad\api\* + \mod_vimipad\profile\* =
+     stabile öffentliche API für abhängige Plugins (qtype, datafield,
+     Review); \mod_vimipad\local\* = intern. Satelliten deklarieren
+     dependency auf mod_vimipad.
+  9. Alle READMEs folgen dem Template von Moodle an Hochschulen e.V.:
+     https://github.com/moodle-an-hochschulen/moodle-readmetemplate
+
+---
+
+### E) Verifikationsumgebung ZUERST aufsetzen (verpflichtend)
+
+Bevor du inhaltlich arbeitest, richtest du eine echte, lauffähige
+Moodle-4.5-Umgebung ein und verifizierst den mitgelieferten Code REAL
+(nicht nur statisch). Das ist Pflicht, weil mehrere Fehlerklassen
+(PHPUnit-Fails, AMD-Grunt-Diff, Editor-Loading, Backup/Restore) sich
+ausschließlich in einer laufenden Instanz zeigen.
+
+Folge dabei Schritt für Schritt der Anleitung im Repo:
+  docs/dev/moodle-test-environment-setup.md
+
+Kurzfassung des Ablaufs (Details in der Anleitung):
+  1. Systempakete (php-pgsql/mbstring/curl/intl/zip/gd/soap, postgresql, locales)
+  2. PHP konfigurieren (max_input_vars=5000, locale en_AU.UTF-8)
+  3. PostgreSQL starten + Moodle-DB/-User anlegen
+  4. Moodle klonen (git, MOODLE_405_STABLE) und Plugin nach mod/vimipad spiegeln
+  5. config.php mit PHPUnit- und Behat-Blöcken schreiben
+  6. PHPUnit-Env initialisieren -> vendor/bin/phpunit --filter mod_vimipad
+  7. moodle-cs (aktuell) via Composer -> phpcs --severity=1 (Ziel 0/0)
+  8. moodle-plugin-ci PHAR -> phplint/phpmd/phpcpd/phpdoc/validate/savepoints/mustache
+  9. Moodles Grunt-Toolchain (npm ci) -> npx grunt amd (AMD reproduzierbar bauen)
+ 10. Behat init + dry-run (Steps validieren; @javascript nur in CI)
+ 11. Frontend: ./node_modules/.bin/tsc --noEmit, node build.mjs, ./node_modules/.bin/jest
+
+WICHTIGE FALLSTRICKE (siehe Anleitung, Abschnitt 0):
+  - PostgreSQL schläft ein -> vor JEDEM DB-Kommando: service postgresql start; sleep 3
+  - Nach Plugin-Sync mit NEUEN Dateien: PHPUnit-Env re-initialisieren (init.php)
+  - init.php macht ein Composer-Self-Update -> bricht bei getcomposer.org 503 ab
+    (Env bleibt auf alter Version). Immer: init.php --no-composer-self-update
+  - PHPUnit-init baut das Schema nur bei VERSIONSSPRUNG neu -> bei install.xml-
+    Aenderung version.php ZUERST hochziehen, dann re-initialisieren
+  - NIE 'npx tsc' (zieht Fremdpaket tsc@2.0.4) -> immer ./node_modules/.bin/tsc
+  - php -S ist instabil -> @javascript-Behat nur in der Projekt-CI, nicht hier
+  - AMD-Build MUSS reproduzierbar sein (zweiter grunt-Lauf == erster), sonst CI rot
+
+Zielzustand vor Beginn der eigentlichen Arbeit:
+  PHPUnit grün, phpcs 0/0, AMD identisch, tsc/Jest grün,
+  phpdoc/validate/savepoints/mustache ohne Fehlerzeilen.
+
+Wenn ein Schritt in der Sandbox nicht stabil läuft (z. B. voller Site-Install
+wegen instabilem PostgreSQL), dokumentiere das ehrlich und stütze die
+Verifikation auf die stabile PHPUnit-Env, statt Erfolg vorzutäuschen.
+
+---
+
+### F) Ziel dieser Sitzung
+
+Wir knüpfen an die Arbeiten an, die im aktuellen Kontext-Dokument
+und in der angehängten Code-Base vorliegen, und gehen, wenn der letzte
+Arbeitsschritt als vollumfänglich erfüllt angesehen wird, zum nächsten
+vorgesehenen Schritt in der Umsetzung über.

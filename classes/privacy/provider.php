@@ -203,6 +203,16 @@ class provider implements
             $base . $snap . "JOIN {vimipad_aifeedback} af ON af.snapshotid = s.id WHERE af.graderid = :u",
             $mod + ['u' => $userid]
         );
+        // Peer reviews written (reviewer).
+        $contextlist->add_from_sql(
+            $base . $snap . "JOIN {vimipad_peerreview} pr ON pr.snapshotid = s.id WHERE pr.reviewerid = :u",
+            $mod + ['u' => $userid]
+        );
+        // Advanced-grading instances rated (rater).
+        $contextlist->add_from_sql(
+            $base . $snap . "JOIN {vimipad_gradeinstance} gi ON gi.snapshotid = s.id WHERE gi.raterid = :u",
+            $mod + ['u' => $userid]
+        );
         // Grades received or given (attached to the instance directly).
         $contextlist->add_from_sql(
             $base . "JOIN {vimipad_grade} g ON g.vimipadid = v.id WHERE g.userid = :u1 OR g.grader = :u2",
@@ -261,6 +271,10 @@ class provider implements
             JOIN {vimipad_annotation} a ON a.snapshotid = s.id WHERE cm.id = :cmid", $params);
         $userlist->add_from_sql('graderid', "SELECT af.graderid $snap
             JOIN {vimipad_aifeedback} af ON af.snapshotid = s.id WHERE cm.id = :cmid AND af.graderid IS NOT NULL", $params);
+        $userlist->add_from_sql('reviewerid', "SELECT pr.reviewerid $snap
+            JOIN {vimipad_peerreview} pr ON pr.snapshotid = s.id WHERE cm.id = :cmid", $params);
+        $userlist->add_from_sql('raterid', "SELECT gi.raterid $snap
+            JOIN {vimipad_gradeinstance} gi ON gi.snapshotid = s.id WHERE cm.id = :cmid AND gi.raterid IS NOT NULL", $params);
         $userlist->add_from_sql('userid', "SELECT g.userid $grade
             WHERE cm.id = :cmid AND g.userid IS NOT NULL", $params);
         $userlist->add_from_sql('grader', "SELECT g.grader $grade
@@ -296,19 +310,48 @@ class provider implements
                 ['vid' => $cm->instance, 'userid' => $userid]
             );
 
+            // Load nodes, relations and journal for ALL of this user's
+            // workspaces in three IN-queries and group in PHP, instead of three
+            // queries per workspace (the former 3N+1 pattern).
+            $nodesby = [];
+            $relationsby = [];
+            $journalby = [];
+            if ($workspaces) {
+                $wsids = array_keys($workspaces);
+                [$insql, $inparams] = $DB->get_in_or_equal($wsids, SQL_PARAMS_NAMED, 'ws');
+                foreach ($DB->get_records_select('vimipad_node', "workspaceid $insql", $inparams) as $n) {
+                    $nodesby[(int) $n->workspaceid][] = $n;
+                }
+                foreach ($DB->get_records_select('vimipad_relation', "workspaceid $insql", $inparams) as $r) {
+                    $relationsby[(int) $r->workspaceid][] = $r;
+                }
+                $jparams = $inparams + ['juser' => $userid];
+                foreach (
+                    $DB->get_records_select(
+                        'vimipad_journalentry',
+                        "workspaceid $insql AND userid = :juser",
+                        $jparams
+                    ) as $j
+                ) {
+                    $journalby[(int) $j->workspaceid][] = $j;
+                }
+            }
+
             foreach ($workspaces as $ws) {
-                $nodes = $DB->get_records('vimipad_node', ['workspaceid' => $ws->id]);
-                $relations = $DB->get_records('vimipad_relation', ['workspaceid' => $ws->id]);
-                $journal = $DB->get_records(
-                    'vimipad_journalentry',
-                    ['workspaceid' => $ws->id, 'userid' => $userid]
-                );
+                $nodes = $nodesby[(int) $ws->id] ?? [];
+                $relations = $relationsby[(int) $ws->id] ?? [];
+                $journal = $journalby[(int) $ws->id] ?? [];
 
                 $data = (object) [
                     'name' => $ws->name,
                     'currentrevision' => $ws->currentrevision,
                     'nodes' => array_values(array_map(static function ($n) {
-                        return ['stableid' => $n->stableid, 'type' => $n->type, 'label' => $n->label];
+                        return [
+                            'stableid' => $n->stableid,
+                            'type' => $n->type,
+                            'label' => $n->label,
+                            'content' => $n->content,
+                        ];
                     }, $nodes)),
                     'relations' => array_values(array_map(static function ($r) {
                         return ['stableid' => $r->stableid, 'type' => $r->type, 'label' => $r->label];
@@ -369,7 +412,7 @@ class provider implements
                     [get_string('privacy:path:contributions', 'mod_vimipad')],
                     (object) [
                         'nodes' => array_values(array_map(static function ($n) {
-                            return ['stableid' => $n->stableid, 'label' => $n->label];
+                            return ['stableid' => $n->stableid, 'label' => $n->label, 'content' => $n->content];
                         }, $cnodes)),
                         'relations' => array_values(array_map(static function ($r) {
                             return ['stableid' => $r->stableid, 'label' => $r->label];
@@ -380,6 +423,122 @@ class provider implements
                         'annotations' => array_values(array_map(static function ($a) {
                             return ['commenttext' => $a->commenttext, 'timecreated' => $a->timecreated];
                         }, $cannotations)),
+                    ]
+                );
+            }
+
+            // Activity involvement: everything else declared in the metadata
+            // that carries this user's id — operations, submitted snapshots,
+            // layout edits, locks and submit intents.
+            $ops = $DB->get_records_sql(
+                "SELECT op.id, op.operationtype, op.timecreated
+                   FROM {vimipad_operation} op
+                   JOIN {vimipad_workspace} ws ON ws.id = op.workspaceid
+                  WHERE ws.vimipadid = :vid AND op.userid = :u",
+                ['vid' => $vid, 'u' => $userid]
+            );
+            $snapshots = $DB->get_records_sql(
+                "SELECT s.id, s.revision, s.timecreated
+                   FROM {vimipad_snapshot} s
+                   JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
+                  WHERE ws.vimipadid = :vid AND s.submittedby = :u",
+                ['vid' => $vid, 'u' => $userid]
+            );
+            $layouts = $DB->get_records_sql(
+                "SELECT l.id, l.profile, l.timemodified
+                   FROM {vimipad_layout} l
+                   JOIN {vimipad_workspace} ws ON ws.id = l.workspaceid
+                  WHERE ws.vimipadid = :vid AND l.modifiedby = :u",
+                ['vid' => $vid, 'u' => $userid]
+            );
+            $locks = $DB->get_records_sql(
+                "SELECT lk.id, lk.targettype, lk.timeexpires
+                   FROM {vimipad_lock} lk
+                   JOIN {vimipad_workspace} ws ON ws.id = lk.workspaceid
+                  WHERE ws.vimipadid = :vid AND lk.userid = :u",
+                ['vid' => $vid, 'u' => $userid]
+            );
+            $intents = $DB->get_records_sql(
+                "SELECT si.id, si.timecreated
+                   FROM {vimipad_submissionintent} si
+                   JOIN {vimipad_workspace} ws ON ws.id = si.workspaceid
+                  WHERE ws.vimipadid = :vid AND si.userid = :u",
+                ['vid' => $vid, 'u' => $userid]
+            );
+            if ($ops || $snapshots || $layouts || $locks || $intents) {
+                writer::with_context($context)->export_data(
+                    [get_string('privacy:path:involvement', 'mod_vimipad')],
+                    (object) [
+                        'operations' => array_values(array_map(static function ($o) {
+                            return ['operationtype' => $o->operationtype, 'timecreated' => $o->timecreated];
+                        }, $ops)),
+                        'submittedsnapshots' => array_values(array_map(static function ($s) {
+                            return ['revision' => $s->revision, 'timecreated' => $s->timecreated];
+                        }, $snapshots)),
+                        'layoutedits' => array_values(array_map(static function ($l) {
+                            return ['profile' => $l->profile, 'timemodified' => $l->timemodified];
+                        }, $layouts)),
+                        'elementlocks' => array_values(array_map(static function ($lk) {
+                            return ['targettype' => $lk->targettype, 'timeexpires' => $lk->timeexpires];
+                        }, $locks)),
+                        'submitintents' => array_values(array_map(static function ($si) {
+                            return ['timecreated' => $si->timecreated];
+                        }, $intents)),
+                    ]
+                );
+            }
+
+            // Assessment activity as a reviewer, rater or AI-feedback grader,
+            // and grades given (grader identity + feedback text authored).
+            $reviews = $DB->get_records_sql(
+                "SELECT pr.id, pr.score, pr.reviewcomment, pr.timemodified
+                   FROM {vimipad_peerreview} pr
+                   JOIN {vimipad_snapshot} s ON s.id = pr.snapshotid
+                   JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
+                  WHERE ws.vimipadid = :vid AND pr.reviewerid = :u",
+                ['vid' => $vid, 'u' => $userid]
+            );
+            $aifeedback = $DB->get_records_sql(
+                "SELECT af.id, af.drafttext, af.acceptedtext, af.timecreated
+                   FROM {vimipad_aifeedback} af
+                   JOIN {vimipad_snapshot} s ON s.id = af.snapshotid
+                   JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
+                  WHERE ws.vimipadid = :vid AND af.graderid = :u",
+                ['vid' => $vid, 'u' => $userid]
+            );
+            $ratings = $DB->get_records_sql(
+                "SELECT gi.id, gi.timemodified
+                   FROM {vimipad_gradeinstance} gi
+                   JOIN {vimipad_snapshot} s ON s.id = gi.snapshotid
+                   JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
+                  WHERE ws.vimipadid = :vid AND gi.raterid = :u",
+                ['vid' => $vid, 'u' => $userid]
+            );
+            $gradesgiven = $DB->get_records('vimipad_grade', ['vimipadid' => $vid, 'grader' => $userid]);
+            if ($reviews || $aifeedback || $ratings || $gradesgiven) {
+                writer::with_context($context)->export_data(
+                    [get_string('privacy:path:grading', 'mod_vimipad')],
+                    (object) [
+                        'peerreviews' => array_values(array_map(static function ($pr) {
+                            return [
+                                'score' => $pr->score,
+                                'reviewcomment' => $pr->reviewcomment,
+                                'timemodified' => $pr->timemodified,
+                            ];
+                        }, $reviews)),
+                        'aifeedback' => array_values(array_map(static function ($af) {
+                            return [
+                                'drafttext' => $af->drafttext,
+                                'acceptedtext' => $af->acceptedtext,
+                                'timecreated' => $af->timecreated,
+                            ];
+                        }, $aifeedback)),
+                        'advancedgradings' => array_values(array_map(static function ($gi) {
+                            return ['timemodified' => $gi->timemodified];
+                        }, $ratings)),
+                        'gradesgiven' => array_values(array_map(static function ($g) {
+                            return ['feedback' => $g->feedback, 'timemodified' => $g->timemodified];
+                        }, $gradesgiven)),
                     ]
                 );
             }
@@ -508,6 +667,33 @@ class provider implements
             $params
         );
         \mod_vimipad\local\cleanup::delete_workspaces($ownworkspaces);
+
+        // Mirror the single-user path exactly, so the deletion outcome does not
+        // depend on which privacy pathway Moodle chose: own grade records, peer
+        // reviews written, and advanced-grading instance links as a rater.
+        $DB->delete_records_select(
+            'vimipad_grade',
+            "vimipadid = :vid AND userid $insql",
+            $params
+        );
+        [$rinsql, $rinparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+        $DB->delete_records_select(
+            'vimipad_peerreview',
+            "reviewerid $rinsql AND snapshotid IN (
+                SELECT s.id FROM {vimipad_snapshot} s
+                  JOIN {vimipad_workspace} w ON w.id = s.workspaceid
+                 WHERE w.vimipadid = :vid)",
+            array_merge($rinparams, ['vid' => $cm->instance])
+        );
+        [$ginsql, $ginparams] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+        $DB->delete_records_select(
+            'vimipad_gradeinstance',
+            "raterid $ginsql AND snapshotid IN (
+                SELECT s.id FROM {vimipad_snapshot} s
+                  JOIN {vimipad_workspace} w ON w.id = s.workspaceid
+                 WHERE w.vimipadid = :vid)",
+            array_merge($ginparams, ['vid' => $cm->instance])
+        );
 
         foreach ($userids as $userid) {
             self::anonymise_shared_contributions($cm->instance, $userid);

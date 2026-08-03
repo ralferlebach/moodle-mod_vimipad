@@ -141,6 +141,14 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/vimipad:view',
     ],
+    'mod_vimipad_get_operations' => [
+        'classname' => 'mod_vimipad\external\get_operations',
+        'methodname' => 'execute',
+        'description' => 'Return a workspace operation log up to a revision (read-only).',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:view',
+    ],
     'mod_vimipad_get_journal_entries' => [
         'classname' => 'mod_vimipad\external\get_journal_entries',
         'methodname' => 'execute',

@@ -125,14 +125,14 @@ describe('SVG map-data round-trip', () => {
 
     test('embeds and re-extracts the map JSON, stripping container chrome', () => {
         const svg = document.createElementNS(NS, 'svg') as SVGSVGElement;
-        const del = document.createElementNS(NS, 'g');
-        del.setAttribute('class', 'vimipad-container-delete');
-        svg.appendChild(del);
+        const chrome = document.createElementNS(NS, 'g');
+        chrome.setAttribute('class', 'vimipad-container-resize');
+        svg.appendChild(chrome);
 
         const json = '{"nodes":[{"stableid":"n1","label":"Cell"}],"relations":[]}';
         const out = serializeCanvasSvg(svg, {x: 0, y: 0, w: 100, h: 80}, json);
 
-        expect(out).not.toContain('vimipad-container-delete');
+        expect(out).not.toContain('vimipad-container-resize');
         expect(extractMapData(out)).toBe(json);
     });
 
