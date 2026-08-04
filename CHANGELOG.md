@@ -4,7 +4,73 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.5** (2026072775).
+> release is **0.8.6** (2026072776).
+
+## 0.8.7 (2026072777) — Journal/revision replay shows the real map
+
+Fixes the read-only state replay used by the journal and the revision viewer/
+player, where nodes appeared to be missing entirely and containers looked
+misplaced.
+
+- **Root cause:** the reconstruction returned the nodes and containers correctly,
+  but the canvas opened every read-only view with a fixed, canvas-centred
+  viewport. Because a past revision's node positions come from the saved layout
+  and can sit anywhere on the large (2400x1600) canvas, anything outside that
+  fixed window was clipped — nodes vanished and containers, framed against the
+  wrong window, looked out of place.
+- **Fix:** in read-only views (revision viewer, journal replay, player) the
+  canvas now fits its viewport to the actual content — every node at its recorded
+  position plus every container box — so the whole reconstructed map is framed.
+  Panning or zooming hands control back to the user; the auto-fit then steps
+  aside. The live editor is unchanged.
+- New Jest regression coverage: the RevisionViewer frames nodes placed far from
+  the canvas centre, and the RevisionPlayer frames the reconstructed content
+  (nodes at their recorded positions and the moved container) at the shown
+  revision.
+
+## 0.8.6 (2026072776) — Beta-testing infrastructure
+
+Non-behavioural release that makes the plugin easier to beta-test and to keep
+healthy in production. No schema change.
+
+- **Expanded test-data generator (AP1).** The plugin generator gained granular
+  creators — `create_node`, `create_relation`, `create_container`,
+  `create_membership`, `create_operations`, `create_snapshot`, `create_grade`,
+  `create_peer_review` — plus load profiles `create_map_profile` (small 20/30/5,
+  medium 200/400/40, large 1000/2000/200) and `create_collaboration_history`.
+  The Behat generator can now seed a sized map in one Given step
+  (`mod_vimipad > maps` with a `size` column).
+- **Operational status checks (AP4).** Three checks appear under Reports:
+  ViMi Pad data integrity (orphaned child rows, including layout history),
+  ViMi Pad subplugins (declared assess/form subplugins are installed and
+  registered) and ViMi Pad history size (operation log and layout history within
+  soft budgets), wired via a `mod_vimipad_status_checks()` callback.
+- **Beta operations package.** A German beta-testing guide
+  (`docs/beta/beta-testing.md`) covering how testers report, a P0–P3 triage
+  table, the "every reclamation becomes an automated test" rule and how to seed
+  demo data; plus GitHub issue templates (bug report, feature/change request).
+- New tests: PHPUnit for the generator creators and small load profile, and for
+  each status check.
+- **Behat acceptance suite (AP3).** Four new feature files exercising the
+  role/capability matrix (grading hidden from students; prohibiting
+  mod/vimipad:grade or :view takes effect), Moodle group modes (group selector
+  under separate/visible groups; the group-map/group-mode validation), a course
+  backup-and-restore roundtrip that keeps the submitted map and its grade, and
+  automated accessibility (axe) checks on the editor, grading and snapshot pages.
+  All 20 mod_vimipad scenarios resolve with zero undefined steps and pass
+  gherkinlint; the @javascript and live runs execute in CI.
+- **Playwright collaboration harness (AP5).** A browser test suite under
+  `tests/playwright/` for the multi-client behaviour Behat cannot reach: two
+  users on one course-mode map, with propagation, presence and convergence
+  checks. Includes a Playwright config, page helpers, a Moodle CLI seed
+  (`seed.php`) and a manual/scheduled GitHub Actions workflow. Runs against a
+  live site, kept out of the static pipeline and the plugin's own tsc/jest.
+- **Load test and release process (AP6).** A JMeter plan
+  (`tests/load/vimipad-read-endpoints.jmx`) driving the read-heavy web-service
+  functions against a seeded large map to catch latency/N+1 regressions, with a
+  README and a manual workflow; plus a release checklist
+  (`docs/beta/release-checklist.md`) covering the CI matrix, Plugin Checker, RC
+  pilot and the deliberate ALPHA→BETA maturity flip.
 
 ## 0.8.5 (2026072775) — Topology in replay/journal (R10)
 

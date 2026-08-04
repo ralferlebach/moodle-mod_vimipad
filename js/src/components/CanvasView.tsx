@@ -46,6 +46,7 @@ import {parseNodeStyle} from '../canvas/node_style';
 import {BoxCorner, boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBoxCorner, serializeGeometry} from '../canvas/container_geometry';
 import {isLocked, readGroupLocks, writeGroupLocks, LockGroup, isGroupLocked} from '../canvas/element_lock';
 import {screenToViewBox} from '../canvas/viewport';
+import {computeContentBounds} from '../canvas/svg_export';
 import {editableToText} from '../canvas/editable_text';
 import {freeConnectorPath, labelPoint, offsetAnchors, siblingOffsets} from '../canvas/connection_geometry';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
@@ -200,6 +201,41 @@ export function CanvasView(props: Props): React.ReactElement {
     });
     const viewRef = useRef(view);
     useEffect(() => { viewRef.current = view; }, [view]);
+
+    // In read-only views (revision viewer, journal replay, player) the node
+    // positions come from the saved layout and can sit anywhere on the large
+    // canvas, so the fixed, canvas-centred starting viewport would clip content
+    // that lies outside it — nodes appear to be missing and containers look
+    // misplaced. Fit the viewport to the actual content instead, until the user
+    // pans or zooms (then their framing is respected).
+    const userPannedRef = useRef(false);
+    useEffect(() => {
+        if (!disabled || userPannedRef.current) {
+            return;
+        }
+        const hasContent = state.nodes.length > 0 || (state.containers?.length ?? 0) > 0;
+        if (!hasContent) {
+            return;
+        }
+        const bounds = computeContentBounds(
+            state.nodes, layout, sizes, 120, view, state.containers ?? []
+        );
+        // Grow the content box to the viewport aspect ratio, keep it centred, and
+        // clamp its size and position to the canvas.
+        let w = Math.max(bounds.w, bounds.h / VIEW_ASPECT);
+        w = Math.min(MAX_VIEW_W, Math.max(MIN_VIEW_W, w));
+        let h = w * VIEW_ASPECT;
+        if (h < bounds.h) {
+            h = bounds.h;
+            w = h / VIEW_ASPECT;
+        }
+        const cx = bounds.x + bounds.w / 2;
+        const cy = bounds.y + bounds.h / 2;
+        setView(clampView({x: cx - w / 2, y: cy - h / 2, w, h}));
+        // Intentionally not depending on `view`: this fits on content changes
+        // (e.g. scrubbing the player to a new revision), not on its own updates.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [disabled, state.nodes, state.containers, layout, sizes]);
 
     // Full-page canvas view. Native Fullscreen API is used when available (robust
     // against ancestors with transform/overflow that break position:fixed); a
@@ -598,6 +634,7 @@ export function CanvasView(props: Props): React.ReactElement {
                 if (pinchDist.current && dist > 0) {
                     const ratio = pinchDist.current / dist;
                     const rect = svg.getBoundingClientRect();
+                    userPannedRef.current = true;
                     setView(v => {
                         const fx = (midX - rect.left) / rect.width;
                         const fy = (midY - rect.top) / rect.height;
@@ -617,6 +654,7 @@ export function CanvasView(props: Props): React.ReactElement {
                 const dx = (event.clientX - panStart.current.cx) / rect.width * v.w;
                 const dy = (event.clientY - panStart.current.cy) / rect.height * v.h;
                 const start = panStart.current;
+                userPannedRef.current = true;
                 setView(cur => clampView({...cur, x: start.vx - dx, y: start.vy - dy}));
                 return;
             }
@@ -746,6 +784,7 @@ export function CanvasView(props: Props): React.ReactElement {
             event.preventDefault();
             const rect = svg.getBoundingClientRect();
             const factor = event.deltaY > 0 ? 1.1 : 1 / 1.1;
+            userPannedRef.current = true;
             setView(v => {
                 const fx = (event.clientX - rect.left) / rect.width;
                 const fy = (event.clientY - rect.top) / rect.height;

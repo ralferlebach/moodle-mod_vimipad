@@ -43,6 +43,12 @@ class behat_mod_vimipad_generator extends behat_generator_base {
                 'required' => ['vimipad', 'user'],
                 'switchids' => ['vimipad' => 'instanceid', 'user' => 'userid'],
             ],
+            'maps' => [
+                'singular' => 'map',
+                'datagenerator' => 'map',
+                'required' => ['vimipad', 'user'],
+                'switchids' => ['vimipad' => 'instanceid', 'user' => 'userid'],
+            ],
         ];
     }
 
@@ -81,5 +87,23 @@ class behat_mod_vimipad_generator extends behat_generator_base {
         $generator->create_workspace($instance, (int) $data['userid'], [
             ['stableid' => 'node_seedaaaaaaa', 'label' => $label],
         ], true);
+    }
+
+    /**
+     * Create a sized map (small/medium/large) for a user, so a scenario can seed
+     * a realistic workspace with one Given step.
+     *
+     * @param array $data Requires instanceid, userid; optional size.
+     * @return void
+     */
+    protected function process_map(array $data): void {
+        global $DB;
+
+        $instance = $DB->get_record('vimipad', ['id' => $data['instanceid']], '*', MUST_EXIST);
+        $size = $data['size'] ?? 'small';
+
+        /** @var mod_vimipad_generator $generator */
+        $generator = $this->componentdatagenerator;
+        $generator->create_map_profile($instance, (int) $data['userid'], $size);
     }
 }

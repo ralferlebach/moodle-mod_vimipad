@@ -1,0 +1,51 @@
+name: Load test (JMeter)
+
+# Read-endpoint load test (AP6). Manual only: it needs a live, seeded site and a
+# web-service token, which are provided as workflow inputs. Not part of the PR
+# pipeline.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Base URL of the target Moodle
+        required: true
+        default: http://localhost:8000
+      token:
+        description: REST web-service token (view-capable user)
+        required: true
+      workspaceid:
+        description: Seeded workspace id (large profile)
+        required: true
+      cmid:
+        description: Course-module id of the activity
+        required: true
+
+jobs:
+  jmeter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out plugin
+        uses: actions/checkout@v4
+
+      - name: Set up JMeter
+        run: |
+          curl -sSL https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.tgz -o jmeter.tgz
+          tar xzf jmeter.tgz
+
+      - name: Run load plan
+        run: |
+          apache-jmeter-5.6.3/bin/jmeter -n \
+            -t tests/load/vimipad-read-endpoints.jmx \
+            -Jbase_url='${{ github.event.inputs.base_url }}' \
+            -Jtoken='${{ github.event.inputs.token }}' \
+            -Jworkspaceid='${{ github.event.inputs.workspaceid }}' \
+            -Jcmid='${{ github.event.inputs.cmid }}' \
+            -l results.jtl
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-results
+          path: results.jtl
+          retention-days: 7
