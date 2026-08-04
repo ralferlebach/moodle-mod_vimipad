@@ -14,13 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+namespace vimipadform_semanticnetwork\privacy;
+
 /**
- * Strings for the Tree display-type subplugin.
+ * Privacy provider for the semanticnetwork display-type subplugin.
  *
- * @package    vimipadform_tree
+ * The display-type subplugin stores no data of its own; it only contributes
+ * layout and validation rules that operate on map data held by mod_vimipad.
+ *
+ * @package    vimipadform_semanticnetwork
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-
-$string['pluginname'] = 'Tree';
-$string['privacy:metadata'] = 'The tree display-type subplugin does not store any personal data.';
+class provider implements \core_privacy\local\metadata\null_provider {
+    /**
+     * The language string explaining why this component stores no data.
+     *
+     * @return string
+     */
+    public static function get_reason(): string {
+        return 'privacy:metadata';
+    }
+}

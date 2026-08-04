@@ -71,6 +71,14 @@ export class ApiClient {
     private readonly readonly: boolean;
 
     /**
+     * Whether the caller opts into template-lock enforcement against its own
+     * edits (the lock-mode preview toggle). Sent with every mutating call so
+     * the server can bind a managing user to the locks a learner would see.
+     * Only ever tightens enforcement server-side.
+     */
+    private enforceLocks = false;
+
+    /**
      * @param transport The call transport.
      * @param cmid The course module id.
      * @param readonly If true, all mutating calls are blocked (foreign view).
@@ -79,6 +87,19 @@ export class ApiClient {
         this.readonly = readonly;
         this.transport = readonly ? readonlyGuard(transport) : transport;
         this.cmid = cmid;
+    }
+
+    /**
+     * Set whether template locks are enforced against this caller's own edits.
+     *
+     * Mirrors the lock-mode toggle in the editor. When on, a managing user is
+     * bound by the same move/colour/text locks a learner would be, so they can
+     * preview and run the activity with locks live.
+     *
+     * @param enforce True to enforce locks against own edits.
+     */
+    setEnforceLocks(enforce: boolean): void {
+        this.enforceLocks = enforce;
     }
 
     /**
@@ -118,6 +139,25 @@ export class ApiClient {
             revision,
         });
         return result as WorkspaceState;
+    }
+
+    /**
+     * Fetch a workspace's append-only node-layout history, so the replay player
+     * can show each frame with the topology it had. Entries are in ascending
+     * revision order; a frame at revision N uses the newest entry with
+     * revision <= N.
+     *
+     * @param workspaceid The workspace id.
+     * @returns The layout history entries.
+     */
+    async getLayoutHistory(
+        workspaceid: number
+    ): Promise<{revision: number; layoutjson: string}[]> {
+        const result = await this.transport('mod_vimipad_get_layout_history', {
+            cmid: this.cmid,
+            workspaceid,
+        });
+        return (result as {history: {revision: number; layoutjson: string}[]}).history;
     }
 
     /**
@@ -193,6 +233,7 @@ export class ApiClient {
             baserevision,
             operationtype,
             payloadjson: JSON.stringify(payload),
+            enforcelocks: this.enforceLocks,
         });
         return result as ApplyResult;
     }
@@ -216,6 +257,7 @@ export class ApiClient {
             layoutjson,
             viewportjson,
             mode,
+            enforcelocks: this.enforceLocks,
         });
     }
 

@@ -4,7 +4,146 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.7.31** (2026072770).
+> release is **0.8.5** (2026072775).
+
+## 0.8.5 (2026072775) — Topology in replay/journal (R10)
+
+Past revisions now replay with the node topology they actually had, instead of a
+recomputed auto-layout, so moves and re-placements are visible in the revision
+viewer and player.
+
+- **Append-only layout history.** Node positions live in the (non-revisioned)
+  layout channel, so historical topology was previously lost. A new
+  `vimipad_layouthist` table records each saved layout tagged with the workspace
+  semantic revision at that moment; a replay of revision N uses the newest entry
+  with revision <= N. Consecutive identical layouts are de-duplicated and the
+  history is capped per workspace/profile (oldest pruned) to bound growth.
+- **Server.** `layout_service` appends history on every write and exposes
+  `layout_at_revision` and `layout_history`. `get_revision_state` now returns the
+  historical layout for its revision, and a new `get_layout_history` external
+  feeds the player.
+- **Client.** The revision viewer renders nodes at their recorded positions
+  (falling back to the auto-layout when nothing was recorded that early); the
+  revision player loads the history once and picks the right layout for each
+  frame as the slider moves. History loading is best-effort — if it is
+  unavailable the replay still works with the auto-layout fallback.
+- **Backup/restore, privacy, cleanup.** The history table is backed up and
+  restored with user info (workspace and user ids remapped), covered by the
+  privacy provider (discovery, user list, and `modifiedby` anonymisation on
+  delete), and removed with the workspace on bulk deletion. Schema upgrade step
+  and a `null`-safe `layout_at_revision` included.
+- New tests: PHPUnit for history append/dedup/query and the backup roundtrip of
+  the history; Jest for the viewer rendering recorded positions and its
+  auto-layout fallback.
+
+## 0.8.4 (2026072774) — Profile-specific arrange + container membership (R7, R8)
+
+The "re-arrange" action is now a real, profile-aware layout engine and preserves
+container membership.
+
+Layout quality (R7):
+- **Re-arrange is now profile-specific and centrality-aware.** A new deterministic
+  `arrangeLayout` replaces the old "tree or circle" split. Tree and concept maps
+  get a tidy top-down hierarchy; mind maps and bubble maps get a radial hub with
+  the most-connected node at the centre and even, equal-length spokes; semantic
+  networks get a deterministic force-directed layout where high-degree nodes
+  settle centrally, nodes spread out evenly, and edges come out roughly equal in
+  length. Seeds and iteration counts are fixed, so a given map always arranges
+  identically.
+- The live render path (`computeLayout`) is unchanged and still cheap; the new
+  engine runs only on the explicit re-arrange action.
+
+Container membership (R8):
+- **Re-arrange now preserves each node's container membership exactly.** When
+  containers are present, every node is re-placed only within the region its
+  membership demands — the intersection of the containers it belongs to, and
+  outside the ones it does not — with the containers left where the author put
+  them. So intersections and subsets survive: a node shared by two overlapping
+  containers stays in both, a node in one stays only in that one, and a free node
+  stays outside all of them. This replaces the previous bounding-box refit, which
+  could grow a container over a non-member.
+- New Jest coverage: determinism, radial centrality/even spokes, force-layout
+  centrality and near-equal edge lengths, top-down tree, and the R8 example
+  (A in C1∩C2, B in C1, C in C2, D outside) preserved across re-arrange.
+
+## 0.8.3 (2026072773) — Lock badge placement + container label fixes (R6, R9)
+
+- **The template-lock badge now sits outside the top-right corner, above every
+  element.** It was a coloured padlock glyph inside a node's top-left corner and
+  only on nodes. It is now a grey padlock with a white outline, drawn just
+  outside the top-right corner of every locked node, relation and container, on
+  a dedicated overlay layer that paints above all elements and their text but
+  below the menu overlay.
+- **An unlabelled container no longer shows a grey title bar.** The grey bar is
+  drawn only when the container carries a label or is selected/being renamed, so
+  an empty container shows just its dashed outline. The bar stays interactive
+  (transparent) even when hidden, so the container can still be selected, moved
+  and renamed.
+- **Clearing a container's label keeps it empty.** The display no longer falls
+  back to "Containers" when the label is blank; an empty label renders as empty
+  and persists as an empty string.
+- **A new container ships labelled "New container" / "Neuer Container"** instead
+  of empty, so it reads as intentional and is easy to grab.
+- New Jest coverage: the badge overlay layer renders one badge per locked
+  element and paints after the node layer; an empty container has a transparent
+  title bar and no fallback text; a labelled one shows the grey bar and label.
+
+## 0.8.2 (2026072772) — Lock menu restructured (reclamations R1, R2)
+
+The lock UI now matches what was ordered. The top-right lock-mode button no
+longer switches the whole element menu to a lock menu; it only arms enforcement
+(as of 0.8.1). Locking an element is a menu action instead:
+
+- **Every element menu carries a lock button.** Nodes, relations and containers
+  now show a lock button in their normal control dock. It opens a lock submenu
+  of per-group toggles (move, colour, text — relations omit colour, having no
+  fill), rather than the top-right button replacing the menu.
+- **Lock toggles read as "no-parking" signs.** Each toggle shows the same icon
+  as the function it locks, struck through with a diagonal slash, and lights up
+  in the active state when that group is locked. The lock button itself shows a
+  closed padlock when any group is locked, an open one otherwise.
+- **Shared, consistent implementation.** The submenu is a single `LockSubmenu`
+  component reused by the node/container dock (`NodeFormatToolbar`) and the new
+  extracted `RelationMenu`, so the three element kinds behave identically. The
+  previously inline relation dock in `CanvasView` is now that component.
+- The top-right button's label now reads "Enforce locks (preview as learner)"
+  to reflect its actual role. New Jest coverage: the lock button shows only when
+  the user may lock, the submenu opens on click with struck-through toggles,
+  toggling a group calls back with that group, and the relation submenu offers
+  only move/text.
+
+## 0.8.1 (2026072771) — Beta prep: lock enforcement made real + form-subplugin privacy
+
+Starts the 0.8.x line. Closes the two most urgent beta reclamations around the
+element-lock feature and a privacy-compliance gap found under a real Moodle run.
+
+Lock enforcement (reclamations R3, R4, R5):
+- **Locks are now enforced on the layout channel.** Node positions and sizes are
+  saved through `save_layout`, which previously performed no lock checks — so a
+  move-locked node could be freely repositioned or resized by anyone. The layout
+  service now pins move-locked nodes to their stored geometry (in both merge and
+  replace mode); a freshly created locked node can still be placed once. Server
+  tests cover merge, replace, first placement and the bypass case.
+- **The lock-mode toggle is a real enforcement switch.** `apply_operation` and
+  `save_layout` take an `enforcelocks` flag mirroring the top-right lock-mode
+  button. Server bypass is now `manageprofiles && !enforcelocks`, so a teacher
+  can preview and run the activity bound by the same locks a learner sees. The
+  flag only ever *tightens* enforcement — a non-manager can never loosen a lock.
+- **Client gating matches the server.** Node drag/resize and container
+  move/resize refuse to start on a move-locked element while enforcement is
+  active for the current user (`!canManage || lockMode`). Re-arrange pins
+  move-locked nodes and nodes inside move-locked containers under the same rule.
+- **List view (R5).** Locked controls are shown *disabled* rather than hidden,
+  with a lock badge and tooltip, so an editor can see the row is locked: a
+  text-locked relation cannot be renamed, a move-locked one cannot be retargeted
+  or reversed, and a fully locked one cannot be deleted — unless the user is a
+  manager authoring with lock-mode off.
+
+Privacy (blocker found under a real run):
+- **The five `vimipadform_*` display-type subplugins now ship a privacy
+  provider.** They store no data of their own, so each declares a
+  `null_provider` with a `privacy:metadata` reason (EN/DE). Previously the core
+  `provider_compliance` test failed for all five; it now passes.
 
 ## 0.7.31 (2026072770) — 0.7.x hardening close-out (final audit follow-ups)
 

@@ -28,6 +28,8 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {ApiClient} from '../api/service';
 import {CanvasView} from './CanvasView';
 import {computeLayout} from '../graph/autolayout';
+import {decodeLayout} from '../canvas/layout_codec';
+import {LayoutMap} from '../types';
 import {ReplayEngine, Operation} from '../graph/reconstruct';
 import {EditorState} from '../store/reducer';
 
@@ -127,6 +129,9 @@ export function RevisionPlayer(props: Props): React.ReactElement {
     const [effectiveMax, setEffectiveMax] = useState(total);
     // True when the op-log was only partially loaded (history truncated).
     const [truncated, setTruncated] = useState(false);
+    // The node-layout history ({revision, positions}), ascending by revision.
+    // A frame at revision r uses the newest entry with revision <= r.
+    const [layoutHistory, setLayoutHistory] = useState<{revision: number; positions: LayoutMap}[]>([]);
     const liveState = useRef<EditorState | null>(null);
     // Held across the on-demand frame construction so shown states carry the
     // right profile/form config without re-reading the live state each time.
@@ -170,6 +175,25 @@ export function RevisionPlayer(props: Props): React.ReactElement {
                 }
                 profileRef.current = live.profile;
                 formconfigRef.current = (live as {formconfig?: unknown}).formconfig;
+
+                // Load the node-layout history so each frame renders with the
+                // topology it actually had, instead of a recomputed auto-layout.
+                // This is an enhancement: if it is unavailable, the replay still
+                // works with the auto-layout fallback.
+                try {
+                    const rawHistory = await api.getLayoutHistory(workspaceid);
+                    if (cancelled) {
+                        return;
+                    }
+                    if (Array.isArray(rawHistory)) {
+                        setLayoutHistory(rawHistory.map(h => ({
+                            revision: h.revision,
+                            positions: decodeLayout(h.layoutjson).positions,
+                        })));
+                    }
+                } catch {
+                    // Ignore: fall back to auto-layout for historical frames.
+                }
 
                 // Page through the operation log so no single request is
                 // unbounded; stop at a safe hard ceiling on total operations.
@@ -263,8 +287,22 @@ export function RevisionPlayer(props: Props): React.ReactElement {
     // static view) instead of an unfaithful partial animation.
     const shownState = historyIncomplete && liveState.current ? liveState.current : state;
     const shownLayout = useMemo(
-        () => computeLayout(shownState.nodes, {}, shownState.relations, shownState.profile),
-        [shownState.nodes, shownState.relations, shownState.profile]
+        () => {
+            // Pick the newest recorded layout at or before the shown revision, so
+            // moves and re-placements from the past are visible. Nodes with no
+            // recorded position fall back to the deterministic auto-layout.
+            const rev = shownState.revision;
+            let stored: LayoutMap = {};
+            for (const entry of layoutHistory) {
+                if (entry.revision <= rev) {
+                    stored = entry.positions;
+                } else {
+                    break;
+                }
+            }
+            return computeLayout(shownState.nodes, stored, shownState.relations, shownState.profile);
+        },
+        [shownState.nodes, shownState.relations, shownState.profile, shownState.revision, layoutHistory]
     );
 
     const togglePlay = useCallback(() => {

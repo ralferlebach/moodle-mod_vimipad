@@ -23,3 +23,4 @@
  */
 
 $string['pluginname'] = 'Baumdiagramm';
+$string['privacy:metadata'] = 'Das Darstellungstyp-Subplugin tree speichert keine personenbezogenen Daten.';

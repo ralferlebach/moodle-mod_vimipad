@@ -23,3 +23,4 @@
  */
 
 $string['pluginname'] = 'Concept-Map';
+$string['privacy:metadata'] = 'Das Darstellungstyp-Subplugin conceptmap speichert keine personenbezogenen Daten.';

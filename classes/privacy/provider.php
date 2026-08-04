@@ -100,6 +100,11 @@ class provider implements
             'timemodified' => 'privacy:metadata:timemodified',
         ], 'privacy:metadata:vimipad_layout');
 
+        $collection->add_database_table('vimipad_layouthist', [
+            'modifiedby' => 'privacy:metadata:modifiedby',
+            'timecreated' => 'privacy:metadata:timecreated',
+        ], 'privacy:metadata:vimipad_layouthist');
+
         $collection->add_database_table('vimipad_grade', [
             'userid' => 'privacy:metadata:vimipad_grade:userid',
             'grade' => 'privacy:metadata:vimipad_grade:grade',
@@ -179,6 +184,11 @@ class provider implements
         // Layout modifications.
         $contextlist->add_from_sql(
             $base . $ws . "JOIN {vimipad_layout} l ON l.workspaceid = ws.id WHERE l.modifiedby = :u",
+            $mod + ['u' => $userid]
+        );
+        // Layout history modifications.
+        $contextlist->add_from_sql(
+            $base . $ws . "JOIN {vimipad_layouthist} lh ON lh.workspaceid = ws.id WHERE lh.modifiedby = :u",
             $mod + ['u' => $userid]
         );
         // Element locks.
@@ -261,6 +271,12 @@ class provider implements
             JOIN {vimipad_journalentry} j ON j.workspaceid = ws.id WHERE cm.id = :cmid", $params);
         $userlist->add_from_sql('modifiedby', "SELECT l.modifiedby $ws
             JOIN {vimipad_layout} l ON l.workspaceid = ws.id WHERE cm.id = :cmid AND l.modifiedby IS NOT NULL", $params);
+        $userlist->add_from_sql(
+            'modifiedby',
+            "SELECT lh.modifiedby $ws
+            JOIN {vimipad_layouthist} lh ON lh.workspaceid = ws.id WHERE cm.id = :cmid AND lh.modifiedby IS NOT NULL",
+            $params
+        );
         $userlist->add_from_sql('userid', "SELECT lk.userid $ws
             JOIN {vimipad_lock} lk ON lk.workspaceid = ws.id WHERE cm.id = :cmid", $params);
         $userlist->add_from_sql('userid', "SELECT si.userid $ws
@@ -772,6 +788,14 @@ class provider implements
 
         $DB->set_field_select(
             'vimipad_layout',
+            'modifiedby',
+            0,
+            "workspaceid $insql AND modifiedby = :userid",
+            array_merge($params, ['userid' => $userid])
+        );
+
+        $DB->set_field_select(
+            'vimipad_layouthist',
             'modifiedby',
             0,
             "workspaceid $insql AND modifiedby = :userid",

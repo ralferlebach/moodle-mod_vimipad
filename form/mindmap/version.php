@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'vimipadform_mindmap';
-$plugin->version   = 2026072601;
+$plugin->version   = 2026072602;
 $plugin->requires  = 2024100700;   // Moodle 4.5.0.
 $plugin->maturity  = MATURITY_ALPHA;
 $plugin->release   = '0.1.0';

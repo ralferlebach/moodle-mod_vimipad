@@ -40,10 +40,10 @@ import Notification from 'core/notification';
 const STRING_KEYS = [
     'constraint:hintsheading',
     'editor:concepts', 'editor:conceptsandrelations',
-    'editor:containers', 'editor:drawcontainer', 'editor:drawcontainerdone',
+    'editor:containers', 'editor:drawcontainer', 'editor:drawcontainerdone', 'editor:newcontainer',
     'editor:node', 'editor:templatelocks', 'editor:templatelockshint', 'editor:lockallowlabel',
     'editor:importnovimidata', 'editor:authortools',
-    'editor:lockmode', 'editor:lockelement', 'editor:unlockelement',
+    'editor:lockmode', 'editor:lockelement', 'editor:unlockelement', 'editor:elementlocked',
     'editor:lockgroup_move', 'editor:lockgroup_color', 'editor:lockgroup_text',
     'editor:fmt_fontsans', 'editor:fmt_fontserif', 'editor:fmt_fontmono',
     'editor:add', 'editor:addnode', 'editor:addrelation', 'editor:actions',

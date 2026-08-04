@@ -431,5 +431,29 @@ function xmldb_vimipad_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026072750, 'vimipad');
     }
 
+    if ($oldversion < 2026072775) {
+        // Append-only layout history: past revisions can now replay with their
+        // real node topology instead of a recomputed auto-layout. Each layout
+        // save appends a row tagged with the workspace's semantic revision at
+        // that moment, so a replay picks the layout that was current at (or
+        // before) the revision being shown.
+        $table = new xmldb_table('vimipad_layouthist');
+        if (!$dbman->table_exists($table)) {
+            $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
+            $table->add_field('workspaceid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('profile', XMLDB_TYPE_CHAR, '64', null, XMLDB_NOTNULL, null, null);
+            $table->add_field('revision', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_field('layoutjson', XMLDB_TYPE_TEXT, null, null, null, null, null);
+            $table->add_field('modifiedby', XMLDB_TYPE_INTEGER, '10', null, null, null, null);
+            $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
+            $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+            $table->add_key('workspaceid', XMLDB_KEY_FOREIGN, ['workspaceid'], 'vimipad_workspace', ['id']);
+            $table->add_index('workspaceid-profile-revision', XMLDB_INDEX_NOTUNIQUE, ['workspaceid', 'profile', 'revision']);
+            $dbman->create_table($table);
+        }
+
+        upgrade_mod_savepoint(true, 2026072775, 'vimipad');
+    }
+
     return true;
 }

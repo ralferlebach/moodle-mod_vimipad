@@ -100,6 +100,10 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
                 '/activity/vimipad/workspaces/workspace/layouts/layout'
             );
             $paths[] = new restore_path_element(
+                'vimipad_layouthist',
+                '/activity/vimipad/workspaces/workspace/layouthists/layouthist'
+            );
+            $paths[] = new restore_path_element(
                 'vimipad_operation',
                 '/activity/vimipad/workspaces/workspace/operations/operation'
             );
@@ -290,6 +294,22 @@ class restore_vimipad_activity_structure_step extends restore_activity_structure
         $data->modifiedby = $this->get_mappingid('user', $data->modifiedby) ?: null;
 
         $DB->insert_record('vimipad_layout', $data);
+    }
+
+    /**
+     * Restore an append-only layout-history entry.
+     *
+     * @param array|object $data The record data.
+     * @return void
+     */
+    protected function process_vimipad_layouthist($data): void {
+        global $DB;
+
+        $data = (object) $data;
+        $data->workspaceid = $this->get_new_parentid('vimipad_workspace');
+        $data->modifiedby = $this->get_mappingid('user', $data->modifiedby) ?: null;
+
+        $DB->insert_record('vimipad_layouthist', $data);
     }
 
     /**

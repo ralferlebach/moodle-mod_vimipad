@@ -125,6 +125,17 @@ final class backup_restore_test extends \advanced_testcase {
             'createdby' => $USER->id, 'modifiedby' => $USER->id,
             'timecreated' => $now, 'timemodified' => $now, 'deleted' => 0,
         ]);
+        // Two layout-history rows, so the topology-in-replay data survives backup.
+        $DB->insert_record('vimipad_layouthist', (object) [
+            'workspaceid' => $workspaceid, 'profile' => 'conceptmap', 'revision' => 1,
+            'layoutjson' => '{"v":1,"pos":{"node_aaaaaaaaaaaa":{"x":10,"y":10}}}',
+            'modifiedby' => $USER->id, 'timecreated' => $now,
+        ]);
+        $DB->insert_record('vimipad_layouthist', (object) [
+            'workspaceid' => $workspaceid, 'profile' => 'conceptmap', 'revision' => 2,
+            'layoutjson' => '{"v":1,"pos":{"node_aaaaaaaaaaaa":{"x":90,"y":90}}}',
+            'modifiedby' => $USER->id, 'timecreated' => $now,
+        ]);
         $snapshotid = $DB->insert_record('vimipad_snapshot', (object) [
             'workspaceid' => $workspaceid, 'revision' => 2, 'snapshotjson' => '{"nodes":2}',
             'submittedby' => $USER->id, 'status' => 1, 'timecreated' => $now,
@@ -186,6 +197,18 @@ final class backup_restore_test extends \advanced_testcase {
 
         $this->assertSame(2, $DB->count_records('vimipad_node', ['workspaceid' => $newworkspace->id]));
         $this->assertSame(1, $DB->count_records('vimipad_relation', ['workspaceid' => $newworkspace->id]));
+
+        // The append-only layout history survives the roundtrip (topology in replay).
+        $newhist = $DB->get_records(
+            'vimipad_layouthist',
+            ['workspaceid' => $newworkspace->id, 'profile' => 'conceptmap'],
+            'revision ASC'
+        );
+        $this->assertCount(2, $newhist);
+        $newhist = array_values($newhist);
+        $this->assertSame(1, (int) $newhist[0]->revision);
+        $this->assertSame(2, (int) $newhist[1]->revision);
+        $this->assertStringContainsString('"x":90', $newhist[1]->layoutjson);
 
         $rel = $DB->get_record('vimipad_relation', ['workspaceid' => $newworkspace->id]);
         $this->assertSame('node_aaaaaaaaaaaa', $rel->sourceid);

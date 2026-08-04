@@ -38,6 +38,12 @@ import {isGroupLocked, isAnyLocked} from '../canvas/element_lock';
 interface Props {
     state: EditorState;
     disabled: boolean;
+    /**
+     * Whether template locks are enforced against the current user. A manager
+     * authoring a template (lock-mode off) can still edit locked relations here;
+     * a learner or a previewing teacher cannot. Mirrors the canvas exactly.
+     */
+    enforced: boolean;
     onDeleteRelation: (stableid: string) => void;
     onRetarget: (stableid: string, change: {sourceid?: string; targetid?: string}) => void;
     onRenameRelation: (stableid: string, label: string) => void;
@@ -53,7 +59,7 @@ const DND_MIME = 'application/x-vimipad-node';
  * @returns The rendered list view.
  */
 export function RelationListView(props: Props): React.ReactElement {
-    const {state, disabled, onDeleteRelation, onRetarget, onRenameRelation, t} = props;
+    const {state, disabled, enforced, onDeleteRelation, onRetarget, onRenameRelation, t} = props;
     const [editing, setEditing] = useState<string | null>(null);
 
     if (state.relations.length === 0) {
@@ -130,26 +136,29 @@ export function RelationListView(props: Props): React.ReactElement {
                         const doubled = rel.direction === 2;
                         const relSpan = doubled && !reversed;
                         const relSkip = doubled && reversed;
-                        // Locks must not be bypassable from the list view. A
-                        // move-locked relation cannot be retargeted or reversed;
-                        // a text-locked one cannot be renamed; a relation with
-                        // any lock cannot be deleted here.
-                        const moveLocked = isGroupLocked(rel.metadatajson, 'move');
-                        const textLocked = isGroupLocked(rel.metadatajson, 'text');
-                        const anyLocked = isAnyLocked(rel.metadatajson);
-                        const canEdit = isEd && !textLocked;
+                        // Locks must not be bypassable from the list view. They
+                        // only bind when enforcement is active for this user
+                        // (learner, or teacher previewing with lock-mode on), so
+                        // a teacher authoring a template can still edit here.
+                        // Locked controls are shown *disabled* rather than hidden,
+                        // so an editor can see that the row is locked.
+                        const moveLocked = enforced && isGroupLocked(rel.metadatajson, 'move');
+                        const textLocked = enforced && isGroupLocked(rel.metadatajson, 'text');
+                        const anyLocked = enforced && isAnyLocked(rel.metadatajson);
+                        const lockTitle = t('editor:elementlocked');
                         return (
                             <tr key={`${rel.stableid}-${reversed ? 'r' : 'f'}`}>
                                 <td
                                     onDragOver={moveLocked ? undefined : allowDrop}
                                     onDrop={moveLocked ? undefined : (e => handleDrop(e, onSrc))}
                                 >
-                                    {isEd && !moveLocked ? (
+                                    {isEd ? (
                                         <select
                                             className="form-control form-control-sm"
                                             aria-label={t('editor:subject')}
                                             value={srcId}
-                                            disabled={disabled}
+                                            disabled={disabled || moveLocked}
+                                            title={moveLocked ? lockTitle : undefined}
                                             onChange={e => onSrc(e.target.value)}
                                         >{nodeOptions}</select>
                                     ) : labelFor(state, srcId)}
@@ -159,17 +168,18 @@ export function RelationListView(props: Props): React.ReactElement {
                                         rowSpan={relSpan ? 2 : undefined}
                                         className={relSpan ? 'align-middle' : undefined}
                                     >
-                                        {canEdit ? (
+                                        {isEd ? (
                                             <input
                                                 key={rel.stableid}
                                                 type="text"
                                                 className="form-control form-control-sm"
                                                 defaultValue={rel.label}
-                                                disabled={disabled}
+                                                disabled={disabled || textLocked}
+                                                title={textLocked ? lockTitle : undefined}
                                                 placeholder={t('editor:relation')}
                                                 aria-label={t('editor:relation')}
                                                 onBlur={e => {
-                                                    if (e.target.value !== rel.label) {
+                                                    if (!textLocked && e.target.value !== rel.label) {
                                                         onRenameRelation(rel.stableid, e.target.value);
                                                     }
                                                 }}
@@ -181,12 +191,13 @@ export function RelationListView(props: Props): React.ReactElement {
                                     onDragOver={moveLocked ? undefined : allowDrop}
                                     onDrop={moveLocked ? undefined : (e => handleDrop(e, onTgt))}
                                 >
-                                    {isEd && !moveLocked ? (
+                                    {isEd ? (
                                         <select
                                             className="form-control form-control-sm"
                                             aria-label={t('editor:object')}
                                             value={tgtId}
-                                            disabled={disabled}
+                                            disabled={disabled || moveLocked}
+                                            title={moveLocked ? lockTitle : undefined}
                                             onChange={e => onTgt(e.target.value)}
                                         >{nodeOptions}</select>
                                     ) : labelFor(state, tgtId)}
@@ -196,6 +207,9 @@ export function RelationListView(props: Props): React.ReactElement {
                                     className="text-right vimipad-relation-actions"
                                     rowSpan={relSpan ? 2 : undefined}
                                 >
+                                    {anyLocked && (
+                                        <Icon name={FA.lock} title={lockTitle} className="text-muted mr-1" />
+                                    )}
                                     {isEd ? (
                                         <button
                                             type="button"
@@ -207,42 +221,39 @@ export function RelationListView(props: Props): React.ReactElement {
                                         >
                                             <Icon name={FA.confirm} />
                                         </button>
-                                    ) : (!textLocked && (
+                                    ) : (
                                         <button
                                             type="button"
                                             className="btn btn-sm btn-outline-secondary mr-1"
-                                            disabled={disabled}
-                                            title={t('editor:reledit')}
+                                            disabled={disabled || textLocked}
+                                            title={textLocked ? lockTitle : t('editor:reledit')}
                                             aria-label={t('editor:reledit')}
                                             onClick={() => setEditing(rel.stableid)}
                                         >
                                             <Icon name={FA.edit} />
                                         </button>
-                                    ))}
-                                    {!moveLocked && (
+                                    )}
                                     <button
                                         type="button"
                                         className="btn btn-sm btn-outline-secondary mr-1"
-                                        disabled={disabled}
-                                        title={t('editor:reverse')}
+                                        disabled={disabled || moveLocked}
+                                        title={moveLocked ? lockTitle : t('editor:reverse')}
                                         aria-label={t('editor:reverse')}
                                         onClick={() => onRetarget(rel.stableid,
                                             {sourceid: rel.targetid, targetid: rel.sourceid})}
                                     >
                                         <Icon name={FA.reverse} />
                                     </button>
-                                    )}
-                                    {!anyLocked && (
                                     <button
                                         type="button"
                                         className="btn btn-sm btn-outline-danger"
-                                        disabled={disabled}
+                                        disabled={disabled || anyLocked}
+                                        title={anyLocked ? lockTitle : t('editor:deleterelation')}
                                         onClick={() => onDeleteRelation(rel.stableid)}
                                         aria-label={t('editor:deleterelation')}
                                     >
                                         &times;
                                     </button>
-                                    )}
                                 </td>
                                 )}
                             </tr>

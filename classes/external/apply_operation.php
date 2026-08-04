@@ -45,6 +45,13 @@ class apply_operation extends external_api {
             'baserevision' => new external_value(PARAM_INT, 'Revision the client based this operation on'),
             'operationtype' => new external_value(PARAM_ALPHANUMEXT, 'Operation type'),
             'payloadjson' => new external_value(PARAM_RAW, 'JSON-encoded operation payload'),
+            'enforcelocks' => new external_value(
+                PARAM_BOOL,
+                'Whether the caller wants template element locks enforced against itself '
+                    . '(the lock-mode preview toggle). Only ever tightens enforcement.',
+                VALUE_DEFAULT,
+                0
+            ),
         ]);
     }
 
@@ -56,6 +63,7 @@ class apply_operation extends external_api {
      * @param int $baserevision Client base revision.
      * @param string $operationtype Operation type.
      * @param string $payloadjson JSON-encoded payload.
+     * @param bool $enforcelocks Whether the caller opts into lock enforcement against itself.
      * @return array{revision: int, stableid: string}
      */
     public static function execute(
@@ -63,7 +71,8 @@ class apply_operation extends external_api {
         int $workspaceid,
         int $baserevision,
         string $operationtype,
-        string $payloadjson
+        string $payloadjson,
+        bool $enforcelocks = false
     ): array {
         global $USER;
 
@@ -73,6 +82,7 @@ class apply_operation extends external_api {
             'baserevision' => $baserevision,
             'operationtype' => $operationtype,
             'payloadjson' => $payloadjson,
+            'enforcelocks' => $enforcelocks,
         ]);
 
         $instance = null;
@@ -94,8 +104,14 @@ class apply_operation extends external_api {
         // cooperative collaboration lock mode (lockmodeforlearners) is a
         // separate concept — an editing lease between peers — and must never
         // disable template protection.
+        //
+        // The lock-mode preview toggle ($enforcelocks) lets a manager opt back
+        // into enforcement against their own edits, so they can verify a locked
+        // template behaves for learners. It only ever tightens: a non-manager
+        // never bypasses regardless of the flag.
         $canmanage = has_capability('mod/vimipad:manageprofiles', $context);
-        $service = new operation_service($canmanage);
+        $bypasslocks = $canmanage && !$params['enforcelocks'];
+        $service = new operation_service($bypasslocks);
         $result = $service->apply(
             (int) $workspace->id,
             $params['baserevision'],

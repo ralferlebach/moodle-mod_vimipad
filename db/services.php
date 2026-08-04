@@ -149,6 +149,14 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/vimipad:view',
     ],
+    'mod_vimipad_get_layout_history' => [
+        'classname' => 'mod_vimipad\external\get_layout_history',
+        'methodname' => 'execute',
+        'description' => 'Return a workspace node-layout history for replay (read-only).',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:view',
+    ],
     'mod_vimipad_get_journal_entries' => [
         'classname' => 'mod_vimipad\external\get_journal_entries',
         'methodname' => 'execute',

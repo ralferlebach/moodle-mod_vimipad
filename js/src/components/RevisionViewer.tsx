@@ -18,6 +18,7 @@ import {ApiClient} from '../api/service';
 import {CanvasView} from './CanvasView';
 import {RelationListView} from './RelationListView';
 import {computeLayout} from '../graph/autolayout';
+import {decodeLayout} from '../canvas/layout_codec';
 import {EditorState} from '../store/reducer';
 
 interface Props {
@@ -87,8 +88,15 @@ export function RevisionViewer(props: Props): React.ReactElement {
     }, [api, workspaceid, revision]);
 
     const layout = useMemo(
-        () => computeLayout(state.nodes, {}, state.relations, state.profile),
-        [state.nodes, state.relations, state.profile]
+        () => {
+            // Use the historical node layout recorded for this revision, so the
+            // past map renders with the topology it actually had. Nodes without a
+            // recorded position (e.g. from before layout history existed) fall
+            // back to the deterministic auto-layout.
+            const stored = decodeLayout(state.layoutjson ?? '').positions;
+            return computeLayout(state.nodes, stored, state.relations, state.profile);
+        },
+        [state.nodes, state.relations, state.profile, state.layoutjson]
     );
 
     if (loading) {
@@ -138,6 +146,7 @@ export function RevisionViewer(props: Props): React.ReactElement {
                 <RelationListView
                     state={state}
                     disabled={true}
+                    enforced={true}
                     onDeleteRelation={noop}
                     onRetarget={noop}
                     onRenameRelation={noop}

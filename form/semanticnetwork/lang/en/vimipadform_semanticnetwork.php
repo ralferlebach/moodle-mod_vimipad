@@ -23,3 +23,4 @@
  */
 
 $string['pluginname'] = 'Semantic network';
+$string['privacy:metadata'] = 'The semanticnetwork display-type subplugin does not store any personal data.';
