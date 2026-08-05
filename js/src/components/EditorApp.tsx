@@ -95,6 +95,8 @@ interface Props {
     targetUserid?: number;
     /** Site-configured solver iteration ceiling for the Arrange action. */
     arrangeIterations?: number;
+    /** Site setting: may the Arrange action shrink oversized containers. Default true. */
+    arrangeShrink?: boolean;
 }
 
 type ViewMode = 'canvas' | 'list' | 'tools';
@@ -112,7 +114,8 @@ const EMPTY: EditorState = {
  * @returns The rendered editor.
  */
 export function EditorApp(props: Props): React.ReactElement {
-    const {api, t, groupid = 0, initialView = 'canvas', targetUserid = 0, arrangeIterations} = props;
+    const {api, t, groupid = 0, initialView = 'canvas', targetUserid = 0, arrangeIterations,
+        arrangeShrink = true} = props;
     const [state, dispatch] = useReducer(reduce, EMPTY);
     const view = initialView;
     const [stored, setStored] = useState<LayoutMap>({});
@@ -804,6 +807,7 @@ export function EditorApp(props: Props): React.ReactElement {
             nodes: state.nodes, relations: state.relations, containers,
             profile: state.profile, positions: stored, sizes, pinned, lockedContainers,
             maxIterations: arrangeIterations, formconfig: state.formconfig,
+            shrinkContainers: arrangeShrink,
         });
         const auto: LayoutMap = {...arranged.positions};
         for (const n of state.nodes) {
@@ -873,7 +877,8 @@ export function EditorApp(props: Props): React.ReactElement {
             setArranging(false);
         }
     }, [api, state.workspaceid, state.nodes, state.relations, state.profile, state.containers,
-        state.canmanage, lockMode, stored, sizes, pushHistory, announce, t, load, arrangeIterations]);
+        state.canmanage, lockMode, stored, sizes, pushHistory, announce, t, load, arrangeIterations,
+        arrangeShrink]);
 
     const onNodeResized = useCallback(async (stableid: string, size: Size) => {
         const prevSizes = sizes;

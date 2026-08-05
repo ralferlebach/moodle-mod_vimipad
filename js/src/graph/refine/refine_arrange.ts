@@ -127,6 +127,14 @@ export interface ArrangeInput {
      */
     resizeContainers?: boolean;
     /**
+     * Whether an oversized container may be shrunk (damped) toward its members
+     * on arrange. Default true. When false, containers still grow to contain
+     * overflow but never shrink below the author's drawn size — so a teacher's
+     * deliberately-sized template box is preserved. Independent of
+     * resizeContainers, which turns all container geometry changes off.
+     */
+    shrinkContainers?: boolean;
+    /**
      * Solver iteration ceiling for this arrange (site-configurable). Higher
      * means a single press converges further; omitted uses the engine default.
      */
@@ -165,6 +173,7 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
     const {nodes, relations, containers, profile, positions, sizes, pinned, overrides} = input;
     const lockedContainers = input.lockedContainers;
     const resizeContainers = input.resizeContainers ?? true;
+    const shrinkContainers = input.shrinkContainers ?? true;
     const prof = resolveProfileRefine(profile, input.formconfig);
 
     const posOf = (id: string): {x: number; y: number} =>
@@ -247,7 +256,7 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
         // press move only part-way toward the target, so the map only settled
         // after ~10 clicks; light damping lets a single press converge.
         stabilityScale: 0.08,
-        containerShrinkRate: 0.35,
+        containerShrinkRate: shrinkContainers ? 0.35 : 0,
         ...(input.maxIterations ? {maxIterations: input.maxIterations} : {}),
         ...overrides,
     };

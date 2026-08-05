@@ -4,7 +4,28 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.17** (2026072787).
+> release is **0.8.18** (2026072788).
+
+## 0.8.18 (2026072788) — Container shrink-on-arrange is now optional
+
+The Arrange action shrinks an oversized container toward its members (damped, so
+it converges over presses) so boxes hug their contents. That is the right
+default, but where a teacher sizes a template container deliberately it should be
+possible to keep the drawn size and only ever grow the box to contain overflow.
+Until now the choice was all-or-nothing — resizing was either on (grow and
+shrink) or the box was fully fixed (neither), with no "grow to contain but never
+shrink" middle ground.
+
+A new site setting, "Shrink containers on arrange" (on by default), provides
+exactly that middle ground. When off, containers never shrink below their drawn
+size but still grow to enclose an overflowing member; the damping is unchanged.
+The setting flows through the same path as the existing arrange-iterations
+setting — a `data-arrangeshrink` attribute on the editor mount, read in the AMD
+init, passed to the refiner as a `shrinkContainers` option that forces the
+container shrink rate to zero when off. No database or schema change is
+involved (it is an admin config value, not a per-activity field). New tests
+assert that with shrinking disabled an oversized box keeps its exact drawn size
+yet an undersized box still grows to contain its member.
 
 ## 0.8.17 (2026072787) — Radial forms keep their cyclic order on arrange
 

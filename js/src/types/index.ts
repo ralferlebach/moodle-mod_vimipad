@@ -209,6 +209,8 @@ export interface MountConfig {
     targetUserid?: number;
     /** Site-configured solver iteration ceiling for the Arrange action. */
     arrangeIterations?: number;
+    /** Site setting: may the Arrange action shrink oversized containers. Default true. */
+    arrangeShrink?: boolean;
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */

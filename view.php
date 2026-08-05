@@ -334,6 +334,7 @@ switch ($tab) {
                     'data-readonly' => $readonly ? 1 : 0,
                     'data-targetuserid' => $targetuserid,
                     'data-arrangeiterations' => (int) (get_config('mod_vimipad', 'arrangeiterations') ?: 500),
+                    'data-arrangeshrink' => get_config('mod_vimipad', 'arrangeshrink') === '0' ? 0 : 1,
                 ]
             );
         } else {

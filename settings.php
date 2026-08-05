@@ -56,6 +56,17 @@ if ($ADMIN->fulltree) {
         PARAM_INT
     ));
 
+    // Whether the "Arrange" action may shrink an oversized container toward its
+    // members. On by default (boxes hug their contents); turn off to keep boxes
+    // at their drawn size and only ever grow them to contain overflow — useful
+    // where teachers size template containers deliberately.
+    $settings->add(new admin_setting_configcheckbox(
+        'mod_vimipad/arrangeshrink',
+        get_string('setting:arrangeshrink', 'mod_vimipad'),
+        get_string('setting:arrangeshrink_desc', 'mod_vimipad'),
+        1
+    ));
+
     // Collaboration: polling, adaptive intervals, element leases and optional push.
     $settings->add(new admin_setting_heading(
         'mod_vimipad/collabheading',

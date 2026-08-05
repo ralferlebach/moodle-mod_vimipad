@@ -172,6 +172,39 @@ describe('refineArrangement', () => {
         expect(drop2).toBeLessThan(drop1);
     });
 
+    test('with shrink disabled an oversized box keeps its drawn size but still grows to contain overflow', () => {
+        // The "optional damped shrinking" toggle: shrinkContainers:false means a
+        // container never shrinks below the author's drawn size, yet still grows
+        // to enclose a member that overflows it.
+        const nodes = [node('a')];
+        const sizes: SizeMap = {a: {w: 50, h: 40}};
+
+        // (1) Oversized box, member well inside: must NOT shrink.
+        const big = {x: 100, y: 100, w: 300, h: 300};
+        const inside: LayoutMap = {a: {x: 250, y: 250}};
+        const bigC: VimiContainer[] = [
+            {stableid: 'c', type: 'group', label: 'B', geometryjson: JSON.stringify(big)} as VimiContainer,
+        ];
+        const kept = refineArrangement({
+            nodes, relations: [], containers: bigC, profile: 'mindmap',
+            positions: inside, sizes, shrinkContainers: false,
+        }).containers.c;
+        expect(kept.w).toBe(big.w); // drawn size preserved
+        expect(kept.h).toBe(big.h);
+
+        // (2) Undersized box, member overflowing: must still grow to contain it.
+        const small = {x: 240, y: 240, w: 20, h: 20};
+        const smallC: VimiContainer[] = [
+            {stableid: 'c', type: 'group', label: 'B', geometryjson: JSON.stringify(small)} as VimiContainer,
+        ];
+        const grown = refineArrangement({
+            nodes, relations: [], containers: smallC, profile: 'mindmap',
+            positions: {a: {x: 250, y: 250}}, sizes, shrinkContainers: false,
+        }).containers.c;
+        expect(grown.x).toBeLessThanOrEqual(250 - sizes.a.w / 2);
+        expect(grown.x + grown.w).toBeGreaterThanOrEqual(250 + sizes.a.w / 2);
+    });
+
     test('a locked container is never resized', () => {
         const nodes = [node('m1'), node('m2')];
         const box = {x: 100, y: 100, w: 140, h: 140};
