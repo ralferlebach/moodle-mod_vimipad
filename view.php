@@ -333,6 +333,7 @@ switch ($tab) {
                     'data-view' => $tab,
                     'data-readonly' => $readonly ? 1 : 0,
                     'data-targetuserid' => $targetuserid,
+                    'data-arrangeiterations' => (int) (get_config('mod_vimipad', 'arrangeiterations') ?: 500),
                 ]
             );
         } else {

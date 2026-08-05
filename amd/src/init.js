@@ -137,6 +137,7 @@ export const init = async(cmid, selector = 'vimipad-editor-root') => {
             initialView,
             readonly: element.dataset.readonly === '1',
             targetUserid: parseInt(element.dataset.targetuserid || '0', 10),
+            arrangeIterations: parseInt(element.dataset.arrangeiterations || '0', 10) || undefined,
             callService: buildTransport(),
             // Return undefined for unknown keys so the bundle's own English
             // fallbacks apply. Echoing the key here would surface raw ids like

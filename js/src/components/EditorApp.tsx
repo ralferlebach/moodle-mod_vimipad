@@ -93,6 +93,8 @@ interface Props {
     initialView?: ViewMode;
     /** Owner user to view read-only (0 = self). */
     targetUserid?: number;
+    /** Site-configured solver iteration ceiling for the Arrange action. */
+    arrangeIterations?: number;
 }
 
 type ViewMode = 'canvas' | 'list' | 'tools';
@@ -110,7 +112,7 @@ const EMPTY: EditorState = {
  * @returns The rendered editor.
  */
 export function EditorApp(props: Props): React.ReactElement {
-    const {api, t, groupid = 0, initialView = 'canvas', targetUserid = 0} = props;
+    const {api, t, groupid = 0, initialView = 'canvas', targetUserid = 0, arrangeIterations} = props;
     const [state, dispatch] = useReducer(reduce, EMPTY);
     const view = initialView;
     const [stored, setStored] = useState<LayoutMap>({});
@@ -147,6 +149,12 @@ export function EditorApp(props: Props): React.ReactElement {
     // Polite screen-reader announcements for actions with little visual feedback.
     const [status, setStatus] = useState('');
     const statusTick = useRef(false);
+    // Guards Arrange against re-entry: the action persists a layout save and a
+    // sequence of container_update operations against the current revision, so a
+    // second press while the first is still awaiting would interleave op-batches
+    // on a stale revision and corrupt container membership. One press at a time.
+    const arrangingRef = useRef(false);
+    const [arranging, setArranging] = useState(false);
     const announce = useCallback((text: string) => {
         // Toggle a trailing non-breaking space so repeating the same action still
         // changes the node text and is re-announced by assistive technology.
@@ -277,6 +285,13 @@ export function EditorApp(props: Props): React.ReactElement {
         !readonly && state.locked !== 1
     );
 
+    // Latest state/revision, so callbacks can read the current values without
+    // widening their dependency lists (and without capturing a stale revision).
+    const stateRef = useRef(state);
+    stateRef.current = state;
+    const revisionRef = useRef(state.revision);
+    revisionRef.current = state.revision;
+
     const runOperation = useCallback(async (
         type: string,
         payload: Record<string, unknown>,
@@ -284,9 +299,17 @@ export function EditorApp(props: Props): React.ReactElement {
     ): Promise<{revision: number; stableid: string} | null> => {
         setBusy(true);
         try {
-            const res = await api.applyOperation(state.workspaceid, state.revision, type, payload);
+            // Read the revision from the ref, not the render-time closure: two
+            // edits fired in quick succession (e.g. a container select-drag
+            // immediately followed by a shape pick) would otherwise send the
+            // pre-first-edit revision on the second call, get rejected on a
+            // revision mismatch, and trigger a full reload that drops the
+            // selection. The ref always holds the latest acknowledged revision.
+            const res = await api.applyOperation(
+                stateRef.current.workspaceid, revisionRef.current, type, payload);
             optimistic();
             dispatch({kind: 'setRevision', revision: res.revision});
+            revisionRef.current = res.revision;
             setError(null);
             return res;
         } catch (e) {
@@ -296,13 +319,7 @@ export function EditorApp(props: Props): React.ReactElement {
         } finally {
             setBusy(false);
         }
-    }, [api, state.workspaceid, state.revision, load]);
-
-    // Latest state/revision for the replay executor, without widening deps.
-    const stateRef = useRef(state);
-    stateRef.current = state;
-    const revisionRef = useRef(state.revision);
-    revisionRef.current = state.revision;
+    }, [api, load]);
 
     // Apply a sequence of operations to the server and locally (used by undo and
     // redo). Not recorded in history; the stack is managed by undo()/redo().
@@ -738,6 +755,11 @@ export function EditorApp(props: Props): React.ReactElement {
     // automatic layout (tidy tree for the tree profile, circle otherwise),
     // persisting the result so collaborators receive it too.
     const reArrangeLayout = useCallback(async () => {
+        if (arrangingRef.current) {
+            return;
+        }
+        arrangingRef.current = true;
+        setArranging(true);
         const prevPos = stored;
         const containers = state.containers ?? [];
 
@@ -781,6 +803,7 @@ export function EditorApp(props: Props): React.ReactElement {
         const arranged = refineArrangement({
             nodes: state.nodes, relations: state.relations, containers,
             profile: state.profile, positions: stored, sizes, pinned, lockedContainers,
+            maxIterations: arrangeIterations,
         });
         const auto: LayoutMap = {...arranged.positions};
         for (const n of state.nodes) {
@@ -845,9 +868,12 @@ export function EditorApp(props: Props): React.ReactElement {
         } catch (e) {
             setError((e as Error).message);
             await load();
+        } finally {
+            arrangingRef.current = false;
+            setArranging(false);
         }
     }, [api, state.workspaceid, state.nodes, state.relations, state.profile, state.containers,
-        state.canmanage, lockMode, stored, sizes, pushHistory, announce, t, load]);
+        state.canmanage, lockMode, stored, sizes, pushHistory, announce, t, load, arrangeIterations]);
 
     const onNodeResized = useCallback(async (stableid: string, size: Size) => {
         const prevSizes = sizes;
@@ -995,6 +1021,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         canUndo={canUndo}
                         canRedo={canRedo}
                         onReArrange={reArrangeLayout}
+                        arrangeBusy={arranging}
                         onExportSvg={exportSvg}
                         onExportPng={exportPng}
                         onExportPdf={exportPdf}

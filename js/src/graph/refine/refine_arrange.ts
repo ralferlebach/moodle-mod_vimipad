@@ -95,6 +95,11 @@ export interface ArrangeInput {
      * containerShrinkRate > 0 to also tighten oversized boxes.
      */
     resizeContainers?: boolean;
+    /**
+     * Solver iteration ceiling for this arrange (site-configurable). Higher
+     * means a single press converges further; omitted uses the engine default.
+     */
+    maxIterations?: number;
     /** Optional option overrides (e.g. stabilityScale calibrated per site). */
     overrides?: Partial<RefineOptions>;
 }
@@ -194,8 +199,17 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
         // their members. All terms converge, so repeated presses settle.
         edgeTargetBlend: 0.7,
         edgeSpring: 0.5,
-        stabilityScale: 0.35,
+        // A gentle central bowl confines the layout: repulsion alone would fling
+        // an unconnected node off the canvas, and the whole map could drift
+        // off-centre. Gravity reels both back without touching the interior.
+        gravity: 0.1,
+        // With gravity providing the anti-drift, the start-anchor no longer has
+        // to carry it, so it drops to light damping. A strong anchor made every
+        // press move only part-way toward the target, so the map only settled
+        // after ~10 clicks; light damping lets a single press converge.
+        stabilityScale: 0.08,
         containerShrinkRate: 0.35,
+        ...(input.maxIterations ? {maxIterations: input.maxIterations} : {}),
         ...overrides,
     };
 

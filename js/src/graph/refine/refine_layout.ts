@@ -107,6 +107,16 @@ export interface RefineOptions {
      * disables it (pure preservation).
      */
     edgeSpring: number;
+    /**
+     * Central confinement strength: a gentle parabolic bowl pulling every node
+     * toward the layout centre, with per-node weight gravity / L^2 (so the
+     * inward force grows with distance from the centre — negligible for the
+     * central cluster, strong for a node flung far out). It reins in nodes with
+     * no or few edges (which repulsion alone would push off the canvas) and
+     * stops the whole layout drifting off-centre, without distorting the
+     * interior arrangement. 0 disables it.
+     */
+    gravity: number;
     /** Max solver iterations. */
     maxIterations: number;
     /** Per-node, per-iteration movement cap, as a fraction of L. */
@@ -176,7 +186,8 @@ const DEFAULTS: RefineOptions = {
     directionFloor: 0,
     padFactor: 0.15,
     stabilityScale: 1,
-    maxIterations: 200,
+    gravity: 0,
+    maxIterations: 500,
     stepCapFactor: 0.1,
     movementBudget: Infinity,
     gradTol: 1e-4,
@@ -249,6 +260,10 @@ export interface Problem {
     directed: boolean;
     dirFloor: number;
     kSpring: number;
+    /** Central confinement: bowl centre (gravCx, gravCy) and weight kGrav (= gravity / L^2). */
+    gravCx: number;
+    gravCy: number;
+    kGrav: number;
     cIn: number;
     cOut: number;
     cFill: number;
@@ -369,6 +384,23 @@ export function buildProblem(
         wstab[i] = (nd.stabilityWeight ?? 1) * stabW;
     });
 
+    // Confinement centre: the mean of the starting positions. The bowl pulls
+    // every node toward here, so an isolated node repulsion pushes outward is
+    // reeled back and the layout as a whole cannot drift off-centre. Anchoring
+    // it to the start (rather than the origin) means the arrange keeps the map
+    // where the human put it on average, instead of migrating to (0,0).
+    let gravCx = 0;
+    let gravCy = 0;
+    if (n > 0) {
+        for (let i = 0; i < n; i++) {
+            gravCx += px0[i];
+            gravCy += py0[i];
+        }
+        gravCx /= n;
+        gravCy /= n;
+    }
+    const kGrav = opts.gravity / (l * l);
+
     let ux = 0;
     let uy = 0;
     const directed = !!opts.preferredDir;
@@ -397,6 +429,7 @@ export function buildProblem(
         l, p0, arep, padx: opts.padFactor * l, pady: opts.padFactor * l,
         epsReg: EPS_REG_FACTOR * l, ux, uy, directed, dirFloor: opts.directionFloor,
         kSpring: opts.edgeSpring,
+        gravCx, gravCy, kGrav,
         cIn: opts.containerIn, cOut: opts.containerOut, cFill: opts.containerFill,
         cDomeN: opts.containerDomeN, cCap: opts.containerCoshCap, cPad: opts.containerPadFactor * l,
         order: [], kOrder: opts.orderStrength,
@@ -461,7 +494,8 @@ function regulariseCoincidences(prob: Problem, nodes: RefineNode[]): void {
  * @returns The total energy.
  */
 export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Array]): number {
-    const {n, px, py, px0, py0, hw, hh, wstab, edges, l, p0, arep, padx, pady, epsReg, ux, uy, directed, dirFloor, kSpring} = prob;
+    const {n, px, py, px0, py0, hw, hh, wstab, edges, l, p0, arep, padx, pady, epsReg, ux, uy, directed, dirFloor, kSpring,
+        gravCx, gravCy, kGrav} = prob;
     let gx: Float64Array | null = null;
     let gy: Float64Array | null = null;
     if (grad) {
@@ -542,6 +576,22 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
         if (gx && gy) {
             gx[i] += 2 * wstab[i] * ddx;
             gy[i] += 2 * wstab[i] * ddy;
+        }
+    }
+
+    // Central confinement (parabolic bowl): pull every node toward the layout
+    // centre with force kGrav * (pos - centre). E = 0.5 * kGrav * |pos-centre|^2,
+    // so the gradient is kGrav * (pos - centre) — inward everywhere, growing with
+    // distance. This is what stops a poorly-connected node drifting off-canvas.
+    if (kGrav > 0) {
+        for (let i = 0; i < n; i++) {
+            const ddx = px[i] - gravCx;
+            const ddy = py[i] - gravCy;
+            e += 0.5 * kGrav * (ddx * ddx + ddy * ddy);
+            if (gx && gy) {
+                gx[i] += kGrav * ddx;
+                gy[i] += kGrav * ddy;
+            }
         }
     }
 

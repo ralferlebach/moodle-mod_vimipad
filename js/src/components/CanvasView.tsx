@@ -104,6 +104,8 @@ interface Props {
     canUndo?: boolean;
     canRedo?: boolean;
     onReArrange?: () => void;
+    /** True while an arrange is in flight; disables the button for feedback. */
+    arrangeBusy?: boolean;
     onExportSvg?: () => void;
     onExportPng?: () => void;
     onExportPdf?: () => void;
@@ -169,7 +171,7 @@ export function CanvasView(props: Props): React.ReactElement {
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
         onCreateRelation, onChangeDirection,
-        onUndo, onRedo, canUndo, canRedo, onReArrange,
+        onUndo, onRedo, canUndo, canRedo, onReArrange, arrangeBusy,
         onExportSvg, onExportPng, onExportPdf,
     } = props;
 
@@ -526,10 +528,23 @@ export function CanvasView(props: Props): React.ReactElement {
         }
         event.stopPropagation();
         const box = containerPreview;
+        const start = containerDrag.startBox;
         const dragged = containerDrag.stableid;
         setContainerDrag(null);
         setContainerPreview(null);
-        if (box && props.onUpdateContainer) {
+        // Only commit a (revisioned) container_update when the box was actually
+        // moved or resized. A pure select-click starts a zero-distance drag via
+        // the title bar, and committing that would bump the workspace revision on
+        // every click; the very next edit (e.g. picking a container shape in the
+        // menu) then runs against a now-stale revision, gets rejected, and
+        // forces a full state reload that drops the selection — the container
+        // format menu "spinning" and shapes not sticking. Skipping the no-op
+        // keeps select-clicks free of side effects.
+        const changed = !!box && (
+            Math.abs(box.x - start.x) > 0.5 || Math.abs(box.y - start.y) > 0.5
+            || Math.abs(box.w - start.w) > 0.5 || Math.abs(box.h - start.h) > 0.5
+        );
+        if (box && changed && props.onUpdateContainer) {
             props.onUpdateContainer(dragged, serializeGeometry(box));
         }
     }, [containerDrag, containerPreview, props.onUpdateContainer]);
@@ -959,7 +974,7 @@ export function CanvasView(props: Props): React.ReactElement {
                     type="button"
                     className="btn btn-light vimipad-canvas-action"
                     onClick={() => onReArrange?.()}
-                    disabled={disabled}
+                    disabled={disabled || arrangeBusy}
                     title={t('editor:rearrange')}
                     aria-label={t('editor:rearrange')}
                 >
@@ -1634,8 +1649,17 @@ export function CanvasView(props: Props): React.ReactElement {
                     // Rendered in the top overlay so nodes overlapping the
                     // container can never occlude the menu (fixes the z-order
                     // and the resulting pointer/cursor and click-through bugs).
+                    // The box must be tall enough to CONTAIN the expanding shape
+                    // and lock sub-panels: a foreignObject clips (and stops
+                    // hit-testing) anything drawn outside its geometric bounds,
+                    // regardless of CSS overflow, so a one-row-high box made the
+                    // sub-panels unclickable and visually erratic ("das Menue
+                    // spinnt herum"). The toolbar row sits at the top; the panels
+                    // expand downward within the box (pointer-events:none except
+                    // the dock, so the empty area stays click-through). Mirrors
+                    // the node menu, which is tall for the same reason.
                     return (
-                        <MenuOverlay x={box.x} y={box.y - 52} width={320} height={48}>
+                        <MenuOverlay x={box.x} y={box.y - 52} width={320} height={200}>
                                 <NodeFormatToolbar
                                     kind="node"
                                     target={{metadatajson: container.metadatajson}}

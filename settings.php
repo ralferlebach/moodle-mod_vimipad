@@ -39,6 +39,23 @@ if ($ADMIN->fulltree) {
         0
     ));
 
+    // Editor: canvas behaviour.
+    $settings->add(new admin_setting_heading(
+        'mod_vimipad/editorheading',
+        get_string('setting:editorheading', 'mod_vimipad'),
+        get_string('setting:editorheading_desc', 'mod_vimipad')
+    ));
+
+    // Iteration ceiling for the "Arrange" action's layout solver. Higher lets a
+    // single press converge further on large maps, at some CPU cost per press.
+    $settings->add(new admin_setting_configtext(
+        'mod_vimipad/arrangeiterations',
+        get_string('setting:arrangeiterations', 'mod_vimipad'),
+        get_string('setting:arrangeiterations_desc', 'mod_vimipad'),
+        500,
+        PARAM_INT
+    ));
+
     // Collaboration: polling, adaptive intervals, element leases and optional push.
     $settings->add(new admin_setting_heading(
         'mod_vimipad/collabheading',

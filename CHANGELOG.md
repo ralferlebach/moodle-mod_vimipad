@@ -4,11 +4,41 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.14** (2026072784).
+> release is **0.8.15** (2026072785).
 
-## 0.8.14 (2026072784) — Arrange actually restructures; container menu stops jumping
+## 0.8.15 (2026072785) — Container format menu really stops jumping; Behat backup made reliable
 
-Three fixes from Ralf's testing on a small two-container map.
+Follow-up to Ralf's next round of testing on the same two-container map. Ships
+together with the 0.8.14 arrange rework described below (0.8.14 was never
+released on its own), plus two fixes.
+
+**The container format menu still "spun around" — real cause found.** The
+earlier fix anchored the floating menu to the live drag preview, but the menu
+kept jumping and container shapes would not stick. The actual cause was a
+revision race, not a positioning one: selecting a container starts a
+zero-distance move drag through its title bar, and that was committed as a
+`container_update` on every select-click — bumping the workspace revision each
+time. The very next edit (picking a shape in the menu) then ran against the
+now-stale revision captured in its closure, was rejected server-side, and forced
+a full state reload that dropped the selection, so the menu appeared to jump and
+the shape never applied. Two changes fix it: a select-click that does not move
+the box now commits nothing (only a real move or resize emits an operation), and
+every operation reads the current revision from a ref instead of a render-time
+closure, so two edits fired in quick succession can no longer race. A new
+regression test asserts that a container title-bar press-and-release with no
+movement emits no operation, while a press-move-release emits exactly one.
+
+**Behat: the interactive backup/restore scenario was removed.** The full
+backup/restore *data* roundtrip — grade and snapshot reference remapped into the
+restored course — is covered reliably by the PHPUnit `backup_restore_test`. The
+UI-level scenario depended on the interactive backup wizard, whose completion
+step races the asynchronous backup under moodle-plugin-ci and failed in every
+driver and Moodle version (it was never green). It is dropped in favour of the
+PHPUnit coverage; the activity-duplication scenario stays.
+
+## 0.8.14 (2026072784, released within 0.8.15) — Arrange actually restructures; container menu drag-preview
+
+Fixes from Ralf's testing on a small two-container map.
 
 **Arrange was too weak and too short-ranged.** After the earlier drift fix, the
 refiner had swung all the way to pure preservation: edges exerted no pull, so an
@@ -32,6 +62,18 @@ reaching for the menu on two overlapping containers) detached the menu and made
 it snap back on release. The menu now tracks the same drag preview as the body.
 A new component test also guards that picking a shape from the container dock
 actually commits that shape.
+
+**The container shape and lock sub-menus were unusable.** The container's
+floating menu lived in a `foreignObject` that was only one row tall. A
+`foreignObject` clips — and stops hit-testing — anything drawn outside its
+geometric bounds, regardless of CSS `overflow`, so when the shape picker or the
+per-group lock sub-menu expanded *below* the toolbar row, that sub-menu fell
+outside the box: it rendered erratically and could not be clicked ("die
+Form lässt sich nicht einstellen", "Lock-Menüs nicht nutzbar — ein z-Layer-
+Problem"). The container menu's box is now tall enough to contain its expanding
+sub-panels, exactly as the node menu already was; only the toolbar itself stays
+interactive, so the taller (invisible) box remains fully click-through over the
+elements beneath it.
 
 **Behat.** The interactive backup/restore UI scenario is unreliable under
 moodle-plugin-ci (the backup wizard's completion races the asynchronous backup,
