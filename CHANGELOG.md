@@ -6,6 +6,45 @@
 > line; those entries are kept for historical reference only. The current
 > release is **0.8.6** (2026072776).
 
+## 0.8.8 (2026072778) — Preservation-first "Arrange" (potential-driven refiner)
+
+Replaces the old force-directed / re-seeding arrange with a layout **refiner**
+that gently improves the existing human layout in place instead of rebuilding
+it. This is the reliability fix: the tool no longer discards the arrangement a
+person made.
+
+- **No initialisation, warm start.** The refiner starts from the current node
+  positions and only descends an energy; a clean layout is preserved, and the
+  result can never be dramatically worse. Locked and pinned nodes are frozen.
+- **One energy, profile-configurable potentials.** A C2-smooth bounded edge
+  well (repulsive core, binding minimum at the ideal length L = the median edge
+  length, force-free far field), anisotropic (elliptical) node repulsion from
+  the box extents, a multiplicative directional term that aligns directed edges
+  for hierarchical profiles, a warm-start stability anchor, cosh container
+  interiors and domed exteriors that keep members in and non-members out (so
+  overlapping-container membership is preserved), and a soft order-preservation
+  term that protects the mental map. All parameters derive from L, so the
+  behaviour is scale-invariant and deterministic.
+- **Solver.** Monotone gradient descent with Armijo backtracking, a per-node
+  step cap and a global movement budget, plus a conservative last-resort swap
+  pass that only removes a crossing when it does not raise the energy beyond a
+  small budget and never swaps connected nodes. An optional active set can
+  restrict movement to a diagnosed neighbourhood.
+- **Per-profile behaviour** is chosen by a resolver (hierarchical profiles flow
+  down and keep sibling order; radial and free-form profiles impose no axis) —
+  the pragmatic form of the layout-potential contract, ready to be sourced from
+  the form subplugins later.
+- Container boxes are **not** resized by the arrange in this release (membership
+  is kept by the potentials against the fixed boxes); container minimal-fit is
+  implemented in the engine and can be enabled next. Cyclic order preservation
+  for radial profiles is likewise a follow-up.
+- Extensively tested: every analytic gradient is verified against finite
+  differences (edges, direction, repulsion, container cosh/dome, order term),
+  plus behavioural tests for monotone descent, determinism, preservation,
+  overlap separation, edge-length binding, directed alignment, container
+  confinement, overlapping-container intersection preservation, restrictive
+  swaps and the arrange adapter.
+
 ## 0.8.7 (2026072777) — Journal/revision replay shows the real map
 
 Fixes the read-only state replay used by the journal and the revision viewer/

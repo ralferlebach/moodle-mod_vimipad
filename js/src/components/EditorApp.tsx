@@ -28,7 +28,8 @@
 
 import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {ApiClient} from '../api/service';
-import {CANVAS_HEIGHT, CANVAS_WIDTH, arrangeLayout, clampToCanvas, computeLayout} from '../graph/autolayout';
+import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
+import {refineArrangement} from '../graph/refine/refine_arrange';
 import {
     ContainerBox, parseGeometry, isNodePinnedForRearrange,
 } from '../canvas/container_geometry';
@@ -739,22 +740,11 @@ export function EditorApp(props: Props): React.ReactElement {
     const reArrangeLayout = useCallback(async () => {
         const prevPos = stored;
         const containers = state.containers ?? [];
-        // Pass the containers and current positions so the arrange preserves each
-        // node's container membership (intersections and subsets) exactly.
-        const namedBoxes = containers
-            .map(c => {
-                const box = parseGeometry(c.geometryjson);
-                return box ? {id: c.stableid, box} : null;
-            })
-            .filter((b): b is {id: string; box: ContainerBox} => b !== null);
-        const autoRaw = arrangeLayout(state.nodes, state.relations, state.profile, namedBoxes, stored);
 
         // Lock handling for re-arrange:
         //  - a move-locked node keeps its current position (never repositioned);
         //  - a node inside a move-locked container is pinned to its current
         //    position too, so it cannot be pushed out of the locked container.
-        // Both are achieved by overriding the computed position with the stored
-        // one before anything else uses the layout.
         //
         // Enforcement follows the same rule as drag/resize: a non-manager is
         // always bound, a manager only while the lock-mode preview is on. So a
@@ -779,16 +769,26 @@ export function EditorApp(props: Props): React.ReactElement {
                 moveLockedContainerBoxes,
                 (m) => isGroupLocked(m, 'move')
             );
-        const auto: LayoutMap = {...autoRaw};
+        const pinned = new Set(state.nodes.filter(isPinned).map(n => n.stableid));
+
+        // Preservation-first refinement: gently improve the existing (human)
+        // layout in place instead of re-seeding it. Container membership is read
+        // from the current geometry and kept by the interior/exterior potentials;
+        // boxes are not resized here.
+        const arranged = refineArrangement({
+            nodes: state.nodes, relations: state.relations, containers,
+            profile: state.profile, positions: stored, sizes, pinned,
+        });
+        const auto: LayoutMap = {...arranged.positions};
         for (const n of state.nodes) {
-            if (isPinned(n) && stored[n.stableid]) {
+            if (pinned.has(n.stableid) && stored[n.stableid]) {
                 auto[n.stableid] = stored[n.stableid];
             }
         }
 
-        // Container membership is preserved by the arrange itself (containers
-        // stay fixed and each node is packed into the region its membership
-        // demands), so no container refit is needed here. See arrangeLayout.
+        // Container membership is preserved by the refiner (boxes stay fixed and
+        // each node is kept inside or pushed outside its region by the container
+        // potentials), so no container refit is emitted here.
         const refits: Array<{stableid: string; oldgeom: string; newgeom: string}> = [];
 
         setStored(auto);
