@@ -1,4 +1,4 @@
-@mod @mod_vimipad @javascript
+@mod @mod_vimipad
 Feature: ViMi Pad survives course backup and restore
   In order to move and copy courses without losing learner work
   As a teacher
@@ -41,6 +41,7 @@ Feature: ViMi Pad survives course backup and restore
     Then I should see "Sam Student"
     And I should see "Submitted"
 
+  @javascript
   Scenario: Duplicating the activity creates an independent copy
     When I am on the "Course 1" course page logged in as teacher1
     And I turn editing mode on

@@ -29,8 +29,8 @@ Feature: ViMi Pad honours Moodle group modes
 
   Scenario: A teacher sees the group selector under separate groups
     Given the following "activities" exist:
-      | activity | name       | course | idnumber | defaultprofile | groupmode |
-      | vimipad  | Team map   | C1     | vimipad1 | conceptmap     | 1         |
+      | activity | name       | course | idnumber | defaultprofile | collaborationmode | groupmode |
+      | vimipad  | Team map   | C1     | vimipad1 | conceptmap     | 1                 | 1         |
     When I am on the "Team map" "vimipad activity" page logged in as teacher1
     Then I should see "Group A"
 
@@ -44,7 +44,7 @@ Feature: ViMi Pad honours Moodle group modes
   Scenario: A group map requires a Moodle group mode
     When I am on the "Course 1" course page logged in as teacher1
     And I turn editing mode on
-    And I add a "vimipad" to section "1" and I fill the form with:
+    And I add a "vimipad" activity to course "Course 1" section "1" and I fill the form with:
       | Activity name    | Group knowledge map |
       | Working mode     | Group work          |
       | Group mode       | No groups           |

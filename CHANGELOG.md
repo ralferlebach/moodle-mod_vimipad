@@ -6,6 +6,31 @@
 > line; those entries are kept for historical reference only. The current
 > release is **0.8.6** (2026072776).
 
+## 0.8.12 (2026072782) — Behat CI green: three real failures fixed
+
+The behat features added in 0.8.6 were only dry-run validated (the sandbox has
+no browser); their first real CI run surfaced three genuine failures, identical
+across Moodle 4.5 / 5.0 / 5.2. All three are fixed.
+
+- **groups.feature — group selector.** The scenario set only Moodle's group mode,
+  not the plugin's working mode, so the map stayed individual and no selector was
+  shown. It now creates the activity with collaborationmode = group, which is
+  what makes view.php render the group menu.
+- **groups.feature — deprecated step.** "I add a ... to section ... and I fill
+  the form with:" is deprecated in current Moodle; updated to the supported "I
+  add a ... activity to course ... section ... and I fill the form with:".
+- **backup.feature — backup/restore under the wrong driver.** The whole feature
+  was @javascript, so the multi-page backup wizard ran under WebDriver and the
+  final "Continue" button was clicked before the asynchronous backup finished.
+  The grading form is a server-side moodleform and "View and grade" is a plain
+  link, so the backup/restore scenario now runs under BrowserKit (synchronous,
+  reliable); only the activity-duplication scenario, whose action menu needs JS,
+  keeps @javascript. A full-course MODE_GENERAL backup with a gradebook grade was
+  verified to succeed, confirming the backup logic itself was never at fault.
+
+No production code changed; gherkinlint is clean and the dry-run resolves every
+step.
+
 ## 0.8.11 (2026072781) — Journal viewer: no more empty canvas on legacy maps
 
 Fixes the single-revision journal state view showing no nodes at all on some
