@@ -118,6 +118,8 @@ export interface FormConfig {
         direction?: {x: number; y: number};
         /** Cross-axis along which sibling order is preserved (absent = none). */
         orderaxis?: {x: number; y: number};
+        /** Preserve the cyclic order of a hub's neighbours (radial forms). */
+        cyclicorder?: boolean;
     };
 }
 

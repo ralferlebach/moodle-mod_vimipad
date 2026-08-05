@@ -48,7 +48,7 @@ describe('resolveProfileRefine', () => {
             profile: 'tree',
             layout: {directed: true, direction: {x: 0, y: 1}, orderaxis: {x: 1, y: 0}},
         }));
-        expect(r).toEqual({directed: true, preferredDir: {x: 0, y: 1}, orderAxis: {x: 1, y: 0}});
+        expect(r).toEqual({directed: true, preferredDir: {x: 0, y: 1}, orderAxis: {x: 1, y: 0}, cyclicOrder: false});
     });
 
     test('an order-only PHP layout (conceptmap-like) drops direction to null', () => {
@@ -56,14 +56,14 @@ describe('resolveProfileRefine', () => {
             profile: 'conceptmap',
             layout: {directed: false, orderaxis: {x: 1, y: 0}},
         }));
-        expect(r).toEqual({directed: false, preferredDir: null, orderAxis: {x: 1, y: 0}});
+        expect(r).toEqual({directed: false, preferredDir: null, orderAxis: {x: 1, y: 0}, cyclicOrder: false});
     });
 
     test('a free PHP layout (radial) yields no direction and no order', () => {
         const r = resolveProfileRefine('mindmap', cfg({
             profile: 'mindmap', layout: {directed: false},
         }));
-        expect(r).toEqual({directed: false, preferredDir: null, orderAxis: null});
+        expect(r).toEqual({directed: false, preferredDir: null, orderAxis: null, cyclicOrder: false});
     });
 
     test('the PHP layout overrides the built-in default for the same profile', () => {

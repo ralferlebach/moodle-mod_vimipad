@@ -115,6 +115,18 @@ abstract class base {
     }
 
     /**
+     * Whether the cyclic (angular) order of a hub's neighbours is preserved on
+     * arrange, for radial display types (mindmap, bubble map). The default is
+     * off; radial forms override it. Non-radial forms rely on the linear order
+     * axis instead.
+     *
+     * @return bool
+     */
+    public function get_layout_cyclic_order(): bool {
+        return false;
+    }
+
+    /**
      * The component name of the subplugin providing this definition.
      *
      * Derived from the concrete class namespace (e.g. vimipadform_tree\form
@@ -169,7 +181,10 @@ abstract class base {
      * @return array
      */
     public function to_array(): array {
-        $layout = ['directed' => $this->is_layout_directed()];
+        $layout = [
+            'directed' => $this->is_layout_directed(),
+            'cyclicorder' => $this->get_layout_cyclic_order(),
+        ];
         $direction = $this->get_layout_direction();
         if ($direction !== null) {
             $layout['direction'] = ['x' => (float) $direction['x'], 'y' => (float) $direction['y']];

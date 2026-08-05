@@ -4,7 +4,36 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.16** (2026072786).
+> release is **0.8.17** (2026072787).
+
+## 0.8.17 (2026072787) — Radial forms keep their cyclic order on arrange
+
+Builds on the layout-potential contract from 0.8.16 to give radial display types
+(mind map, bubble map) a proper order rule. The linear order axis used by tree
+and concept map keeps a left-to-right sibling row, but it cannot express "around
+a hub", so until now arranging a mind map could let its branches drift past one
+another and scramble the fan. The refiner now preserves the cyclic (angular)
+order of a hub's neighbours: for every node with three or more neighbours, the
+neighbours are sorted by their initial angle about that node, the single largest
+angular gap (the natural opening of the fan, or the wrap-around) is left free,
+and the remaining consecutive pairs are chained so each keeps its
+counter-clockwise adjacency. A pair is protected by the sign of the cross
+product (a-h)x(b-h): an L^2-normalised softplus^2 penalty is ~0 while the order
+holds and grows smoothly as the pair rotates toward an inversion, so the term is
+dormant unless a fan starts to scramble and never fights an already-clean layout.
+
+The behaviour is wired through the same PHP contract as the other layout
+parameters: a new `get_layout_cyclic_order()` on the form base (default off,
+transported in `to_array` and the `get_workspace` external structure), which mind
+map and bubble map override to on, resolved on the client by `resolveProfileRefine`
+into the refiner's new `cyclicStrength` option. Non-radial forms are unaffected.
+
+The analytic gradient of the new term (on the hub and both neighbours) is checked
+against finite differences; further tests cover the constraint construction (the
+k-1 chain and the three-neighbour gate), that the term is engaged and firms up a
+hub's ordering, that a radial hub keeps every neighbour in its initial cyclic
+order after a full refinement, and that each bundled form declares the expected
+cyclic-order flag.
 
 ## 0.8.16 (2026072786) — Layout potential moves into the form subplugin contract
 

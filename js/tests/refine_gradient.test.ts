@@ -125,6 +125,30 @@ describe('assembled energy gradient (finite-difference check)', () => {
         checkGradient(prob);
     });
 
+    test('gradient stays correct with cyclic order active around a hub', () => {
+        // A hub with four neighbours spread around it: the cyclic-order term is
+        // active (three chained cross-product constraints), so its analytic
+        // gradient on the hub and each neighbour must match finite differences.
+        const copts: RefineOptions = {...opts, orderAxis: null, cyclicStrength: 2};
+        const hnodes: RefineNode[] = [
+            {stableid: 'h', x: 300, y: 300, w: 60, h: 40}, // hub
+            {stableid: 'a', x: 430, y: 315, w: 60, h: 40}, // ~right
+            {stableid: 'b', x: 330, y: 175, w: 60, h: 40}, // ~up
+            {stableid: 'c', x: 175, y: 290, w: 60, h: 40}, // ~left
+            {stableid: 'd', x: 350, y: 435, w: 60, h: 40}, // ~down
+        ];
+        const hedges: RefineEdge[] = [
+            {source: 'h', target: 'a', directed: false},
+            {source: 'h', target: 'b', directed: false},
+            {source: 'h', target: 'c', directed: false},
+            {source: 'h', target: 'd', directed: false},
+        ];
+        const prob = buildProblem(hnodes, hedges, copts);
+        // Guard: the constraints were actually built (else the test is vacuous).
+        expect(prob.cyclic.length).toBeGreaterThan(0);
+        checkGradient(prob);
+    });
+
     test('gradient stays correct with an elliptical container', () => {
         // 'a' is a member pushed past the ellipse wall (interior hinge active),
         // 'c' a non-member off-centre inside (elliptical dome active).

@@ -154,6 +154,15 @@ export interface RefineOptions {
     orderStrength: number;
     /** Order margin as a fraction of L: how firmly a pair must keep its side. */
     orderMarginFactor: number;
+    /**
+     * Cyclic (angular) order preservation strength for radial profiles; 0
+     * disables it. When positive, for every node with three or more neighbours
+     * the refiner keeps those neighbours in their initial cyclic order around
+     * that node (so a radial fan cannot scramble), by penalising angular
+     * inversions of adjacent neighbours. This is the radial counterpart to the
+     * linear orderAxis chain, which cannot express "around a hub".
+     */
+    cyclicStrength: number;
     /** Enable the restrictive-swap repair pass after the descent. */
     swaps: boolean;
     /** Max swap passes. */
@@ -206,6 +215,7 @@ const DEFAULTS: RefineOptions = {
     orderAxis: null,
     orderStrength: 1,
     orderMarginFactor: 0.1,
+    cyclicStrength: 0,
     swaps: false,
     swapMaxPasses: 4,
     swapEnergyBudget: 2,
@@ -272,6 +282,13 @@ export interface Problem {
     cPad: number;
     order: {i: number; j: number; nx: number; ny: number; margin: number}[];
     kOrder: number;
+    /**
+     * Cyclic order constraints: for hub h, neighbour b must stay counter-
+     * clockwise of neighbour a (they are consecutive in the initial angular
+     * order around h). Enforced via the sign of the cross product (a-h)x(b-h).
+     */
+    cyclic: {h: number; a: number; b: number; margin: number}[];
+    kCyclic: number;
 }
 
 /** The median of a numeric array (0 for an empty array). */
@@ -433,6 +450,7 @@ export function buildProblem(
         cIn: opts.containerIn, cOut: opts.containerOut, cFill: opts.containerFill,
         cDomeN: opts.containerDomeN, cCap: opts.containerCoshCap, cPad: opts.containerPadFactor * l,
         order: [], kOrder: opts.orderStrength,
+        cyclic: [], kCyclic: opts.cyclicStrength,
     };
 
     // Order preservation: chain adjacent nodes along the profile's cross-axis so
@@ -454,8 +472,74 @@ export function buildProblem(
         }
     }
 
+    buildCyclicConstraints(prob);
     regulariseCoincidences(prob, nodes);
     return prob;
+}
+
+/**
+ * Build the cyclic (angular) order constraints: for every node with three or
+ * more neighbours, keep those neighbours in their initial cyclic order around
+ * it. Neighbours are sorted by their initial angle about the hub; the single
+ * largest angular gap (the natural opening of the fan, or the wrap-around) is
+ * left unconstrained, and the remaining consecutive pairs are chained so that
+ * each keeps its counter-clockwise adjacency. Built from the initial positions
+ * (px0, py0); enforced on the live positions in {@link energyAndGradient}.
+ *
+ * @param prob The problem to populate (prob.cyclic is filled in place).
+ * @returns void
+ */
+function buildCyclicConstraints(prob: Problem): void {
+    if (prob.kCyclic <= 0) {
+        return;
+    }
+    const {n, px0, py0} = prob;
+    const nbrs: number[][] = Array.from({length: n}, () => []);
+    const edges = prob.edges;
+    for (const ed of edges) {
+        if (ed.s !== ed.t) {
+            nbrs[ed.s].push(ed.t);
+            nbrs[ed.t].push(ed.s);
+        }
+    }
+    // A small angular margin so a pair is nudged before it is exactly collinear
+    // with the hub, expressed in the same normalised-cross units as the energy.
+    const margin = 0.05;
+    for (let h = 0; h < n; h++) {
+        const ns = nbrs[h];
+        if (ns.length < 3) {
+            continue;
+        }
+        // Sort neighbours by their initial angle about the hub.
+        const withAngle = ns.map(c => ({c, a: Math.atan2(py0[c] - py0[h], px0[c] - px0[h])}));
+        withAngle.sort((p, q) => p.a - q.a);
+        const k = withAngle.length;
+        // Find the largest cyclic gap; the pair spanning it is left free.
+        let maxGap = -1;
+        let maxAt = 0;
+        for (let i = 0; i < k; i++) {
+            const next = (i + 1) % k;
+            let gap = withAngle[next].a - withAngle[i].a;
+            if (gap < 0) {
+                gap += 2 * Math.PI;
+            }
+            if (gap > maxGap) {
+                maxGap = gap;
+                maxAt = i;
+            }
+        }
+        // Chain the k-1 consecutive pairs, skipping the largest-gap pair, so the
+        // remaining constrained gaps are each smaller than the opening (< PI in
+        // the common case) and the cross-product sign is a faithful order test.
+        for (let step = 0; step < k; step++) {
+            if (step === maxAt) {
+                continue;
+            }
+            const a = withAngle[step].c;
+            const b = withAngle[(step + 1) % k].c;
+            prob.cyclic.push({h, a, b, margin});
+        }
+    }
 }
 
 /**
@@ -701,6 +785,36 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
             const dEdproj = -2 * kOrder * sp * sigmoid(gArg);
             gx[oc.j] += dEdproj * oc.nx; gy[oc.j] += dEdproj * oc.ny;
             gx[oc.i] -= dEdproj * oc.nx; gy[oc.i] -= dEdproj * oc.ny;
+        }
+    }
+    // Cyclic (angular) order: for each hub h, keep neighbour b counter-clockwise
+    // of neighbour a (they are consecutive in the initial fan). The signed cross
+    // product (a-h) x (b-h) is positive while the order holds; a softplus^2
+    // penalty on its L^2-normalised value grows smoothly as the pair rotates
+    // toward an inversion and is ~0 while the order is kept, so the term is
+    // dormant unless a radial fan starts to scramble.
+    const {cyclic, kCyclic} = prob;
+    if (kCyclic > 0) {
+        const invl2 = 1 / (l * l);
+        for (const cc of cyclic) {
+            const axhx = px[cc.a] - px[cc.h];
+            const ayhy = py[cc.a] - py[cc.h];
+            const bxhx = px[cc.b] - px[cc.h];
+            const byhy = py[cc.b] - py[cc.h];
+            const cross = axhx * byhy - ayhy * bxhx;
+            const gArg = cc.margin - cross * invl2;
+            const sp = softplus(gArg);
+            e += kCyclic * sp * sp;
+            if (gx && gy) {
+                // dE/dcross = -2 kCyclic sp sigmoid(gArg) / L^2.
+                const dEdcross = -2 * kCyclic * sp * sigmoid(gArg) * invl2;
+                gx[cc.a] += dEdcross * byhy;
+                gy[cc.a] += dEdcross * (-bxhx);
+                gx[cc.b] += dEdcross * (-ayhy);
+                gy[cc.b] += dEdcross * axhx;
+                gx[cc.h] += dEdcross * (ayhy - byhy);
+                gy[cc.h] += dEdcross * (bxhx - axhx);
+            }
         }
     }
     return e;

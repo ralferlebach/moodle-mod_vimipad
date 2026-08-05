@@ -219,6 +219,7 @@ class get_workspace extends external_api {
                 'bifurcation' => new external_value(PARAM_ALPHA, 'Bifurcation behaviour'),
                 'layout' => new external_single_structure([
                     'directed' => new external_value(PARAM_BOOL, 'Treat relations as directed for layout'),
+                    'cyclicorder' => new external_value(PARAM_BOOL, 'Preserve cyclic order of a hub\'s neighbours'),
                     'direction' => new external_single_structure([
                         'x' => new external_value(PARAM_FLOAT, 'Preferred direction x component'),
                         'y' => new external_value(PARAM_FLOAT, 'Preferred direction y component'),

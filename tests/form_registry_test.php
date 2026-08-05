@@ -105,31 +105,42 @@ final class form_registry_test extends \advanced_testcase {
     public function test_layout_potential_declarations(): void {
         registry::reset_cache();
 
-        // Tree: directed, flows downward (+y), siblings ordered along +x.
+        // Tree: directed, flows downward (+y), siblings ordered along +x, linear.
         $tree = registry::for_profile('tree')->to_array()['layout'];
         $this->assertTrue($tree['directed']);
         $this->assertSame(['x' => 0.0, 'y' => 1.0], $tree['direction']);
         $this->assertSame(['x' => 1.0, 'y' => 0.0], $tree['orderaxis']);
+        $this->assertFalse($tree['cyclicorder']);
 
-        // Concept map: undirected, no forced direction, but keeps sibling order.
+        // Concept map: undirected, no forced direction, keeps sibling order, linear.
         $concept = registry::for_profile('conceptmap')->to_array()['layout'];
         $this->assertFalse($concept['directed']);
         $this->assertArrayNotHasKey('direction', $concept);
         $this->assertSame(['x' => 1.0, 'y' => 0.0], $concept['orderaxis']);
+        $this->assertFalse($concept['cyclicorder']);
 
-        // Radial and free forms: undirected, no direction, no order axis.
-        foreach (['mindmap', 'bubblemap', 'semanticnetwork'] as $profile) {
+        // Radial forms: undirected, no linear order axis, but cyclic order on.
+        foreach (['mindmap', 'bubblemap'] as $profile) {
             $layout = registry::for_profile($profile)->to_array()['layout'];
             $this->assertFalse($layout['directed'], "$profile should be undirected");
             $this->assertArrayNotHasKey('direction', $layout, "$profile should force no direction");
-            $this->assertArrayNotHasKey('orderaxis', $layout, "$profile should keep no order axis");
+            $this->assertArrayNotHasKey('orderaxis', $layout, "$profile should keep no linear order axis");
+            $this->assertTrue($layout['cyclicorder'], "$profile should preserve cyclic order");
         }
+
+        // Semantic network: free — undirected, no direction, no order of any kind.
+        $semantic = registry::for_profile('semanticnetwork')->to_array()['layout'];
+        $this->assertFalse($semantic['directed']);
+        $this->assertArrayNotHasKey('direction', $semantic);
+        $this->assertArrayNotHasKey('orderaxis', $semantic);
+        $this->assertFalse($semantic['cyclicorder']);
 
         // An unknown profile falls back to the free-form default too.
         $fallback = registry::for_profile('doesnotexist')->to_array()['layout'];
         $this->assertFalse($fallback['directed']);
         $this->assertArrayNotHasKey('direction', $fallback);
         $this->assertArrayNotHasKey('orderaxis', $fallback);
+        $this->assertFalse($fallback['cyclicorder']);
     }
 
     /**

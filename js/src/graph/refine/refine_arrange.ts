@@ -46,6 +46,8 @@ export interface ProfileRefine {
     directed: boolean;
     /** Cross-axis for order preservation (null = none). */
     orderAxis: {x: number; y: number} | null;
+    /** Preserve the cyclic (angular) order of a hub's neighbours (radial forms). */
+    cyclicOrder: boolean;
 }
 
 /**
@@ -63,17 +65,19 @@ export interface ProfileRefine {
 export function refineOptionsForProfile(profile: string): ProfileRefine {
     switch (profile) {
         case 'tree':
-            return {preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0}};
+            return {preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false};
         case 'conceptmap':
             // Concept maps are hierarchical but their cross-links point every
             // which way; forcing a global direction would rotate the map. Keep
             // the sibling order axis, but do not impose a direction.
-            return {preferredDir: null, directed: false, orderAxis: {x: 1, y: 0}};
+            return {preferredDir: null, directed: false, orderAxis: {x: 1, y: 0}, cyclicOrder: false};
         case 'mindmap':
         case 'bubblemap':
-            return {preferredDir: null, directed: false, orderAxis: null};
+            // Radial forms: no linear order axis, but keep the cyclic order of a
+            // hub's branches so the fan cannot scramble on arrange.
+            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: true};
         default:
-            return {preferredDir: null, directed: false, orderAxis: null};
+            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: false};
     }
 }
 
@@ -97,6 +101,7 @@ export function resolveProfileRefine(profile: string, config?: FormConfig): Prof
         directed: layout.directed,
         preferredDir: layout.direction ?? null,
         orderAxis: layout.orderaxis ?? null,
+        cyclicOrder: layout.cyclicorder ?? false,
     };
 }
 
@@ -224,6 +229,8 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
         preferredDir: prof.preferredDir,
         directionFloor: prof.directed ? 0.15 : 0,
         orderAxis: prof.orderAxis,
+        // Radial forms keep their branches' cyclic order around each hub.
+        cyclicStrength: prof.cyclicOrder ? 2 : 0,
         swaps: true,
         // "Anordnen" is an explicit rearrange request, so pull the layout toward a
         // clean force-directed state: edges converge toward a common length (via a
