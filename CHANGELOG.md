@@ -6,6 +6,27 @@
 > line; those entries are kept for historical reference only. The current
 > release is **0.8.6** (2026072776).
 
+## 0.8.11 (2026072781) — Journal viewer: no more empty canvas on legacy maps
+
+Fixes the single-revision journal state view showing no nodes at all on some
+(older) maps, even though the player showed them correctly.
+
+- **Root cause (data, surfaced by the display).** For maps whose elements were
+  created before the op-log existed (or were imported by a legacy path), the
+  create-operations are not in the log, so the server-side replay reconstructs
+  an empty map. The player already masks this by falling back to the live map
+  when it detects the log cannot reproduce it; the single-revision viewer had no
+  such fallback, so it rendered an empty canvas.
+- **Fix.** The viewer now detects an incomplete op-log exactly as the player does
+  (fingerprinting the full replay against the live map). When the history is
+  incomplete it shows the current map with a clear notice instead of an empty
+  canvas; when the history is complete it still shows a faithful reconstruction
+  of the requested revision — even an empty one — so genuine early revisions are
+  not misrepresented.
+- New tests cover both paths (incomplete -> live map + notice; complete ->
+  faithful reconstruction, no notice) and confirm the read-only viewport fit is
+  unaffected.
+
 ## 0.8.10 (2026072780) — Arrange resizes containers (grow-to-contain, preserving)
 
 The arrange now adjusts container boxes to keep their members enclosed, having
