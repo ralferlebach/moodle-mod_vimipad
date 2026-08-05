@@ -217,6 +217,17 @@ class get_workspace extends external_api {
                 'defaultshape' => new external_value(PARAM_ALPHA, 'Default node shape key'),
                 'line' => new external_value(PARAM_ALPHA, 'Connector line style'),
                 'bifurcation' => new external_value(PARAM_ALPHA, 'Bifurcation behaviour'),
+                'layout' => new external_single_structure([
+                    'directed' => new external_value(PARAM_BOOL, 'Treat relations as directed for layout'),
+                    'direction' => new external_single_structure([
+                        'x' => new external_value(PARAM_FLOAT, 'Preferred direction x component'),
+                        'y' => new external_value(PARAM_FLOAT, 'Preferred direction y component'),
+                    ], 'Preferred flow direction for directed edges', VALUE_OPTIONAL),
+                    'orderaxis' => new external_single_structure([
+                        'x' => new external_value(PARAM_FLOAT, 'Order axis x component'),
+                        'y' => new external_value(PARAM_FLOAT, 'Order axis y component'),
+                    ], 'Cross-axis along which sibling order is preserved', VALUE_OPTIONAL),
+                ], 'Layout-potential parameters for the arrange refiner'),
             ]),
             'layoutjson' => new external_value(PARAM_RAW, 'Stored layout JSON, empty if none'),
             'nodes' => new external_multiple_structure(new external_single_structure([

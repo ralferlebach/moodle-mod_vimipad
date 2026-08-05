@@ -75,6 +75,46 @@ abstract class base {
     abstract public function get_bifurcation(): string;
 
     /**
+     * The preferred flow direction for directed edges, as ['x' => float,
+     * 'y' => float], or null for none.
+     *
+     * This is one of the layout-potential parameters the arrange refiner reads
+     * instead of hard-coding per-profile behaviour. The default is free-form (no
+     * preferred direction); hierarchical forms (e.g. tree) override it. A unit
+     * vector is conventional but not required.
+     *
+     * @return array|null
+     */
+    public function get_layout_direction(): ?array {
+        return null;
+    }
+
+    /**
+     * Whether relations are treated as directed for layout alignment.
+     *
+     * The default is undirected; directed forms (e.g. tree) override it.
+     *
+     * @return bool
+     */
+    public function is_layout_directed(): bool {
+        return false;
+    }
+
+    /**
+     * The cross-axis along which sibling order is preserved, as ['x' => float,
+     * 'y' => float], or null for none.
+     *
+     * The default preserves no order; forms with a meaningful sibling order
+     * (e.g. tree, conceptmap) override it. Radial forms leave this null; their
+     * cyclic order is a separate, later refinement.
+     *
+     * @return array|null
+     */
+    public function get_layout_order_axis(): ?array {
+        return null;
+    }
+
+    /**
      * The component name of the subplugin providing this definition.
      *
      * Derived from the concrete class namespace (e.g. vimipadform_tree\form
@@ -129,6 +169,15 @@ abstract class base {
      * @return array
      */
     public function to_array(): array {
+        $layout = ['directed' => $this->is_layout_directed()];
+        $direction = $this->get_layout_direction();
+        if ($direction !== null) {
+            $layout['direction'] = ['x' => (float) $direction['x'], 'y' => (float) $direction['y']];
+        }
+        $orderaxis = $this->get_layout_order_axis();
+        if ($orderaxis !== null) {
+            $layout['orderaxis'] = ['x' => (float) $orderaxis['x'], 'y' => (float) $orderaxis['y']];
+        }
         return [
             'profile' => $this->get_profile(),
             'name' => $this->get_name(),
@@ -136,6 +185,7 @@ abstract class base {
             'defaultshape' => $this->get_default_shape(),
             'line' => $this->get_line_style(),
             'bifurcation' => $this->get_bifurcation(),
+            'layout' => $layout,
         ];
     }
 }

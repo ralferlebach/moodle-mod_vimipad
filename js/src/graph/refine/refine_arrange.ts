@@ -30,7 +30,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {VimiNode, VimiRelation, VimiContainer, LayoutMap, SizeMap} from '../../types';
+import {VimiNode, VimiRelation, VimiContainer, LayoutMap, SizeMap, FormConfig} from '../../types';
 import {parseGeometry} from '../../canvas/container_geometry';
 import {parseNodeStyle} from '../../canvas/node_style';
 import {nodeWidth, nodeHeight} from '../../canvas/node_geometry';
@@ -49,10 +49,13 @@ export interface ProfileRefine {
 }
 
 /**
- * The potential configuration for a display profile. Hierarchical profiles flow
- * downward and keep sibling left/right order; radial profiles are free (cyclic
- * order is a later, subplugin-supplied refinement); free-form profiles impose no
- * axis.
+ * The built-in fallback potential configuration for a display profile. This is
+ * used only when no PHP subplugin layout config is supplied (legacy transports,
+ * or a profile without an installed form subplugin); the authoritative source
+ * is now each vimipadform subplugin's layout declaration, resolved by
+ * {@link resolveProfileRefine}. Hierarchical profiles flow downward and keep
+ * sibling left/right order; radial profiles are free (cyclic order is a later,
+ * subplugin-supplied refinement); free-form profiles impose no axis.
  *
  * @param profile The profile key.
  * @returns The per-profile refinement behaviour.
@@ -72,6 +75,29 @@ export function refineOptionsForProfile(profile: string): ProfileRefine {
         default:
             return {preferredDir: null, directed: false, orderAxis: null};
     }
+}
+
+/**
+ * Resolve the layout-potential parameters for the active profile, preferring
+ * the PHP subplugin's declaration (transported in the form config) over the
+ * built-in fallback. This is the single seam through which a vimipadform
+ * subplugin controls how the arrange refiner treats its display type, so new
+ * display types decide their own layout in PHP rather than in this file.
+ *
+ * @param profile The active profile key.
+ * @param config The active form config, if transported.
+ * @returns The per-profile refinement behaviour.
+ */
+export function resolveProfileRefine(profile: string, config?: FormConfig): ProfileRefine {
+    const layout = config?.layout;
+    if (!layout) {
+        return refineOptionsForProfile(profile);
+    }
+    return {
+        directed: layout.directed,
+        preferredDir: layout.direction ?? null,
+        orderAxis: layout.orderaxis ?? null,
+    };
 }
 
 /** Inputs the arrange handler already has to hand. */
@@ -102,6 +128,12 @@ export interface ArrangeInput {
     maxIterations?: number;
     /** Optional option overrides (e.g. stabilityScale calibrated per site). */
     overrides?: Partial<RefineOptions>;
+    /**
+     * The active form config, if transported. Its layout declaration (from the
+     * form's PHP subplugin) drives the per-profile behaviour; when absent the
+     * refiner falls back to its built-in profile defaults.
+     */
+    formconfig?: FormConfig;
 }
 
 /** The refined arrangement. */
@@ -128,7 +160,7 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
     const {nodes, relations, containers, profile, positions, sizes, pinned, overrides} = input;
     const lockedContainers = input.lockedContainers;
     const resizeContainers = input.resizeContainers ?? true;
-    const prof = refineOptionsForProfile(profile);
+    const prof = resolveProfileRefine(profile, input.formconfig);
 
     const posOf = (id: string): {x: number; y: number} =>
         positions[id] ?? {x: 0, y: 0};

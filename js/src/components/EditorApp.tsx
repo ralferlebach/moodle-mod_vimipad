@@ -803,7 +803,7 @@ export function EditorApp(props: Props): React.ReactElement {
         const arranged = refineArrangement({
             nodes: state.nodes, relations: state.relations, containers,
             profile: state.profile, positions: stored, sizes, pinned, lockedContainers,
-            maxIterations: arrangeIterations,
+            maxIterations: arrangeIterations, formconfig: state.formconfig,
         });
         const auto: LayoutMap = {...arranged.positions};
         for (const n of state.nodes) {

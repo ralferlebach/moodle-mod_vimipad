@@ -106,6 +106,19 @@ export interface FormConfig {
     line: string;
     /** Bifurcation behaviour: 'individual' | 'shared' | 'radial'. */
     bifurcation: string;
+    /**
+     * Layout-potential parameters for the arrange refiner, supplied by the
+     * form's PHP subplugin. Absent for legacy transports; the refiner then
+     * falls back to its built-in per-profile defaults.
+     */
+    layout?: {
+        /** Whether relations are treated as directed for alignment. */
+        directed: boolean;
+        /** Preferred flow direction for directed edges (absent = none). */
+        direction?: {x: number; y: number};
+        /** Cross-axis along which sibling order is preserved (absent = none). */
+        orderaxis?: {x: number; y: number};
+    };
 }
 
 /** A 2D position for a node on the canvas. */

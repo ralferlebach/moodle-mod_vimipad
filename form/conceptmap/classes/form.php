@@ -71,4 +71,15 @@ class form extends \mod_vimipad\local\form\base {
     public function get_bifurcation(): string {
         return 'individual';
     }
+
+    /**
+     * Concept maps are hierarchical but their cross-links point every which
+     * way, so no direction is forced (that would rotate the map); the sibling
+     * order axis is kept along +x.
+     *
+     * @return array|null
+     */
+    public function get_layout_order_axis(): ?array {
+        return ['x' => 1.0, 'y' => 0.0];
+    }
 }

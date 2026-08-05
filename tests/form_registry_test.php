@@ -91,6 +91,45 @@ final class form_registry_test extends \advanced_testcase {
         $this->assertSame('rect', $array['defaultshape']);
         $this->assertSame('orthogonal', $array['line']);
         $this->assertSame('shared', $array['bifurcation']);
+        $this->assertArrayHasKey('layout', $array);
+        $this->assertTrue($array['layout']['directed']);
+    }
+
+    /**
+     * Each bundled subplugin declares the layout-potential parameters the
+     * arrange refiner reads (directed flag, preferred direction, order axis).
+     * Hierarchical forms flow/order; radial and free forms declare neither.
+     *
+     * @return void
+     */
+    public function test_layout_potential_declarations(): void {
+        registry::reset_cache();
+
+        // Tree: directed, flows downward (+y), siblings ordered along +x.
+        $tree = registry::for_profile('tree')->to_array()['layout'];
+        $this->assertTrue($tree['directed']);
+        $this->assertSame(['x' => 0.0, 'y' => 1.0], $tree['direction']);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $tree['orderaxis']);
+
+        // Concept map: undirected, no forced direction, but keeps sibling order.
+        $concept = registry::for_profile('conceptmap')->to_array()['layout'];
+        $this->assertFalse($concept['directed']);
+        $this->assertArrayNotHasKey('direction', $concept);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $concept['orderaxis']);
+
+        // Radial and free forms: undirected, no direction, no order axis.
+        foreach (['mindmap', 'bubblemap', 'semanticnetwork'] as $profile) {
+            $layout = registry::for_profile($profile)->to_array()['layout'];
+            $this->assertFalse($layout['directed'], "$profile should be undirected");
+            $this->assertArrayNotHasKey('direction', $layout, "$profile should force no direction");
+            $this->assertArrayNotHasKey('orderaxis', $layout, "$profile should keep no order axis");
+        }
+
+        // An unknown profile falls back to the free-form default too.
+        $fallback = registry::for_profile('doesnotexist')->to_array()['layout'];
+        $this->assertFalse($fallback['directed']);
+        $this->assertArrayNotHasKey('direction', $fallback);
+        $this->assertArrayNotHasKey('orderaxis', $fallback);
     }
 
     /**

@@ -4,7 +4,31 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.15** (2026072785).
+> release is **0.8.16** (2026072786).
+
+## 0.8.16 (2026072786) — Layout potential moves into the form subplugin contract
+
+Architectural step toward a stable public API for derived plugins: the arrange
+refiner's per-profile behaviour is no longer hard-coded in the frontend. Each
+`vimipadform_*` subplugin now declares its own layout-potential parameters in
+PHP — whether relations are directed, the preferred flow direction, and the
+cross-axis along which sibling order is preserved — through three new methods on
+the `\mod_vimipad\local\form\base` contract (`is_layout_directed`,
+`get_layout_direction`, `get_layout_order_axis`), with free-form defaults so a
+new display type only overrides what it needs. Tree declares a directed,
+downward, left-to-right-ordered layout; concept map keeps sibling order without
+forcing a direction; the radial and free forms declare neither. These flow to
+the editor through the existing form-config transport (`to_array` and the
+`get_workspace` external structure gain a `layout` block), and the refiner reads
+them via a new `resolveProfileRefine`, falling back to the built-in per-profile
+switch only when no config is present (legacy transports, or a profile without
+an installed subplugin). Behaviour is unchanged — the PHP declarations mirror the
+former hard-coded values exactly — but the seam is now in place: a subplugin
+controls how its display type is arranged, and the upcoming cyclic-order and
+container-shrink refinements attach to the same contract rather than to a central
+switch. New PHPUnit coverage asserts each bundled form's layout declaration and
+the fallback; new Jest coverage asserts the resolver prefers the PHP config and
+falls back correctly.
 
 ## 0.8.15 (2026072785) — Container format menu really stops jumping; Behat backup made reliable
 
