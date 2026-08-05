@@ -121,7 +121,29 @@ describe('refineArrangement', () => {
         expect(Number.isInteger(res.positions.a.y)).toBe(true);
     });
 
-    test('grow-only: an oversized box is not shrunk (size preserved)', () => {
+    test('a long edge is pulled meaningfully shorter (arrange restructures, not just drift)', () => {
+        // Ralf's report: a far node (Node C) barely moved. With a short and a long
+        // edge sharing a hub, the long-range spring must contract the over-long
+        // edge toward the median length (equalisation), not leave it untouched.
+        const nodes = [node('a'), node('b'), node('c')];
+        const positions: LayoutMap = {
+            a: {x: 200, y: 300}, b: {x: 320, y: 300}, c: {x: 900, y: 300}, // |ab|=120, |ac|=700
+        };
+        const sizes: SizeMap = {a: {w: 70, h: 40}, b: {w: 70, h: 40}, c: {w: 70, h: 40}};
+        const relations = [rel('r1', 'a', 'b'), rel('r2', 'a', 'c')];
+        const dist = (p: LayoutMap, u: string, v: string): number =>
+            Math.hypot(p[u].x - p[v].x, p[u].y - p[v].y);
+        const before = dist(positions, 'a', 'c');
+        const res = refineArrangement({nodes, relations, containers: [], profile: 'mindmap', positions, sizes});
+        // The long edge contracts by a meaningful fraction (not the near-zero of
+        // the old force-free far field).
+        expect(dist(res.positions, 'a', 'c')).toBeLessThan(before * 0.9);
+    });
+
+    test('an oversized box hugs its members (shrinks toward fit but never below them)', () => {
+        // "Anordnen" is an explicit rearrange, so containers now resize to hug
+        // their members (Ralf's request). The box must shrink toward the member
+        // but never past it, and re-applying must settle (convergence).
         const nodes = [node('a')];
         const positions: LayoutMap = {a: {x: 250, y: 250}}; // well inside a big box
         const sizes: SizeMap = {a: {w: 50, h: 40}};
@@ -130,7 +152,24 @@ describe('refineArrangement', () => {
             {stableid: 'c', type: 'group', label: 'B', geometryjson: JSON.stringify(box)} as VimiContainer,
         ];
         const res = refineArrangement({nodes, relations: [], containers, profile: 'mindmap', positions, sizes});
-        expect(res.containers.c).toEqual(box); // no shrink toward the member
+        const g = res.containers.c;
+        expect(g.w).toBeLessThan(box.w); // it shrinks toward the member
+        expect(g.h).toBeLessThan(box.h);
+        // …but still contains the member with its pad (never shrinks past it).
+        expect(g.x).toBeLessThanOrEqual(positions.a.x - sizes.a.w / 2);
+        expect(g.x + g.w).toBeGreaterThanOrEqual(positions.a.x + sizes.a.w / 2);
+        expect(g.y).toBeLessThanOrEqual(positions.a.y - sizes.a.h / 2);
+        expect(g.y + g.h).toBeGreaterThanOrEqual(positions.a.y + sizes.a.h / 2);
+        // Convergence: the second pass shrinks strictly less than the first
+        // (geometric convergence toward the member-hugging fit).
+        const containers2 = [{...containers[0], geometryjson: JSON.stringify(g)}];
+        const res2 = refineArrangement({
+            nodes, relations: [], containers: containers2, profile: 'mindmap',
+            positions: res.positions, sizes,
+        });
+        const drop1 = box.w - g.w;
+        const drop2 = g.w - res2.containers.c.w;
+        expect(drop2).toBeLessThan(drop1);
     });
 
     test('a locked container is never resized', () => {

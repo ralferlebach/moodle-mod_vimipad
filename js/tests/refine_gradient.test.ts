@@ -35,6 +35,7 @@ function buildProblemOptions(): RefineOptions {
         ...defaultRefineOptions(), preferredDir: {x: 0, y: 1}, directionFloor: 0.1,
         stabilityScale: 1.5, scale: 150, orderAxis: {x: 1, y: 0}, orderStrength: 2,
         edgeTargetBlend: 0.5, // move edge rest off the current length so the edge gradient is non-trivial
+        edgeSpring: 0.6, // exercise the non-saturating spring gradient too
     };
 }
 

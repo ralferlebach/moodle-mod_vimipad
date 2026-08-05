@@ -4,7 +4,41 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.6** (2026072776).
+> release is **0.8.14** (2026072784).
+
+## 0.8.14 (2026072784) — Arrange actually restructures; container menu stops jumping
+
+Three fixes from Ralf's testing on a small two-container map.
+
+**Arrange was too weak and too short-ranged.** After the earlier drift fix, the
+refiner had swung all the way to pure preservation: edges exerted no pull, so an
+explicit "arrange" mostly let nodes drift apart under repulsion without ever
+pulling connected nodes together, containers never resized, and a far node on a
+long edge barely moved ("kaum Änderungen", "läuft auseinander", "Container ändern
+die Größe nicht"). "Anordnen" is an explicit rearrange request, so it now pulls
+the layout toward a clean force-directed state: a new gentle, non-saturating
+spring pulls every edge toward the median length even in the far field (so long
+edges finally contract — fixing "zu kurzreichweitig"), nodes are freer to move
+(lower stability anchor), and containers hug their members (they resize instead
+of only growing). Every term still converges, so repeated presses settle and a
+clean layout is left essentially untouched. New tests assert a long edge is
+contracted and that an oversized container shrinks to fit while converging and
+never shrinking past its members; the gradient check now also covers the spring.
+
+**The container shape menu "jumped around".** While a container body and its
+resize handles followed the live drag preview, the floating format menu stayed
+pinned to the container's committed geometry — so any stray nudge (common when
+reaching for the menu on two overlapping containers) detached the menu and made
+it snap back on release. The menu now tracks the same drag preview as the body.
+A new component test also guards that picking a shape from the container dock
+actually commits that shape.
+
+**Behat.** The interactive backup/restore UI scenario is unreliable under
+moodle-plugin-ci (the backup wizard's completion races the asynchronous backup,
+failing under both drivers), while the backup/restore data roundtrip — grade and
+reference-snapshot remap included — is covered reliably by the PHPUnit
+`backup_restore_test`. The fragile UI scenario has been removed with a note; the
+activity-duplication scenario stays.
 
 ## 0.8.13 (2026072783) — Elliptical containers use a true elliptical metric
 

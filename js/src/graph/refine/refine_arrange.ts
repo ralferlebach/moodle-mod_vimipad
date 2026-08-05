@@ -188,9 +188,14 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
         directionFloor: prof.directed ? 0.15 : 0,
         orderAxis: prof.orderAxis,
         swaps: true,
-        // Grow to keep members enclosed, but preserve the human's box size
-        // (no shrink) unless the caller opts in via overrides.
-        containerShrinkRate: 0,
+        // "Anordnen" is an explicit rearrange request, so pull the layout toward a
+        // clean force-directed state: edges converge toward a common length (via a
+        // gentle long-range spring), nodes are free to move, and containers hug
+        // their members. All terms converge, so repeated presses settle.
+        edgeTargetBlend: 0.7,
+        edgeSpring: 0.5,
+        stabilityScale: 0.35,
+        containerShrinkRate: 0.35,
         ...overrides,
     };
 

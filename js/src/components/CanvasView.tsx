@@ -1615,7 +1615,14 @@ export function CanvasView(props: Props): React.ReactElement {
                     if (!container || !props.onUpdateContainerStyle) {
                         return null;
                     }
-                    const box = parseGeometry(container.geometryjson);
+                    // Track the live drag preview so the menu stays anchored to
+                    // the container while it is moved or resized, instead of
+                    // detaching to the committed geometry and snapping back on
+                    // release (the "menu jumps around" bug on overlapping
+                    // containers, where a stray nudge starts a move).
+                    const box = (containerDrag?.stableid === container.stableid && containerPreview)
+                        ? containerPreview
+                        : parseGeometry(container.geometryjson);
                     if (!box) {
                         return null;
                     }

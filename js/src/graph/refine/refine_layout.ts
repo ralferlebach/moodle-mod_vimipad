@@ -98,6 +98,15 @@ export interface RefineOptions {
      * higher values gently normalise lengths toward L.
      */
     edgeTargetBlend: number;
+    /**
+     * Stiffness of a gentle, non-saturating spring pulling each edge toward its
+     * rest length (dimensionless, in units of L). Unlike the bounded edge well
+     * (force-free in the far field, for pure preservation), this term keeps
+     * pulling long edges in and pushing short edges out, so an explicit
+     * "arrange" actually restructures the layout toward even edge lengths. 0
+     * disables it (pure preservation).
+     */
+    edgeSpring: number;
     /** Max solver iterations. */
     maxIterations: number;
     /** Per-node, per-iteration movement cap, as a fraction of L. */
@@ -174,6 +183,7 @@ const DEFAULTS: RefineOptions = {
     energyTol: 1e-7,
     scale: undefined,
     edgeTargetBlend: 0,
+    edgeSpring: 0,
     containerIn: 1,
     containerOut: 0.6,
     containerFill: 0.85,
@@ -238,6 +248,7 @@ export interface Problem {
     uy: number;
     directed: boolean;
     dirFloor: number;
+    kSpring: number;
     cIn: number;
     cOut: number;
     cFill: number;
@@ -385,6 +396,7 @@ export function buildProblem(
         }),
         l, p0, arep, padx: opts.padFactor * l, pady: opts.padFactor * l,
         epsReg: EPS_REG_FACTOR * l, ux, uy, directed, dirFloor: opts.directionFloor,
+        kSpring: opts.edgeSpring,
         cIn: opts.containerIn, cOut: opts.containerOut, cFill: opts.containerFill,
         cDomeN: opts.containerDomeN, cCap: opts.containerCoshCap, cPad: opts.containerPadFactor * l,
         order: [], kOrder: opts.orderStrength,
@@ -449,7 +461,7 @@ function regulariseCoincidences(prob: Problem, nodes: RefineNode[]): void {
  * @returns The total energy.
  */
 export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Array]): number {
-    const {n, px, py, px0, py0, hw, hh, wstab, edges, p0, arep, padx, pady, epsReg, ux, uy, directed, dirFloor} = prob;
+    const {n, px, py, px0, py0, hw, hh, wstab, edges, l, p0, arep, padx, pady, epsReg, ux, uy, directed, dirFloor, kSpring} = prob;
     let gx: Float64Array | null = null;
     let gy: Float64Array | null = null;
     if (grad) {
@@ -505,6 +517,19 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
             if (gx && gy) {
                 gx[t] += ptd * ex; gy[t] += ptd * ey;
                 gx[s] -= ptd * ex; gy[s] -= ptd * ey;
+            }
+        }
+
+        // Gentle non-saturating spring toward the rest length (dimensionless in
+        // L): keeps pulling long edges in and short edges out even in the far
+        // field, so an explicit arrange restructures toward even edge lengths.
+        if (kSpring > 0) {
+            const d = (r - rest) / l;
+            e += 0.5 * kSpring * d * d;
+            if (gx && gy) {
+                const fs = kSpring * d / l; // dE/dr
+                gx[t] += fs * ex; gy[t] += fs * ey;
+                gx[s] -= fs * ex; gy[s] -= fs * ey;
             }
         }
     }
