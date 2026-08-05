@@ -34,11 +34,15 @@ function rel(stableid: string, sourceid: string, targetid: string): VimiRelation
 }
 
 describe('refineOptionsForProfile', () => {
-    test('hierarchical profiles flow down and keep sibling order', () => {
+    test('tree flows down and keeps sibling order', () => {
         expect(refineOptionsForProfile('tree')).toEqual({
             preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0},
         });
-        expect(refineOptionsForProfile('conceptmap').directed).toBe(true);
+    });
+    test('conceptmap keeps sibling order but is not direction-forced', () => {
+        const cm = refineOptionsForProfile('conceptmap');
+        expect(cm.directed).toBe(false);
+        expect(cm.orderAxis).toEqual({x: 1, y: 0});
     });
     test('radial and unknown profiles are free-form', () => {
         expect(refineOptionsForProfile('mindmap').orderAxis).toBeNull();
@@ -115,7 +119,55 @@ describe('refineArrangement', () => {
         const res = refineArrangement({nodes, relations: [], containers, profile: 'tree', positions, sizes});
         expect(Number.isInteger(res.positions.a.x)).toBe(true);
         expect(Number.isInteger(res.positions.a.y)).toBe(true);
-        // Boxes are not resized by the arrange (fixed): geometry is unchanged.
-        expect(res.containers.c).toEqual({x: 100, y: 100, w: 300, h: 300});
+    });
+
+    test('grow-only: an oversized box is not shrunk (size preserved)', () => {
+        const nodes = [node('a')];
+        const positions: LayoutMap = {a: {x: 250, y: 250}}; // well inside a big box
+        const sizes: SizeMap = {a: {w: 50, h: 40}};
+        const box = {x: 100, y: 100, w: 300, h: 300};
+        const containers: VimiContainer[] = [
+            {stableid: 'c', type: 'group', label: 'B', geometryjson: JSON.stringify(box)} as VimiContainer,
+        ];
+        const res = refineArrangement({nodes, relations: [], containers, profile: 'mindmap', positions, sizes});
+        expect(res.containers.c).toEqual(box); // no shrink toward the member
+    });
+
+    test('a locked container is never resized', () => {
+        const nodes = [node('m1'), node('m2')];
+        const box = {x: 100, y: 100, w: 140, h: 140};
+        const positions: LayoutMap = {m1: {x: 150, y: 170}, m2: {x: 190, y: 170}}; // overlapping members
+        const sizes: SizeMap = {m1: {w: 60, h: 40}, m2: {w: 60, h: 40}};
+        const containers: VimiContainer[] = [
+            {stableid: 'c', type: 'group', label: 'B', geometryjson: JSON.stringify(box)} as VimiContainer,
+        ];
+        const res = refineArrangement({
+            nodes, relations: [], containers, profile: 'mindmap', positions, sizes,
+            lockedContainers: new Set(['c']),
+        });
+        expect(res.containers.c).toEqual(box);
+    });
+
+    test('repeated application converges (container geometry settles)', () => {
+        const nodes = [node('m1'), node('m2')];
+        const box = {x: 100, y: 100, w: 140, h: 140};
+        const start: LayoutMap = {m1: {x: 150, y: 170}, m2: {x: 190, y: 170}};
+        const sizes: SizeMap = {m1: {w: 60, h: 40}, m2: {w: 60, h: 40}};
+        const containers: VimiContainer[] = [
+            {stableid: 'c', type: 'group', label: 'B', geometryjson: JSON.stringify(box)} as VimiContainer,
+        ];
+        const arrange = (positions: LayoutMap) => refineArrangement({
+            nodes, relations: [], containers, profile: 'mindmap', positions, sizes,
+        });
+        const p1 = arrange(start);
+        // Feed positions back and re-arrange; container geometry must not keep growing.
+        const containers2 = [{...containers[0], geometryjson: JSON.stringify(p1.containers.c)}];
+        const p2 = refineArrangement({
+            nodes, relations: [], containers: containers2, profile: 'mindmap', positions: p1.positions, sizes,
+        });
+        const dw = Math.abs(p2.containers.c.w - p1.containers.c.w);
+        const dh = Math.abs(p2.containers.c.h - p1.containers.c.h);
+        expect(dw).toBeLessThan(20);
+        expect(dh).toBeLessThan(20);
     });
 });

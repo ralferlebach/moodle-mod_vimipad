@@ -6,6 +6,57 @@
 > line; those entries are kept for historical reference only. The current
 > release is **0.8.6** (2026072776).
 
+## 0.8.10 (2026072780) — Arrange resizes containers (grow-to-contain, preserving)
+
+The arrange now adjusts container boxes to keep their members enclosed, having
+previously left every box untouched.
+
+- **Grow-to-contain, no shrink by default.** A box grows just enough to hold its
+  members with padding; it never shrinks below the human's chosen size, so a
+  deliberately spacious container stays spacious. Repeated presses converge (the
+  box settles at the padded member bounds) rather than drifting. A per-call
+  override (containerShrinkRate > 0) can tighten oversized boxes if wanted.
+- **Locks respected.** A move-locked container is never resized or moved — its
+  geometry belongs to the locked "move" group, so a change would be rejected
+  server-side; the arrange excludes it up front.
+- **Revisioned + undoable.** Each grown box is persisted as a container_update
+  operation (so collaborators receive it) and is part of the re-arrange undo/redo
+  entry alongside the node layout.
+- New adapter tests cover grow-only preservation of an oversized box, the
+  locked-container guarantee, and convergence under repeated application.
+
+Note: containers are still treated as axis-aligned boxes; for elliptical
+containers the bounding box is used (a corner member counts as inside). A true
+elliptical metric remains a possible follow-up.
+
+## 0.8.9 (2026072779) — Arrange calibration: stop the drift, respect grouping and locks
+
+Fixes three misbehaviours of the new arrange reported on real maps: a node
+outside an inner container was slowly dragged into it, an unconnected outside
+node ("was anderes") drifted steadily further out on every press, and the
+spacing to a locked node was not respected.
+
+- **Per-edge rest length (preservation).** The edge well now anchors to each
+  edge's *current* length instead of a single global L, so an already-placed
+  edge exerts no length force and the arrange is idempotent — repeated presses
+  settle instead of pushing connected nodes apart. A new edgeTargetBlend option
+  (default 0 = fully preserve) can gently normalise lengths toward L when wanted.
+- **Flat-bottom container interior.** The interior potential is now exactly zero
+  inside the wall (a quadratic hinge that only rises once a member crosses it),
+  so a large outer container no longer pulls its members toward its centre — the
+  mechanism that was dragging an outside node inward and reducing the spacing to
+  the locked node. Members are still confined; non-members are still pushed out
+  by the (now gentler, shorter-range) exterior dome.
+- **Concept maps are no longer direction-forced.** Only the tree profile imposes
+  a downward flow; concept maps keep their sibling order axis but are not rotated
+  toward a global direction.
+
+New regression coverage reproduces the reported layout (outer box with a locked
+member, inner box, an outside node and an unconnected top node) and asserts the
+outside node is not swallowed, the locked node never moves, its spacing is kept,
+and repeated application converges instead of drifting. Gradient checks now
+exercise the flat-bottom wall.
+
 ## 0.8.8 (2026072778) — Preservation-first "Arrange" (potential-driven refiner)
 
 Replaces the old force-directed / re-seeding arrange with a layout **refiner**

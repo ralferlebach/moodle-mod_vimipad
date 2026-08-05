@@ -59,8 +59,12 @@ export interface ProfileRefine {
 export function refineOptionsForProfile(profile: string): ProfileRefine {
     switch (profile) {
         case 'tree':
-        case 'conceptmap':
             return {preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0}};
+        case 'conceptmap':
+            // Concept maps are hierarchical but their cross-links point every
+            // which way; forcing a global direction would rotate the map. Keep
+            // the sibling order axis, but do not impose a direction.
+            return {preferredDir: null, directed: false, orderAxis: {x: 1, y: 0}};
         case 'mindmap':
         case 'bubblemap':
             return {preferredDir: null, directed: false, orderAxis: null};
@@ -81,6 +85,15 @@ export interface ArrangeInput {
     sizes: SizeMap;
     /** Stable ids that must not move (move-locked, or pinned in a locked container). */
     pinned?: Set<string>;
+    /** Container stable ids whose geometry is locked (never resized/moved). */
+    lockedContainers?: Set<string>;
+    /**
+     * Whether containers may be resized to keep their members enclosed. Default
+     * true: boxes grow to contain members with padding but, by default, do not
+     * shrink (the human's chosen size is preserved). Set an override
+     * containerShrinkRate > 0 to also tighten oversized boxes.
+     */
+    resizeContainers?: boolean;
     /** Optional option overrides (e.g. stabilityScale calibrated per site). */
     overrides?: Partial<RefineOptions>;
 }
@@ -107,6 +120,8 @@ function pointInBox(px: number, py: number, b: {x: number; y: number; w: number;
  */
 export function refineArrangement(input: ArrangeInput): ArrangeResult {
     const {nodes, relations, containers, profile, positions, sizes, pinned, overrides} = input;
+    const lockedContainers = input.lockedContainers;
+    const resizeContainers = input.resizeContainers ?? true;
     const prof = refineOptionsForProfile(profile);
 
     const posOf = (id: string): {x: number; y: number} =>
@@ -150,7 +165,7 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
         }
         rcontainers.push({
             stableid: c.stableid, x: box.x, y: box.y, w: box.w, h: box.h,
-            members, fixed: true, // boxes are not resized by the arrange in this release
+            members, fixed: !resizeContainers || (lockedContainers?.has(c.stableid) ?? false),
         });
     }
 
@@ -159,6 +174,9 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
         directionFloor: prof.directed ? 0.15 : 0,
         orderAxis: prof.orderAxis,
         swaps: true,
+        // Grow to keep members enclosed, but preserve the human's box size
+        // (no shrink) unless the caller opts in via overrides.
+        containerShrinkRate: 0,
         ...overrides,
     };
 

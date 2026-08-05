@@ -96,9 +96,10 @@ describe('refineLayout behaviour', () => {
         expect(after).toBeGreaterThan(before);
     });
 
-    test('pulls an over-long edge toward the ideal length L', () => {
-        // Two connected nodes far apart; L comes from the two shorter edges so the
-        // long a-d edge is well above L and should contract.
+    test('preserves varied edge lengths by default, normalises only when asked', () => {
+        // Two connected nodes far apart; two shorter edges set L. By default
+        // (edgeTargetBlend 0) the long edge keeps its length; with a blend > 0 it
+        // contracts toward L.
         const nodes: RefineNode[] = [
             {stableid: 'a', x: 100, y: 300, w: 60, h: 40},
             {stableid: 'd', x: 900, y: 300, w: 60, h: 40},
@@ -107,12 +108,17 @@ describe('refineLayout behaviour', () => {
         ];
         const edges: RefineEdge[] = [
             {source: 'a', target: 'd'}, // long
-            {source: 'e', target: 'f'}, // ~160 -> sets L
+            {source: 'e', target: 'f'}, // ~160 -> influences L
         ];
-        const res = refineLayout(nodes, edges, {stabilityScale: 0.3});
+        const preserved = refineLayout(nodes, edges, {stabilityScale: 0.3});
+        const normalised = refineLayout(nodes, edges, {stabilityScale: 0.3, edgeTargetBlend: 0.6});
         const before = 800;
-        const after = dist(res.positions.a, res.positions.d);
-        expect(after).toBeLessThan(before);
+        const dPreserved = dist(preserved.positions.a, preserved.positions.d);
+        const dNormalised = dist(normalised.positions.a, normalised.positions.d);
+        // Preserved: the long edge stays long (barely changed).
+        expect(Math.abs(dPreserved - before)).toBeLessThan(60);
+        // Normalised: it contracts noticeably.
+        expect(dNormalised).toBeLessThan(dPreserved - 50);
     });
 
     test('aligns a directed edge toward the preferred direction', () => {

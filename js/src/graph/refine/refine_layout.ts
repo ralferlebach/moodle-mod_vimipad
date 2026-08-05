@@ -35,7 +35,7 @@
 
 import {
     edgePotential, edgePotentialDeriv, dirFactor, dirFactorDeriv, repShape, repShapeDeriv,
-    softCosh, softCoshDeriv, softplus, sigmoid,
+    softplus, sigmoid,
 } from './potentials';
 
 /** A node to refine: its current position, box size and how anchored it is. */
@@ -89,6 +89,13 @@ export interface RefineOptions {
     stabilityScale: number;
     /** Master scale override; when omitted it is the median edge length. */
     scale?: number;
+    /**
+     * Blend of each edge's rest length between its current (human) length and the
+     * global L, in [0,1]. 0 = fully preserve the human's varied edge lengths (the
+     * edge exerts no length force at the start, so the arrange is idempotent);
+     * higher values gently normalise lengths toward L.
+     */
+    edgeTargetBlend: number;
     /** Max solver iterations. */
     maxIterations: number;
     /** Per-node, per-iteration movement cap, as a fraction of L. */
@@ -164,12 +171,13 @@ const DEFAULTS: RefineOptions = {
     gradTol: 1e-4,
     energyTol: 1e-7,
     scale: undefined,
+    edgeTargetBlend: 0,
     containerIn: 1,
-    containerOut: 1,
-    containerFill: 0.7,
+    containerOut: 0.6,
+    containerFill: 0.85,
     containerDomeN: 2,
     containerCoshCap: 6,
-    containerPadFactor: 0.15,
+    containerPadFactor: 0.12,
     containerGrowRate: 0.6,
     containerShrinkRate: 0.15,
     orderAxis: null,
@@ -215,7 +223,7 @@ export interface Problem {
     hh: Float64Array;
     wstab: Float64Array;
     fixed: boolean[];
-    edges: {s: number; t: number; directed: boolean}[];
+    edges: {s: number; t: number; directed: boolean; rest: number}[];
     containers: ProblemContainer[];
     l: number;
     p0: number;
@@ -305,7 +313,7 @@ export function buildProblem(
         });
     }
 
-    const e: {s: number; t: number; directed: boolean}[] = [];
+    const e: {s: number; t: number; directed: boolean; rest: number}[] = [];
     const degree = new Int32Array(n);
     for (const edge of edges) {
         const s = index.get(edge.source);
@@ -313,7 +321,7 @@ export function buildProblem(
         if (s === undefined || tt === undefined || s === tt) {
             continue;
         }
-        e.push({s, t: tt, directed: !!edge.directed});
+        e.push({s, t: tt, directed: !!edge.directed, rest: 0});
         degree[s]++; degree[tt]++;
     }
 
@@ -331,6 +339,15 @@ export function buildProblem(
     }
     const p0 = 2 + kmax;
     const arep = 1 + kmax;
+
+    // Per-edge rest length: anchored to each edge's current (human) length, so an
+    // already-placed edge sits at its well minimum and exerts no length force
+    // (preservation). edgeTargetBlend gently pulls toward the global L.
+    const beta = opts.edgeTargetBlend;
+    for (const ed of e) {
+        const len = Math.hypot(px0[ed.s] - px0[ed.t], py0[ed.s] - py0[ed.t]) || l;
+        ed.rest = (1 - beta) * len + beta * l;
+    }
 
     const stabW = opts.stabilityScale / (l * l);
     const wstab = new Float64Array(n);
@@ -429,7 +446,7 @@ function regulariseCoincidences(prob: Problem, nodes: RefineNode[]): void {
  * @returns The total energy.
  */
 export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Array]): number {
-    const {n, px, py, px0, py0, hw, hh, wstab, edges, l, p0, arep, padx, pady, epsReg, ux, uy, directed, dirFloor} = prob;
+    const {n, px, py, px0, py0, hw, hh, wstab, edges, p0, arep, padx, pady, epsReg, ux, uy, directed, dirFloor} = prob;
     let gx: Float64Array | null = null;
     let gy: Float64Array | null = null;
     if (grad) {
@@ -461,14 +478,14 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
     }
 
     // Edge length (and, for directed edges, direction).
-    for (const {s, t, directed: ed} of edges) {
+    for (const {s, t, directed: ed, rest} of edges) {
         const dx = px[t] - px[s];
         const dy = py[t] - py[s];
         const r = Math.sqrt(dx * dx + dy * dy + epsReg * epsReg);
         const ex = dx / r;
         const ey = dy / r;
-        const pt = edgePotential(r, l, p0);
-        const ptd = edgePotentialDeriv(r, l, p0);
+        const pt = edgePotential(r, rest, p0);
+        const ptd = edgePotentialDeriv(r, rest, p0);
         if (directed && ed) {
             const c = ex * ux + ey * uy;
             const g = dirFactor(c, dirFloor);
@@ -500,24 +517,31 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
         }
     }
 
-    // Containers: confine members inside (cosh well), push non-members outside
-    // (domed super-Gaussian). Boxes are fixed here; they are re-fitted by a
-    // separate projection, not by this gradient.
-    const {containers, cIn, cOut, cFill, cDomeN, cCap, cPad} = prob;
+    // Containers: confine members inside without pulling them to the centre
+    // (a flat-bottomed well: zero in the interior, rising past the inner wall),
+    // and push non-members outside (domed super-Gaussian). Boxes are fixed here.
+    const {containers, cIn, cOut, cDomeN, cPad} = prob;
     for (const c of containers) {
         for (let i = 0; i < n; i++) {
             if (c.members.has(i)) {
-                // Interior: keep the node's box inside the wall with padding.
-                const effhx = Math.max(c.hx - (hw[i] + cPad), 0.2 * c.hx);
-                const effhy = Math.max(c.hy - (hh[i] + cPad), 0.2 * c.hy);
-                const ax = cFill * effhx;
-                const ay = cFill * effhy;
-                const uxc = (px[i] - c.cx) / ax;
-                const uyc = (py[i] - c.cy) / ay;
-                e += cIn * (softCosh(uxc, cCap) + softCosh(uyc, cCap));
+                // Flat-bottom interior: exactly zero inside the inner wall (no pull
+                // toward the centre), quadratic once a member crosses the wall.
+                const inx = Math.max(c.hx - (hw[i] + cPad), 0.15 * c.hx);
+                const iny = Math.max(c.hy - (hh[i] + cPad), 0.15 * c.hy);
+                const ux = (px[i] - c.cx) / inx;
+                const uy = (py[i] - c.cy) / iny;
+                const ox = Math.abs(ux) - 1;
+                const oy = Math.abs(uy) - 1;
+                const pox = ox > 0 ? ox : 0;
+                const poy = oy > 0 ? oy : 0;
+                e += cIn * (pox * pox + poy * poy);
                 if (gx && gy) {
-                    gx[i] += cIn * softCoshDeriv(uxc, cCap) / ax;
-                    gy[i] += cIn * softCoshDeriv(uyc, cCap) / ay;
+                    if (ox > 0) {
+                        gx[i] += cIn * 2 * pox * Math.sign(ux) / inx;
+                    }
+                    if (oy > 0) {
+                        gy[i] += cIn * 2 * poy * Math.sign(uy) / iny;
+                    }
                 }
             } else {
                 // Exterior: force-free beyond the margin, domed inside.
@@ -535,7 +559,6 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
                 const val = Math.exp(-arg);
                 e += cOut * val;
                 if (gx && gy) {
-                    // d/dxi exp(-(|qx|^{2n}+...)) = exp(...)*(-2n)|qx|^{2n-1}sgn(qx)/bx
                     const dqx = -twoN * Math.pow(Math.abs(qx), twoN - 1) * Math.sign(qx) / bx;
                     const dqy = -twoN * Math.pow(Math.abs(qy), twoN - 1) * Math.sign(qy) / by;
                     gx[i] += cOut * val * dqx;

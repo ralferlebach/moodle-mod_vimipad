@@ -34,6 +34,7 @@ function buildProblemOptions(): RefineOptions {
     return {
         ...defaultRefineOptions(), preferredDir: {x: 0, y: 1}, directionFloor: 0.1,
         stabilityScale: 1.5, scale: 150, orderAxis: {x: 1, y: 0}, orderStrength: 2,
+        edgeTargetBlend: 0.5, // move edge rest off the current length so the edge gradient is non-trivial
     };
 }
 
@@ -107,11 +108,11 @@ describe('assembled energy gradient (finite-difference check)', () => {
         checkGradient(prob);
     });
 
-    test('gradient stays correct with a container (member + non-member)', () => {
-        // 'a' is a member (sitting off-centre inside), 'c' a non-member sitting
-        // inside the box (must be pushed out) — both container terms exercised.
+    test('gradient stays correct with a container (member past the wall + non-member)', () => {
+        // 'a' is a member pushed past the right inner wall (so the flat-bottom
+        // hinge is active), 'c' a non-member sitting inside (dome active).
         const cnodes: RefineNode[] = [
-            {stableid: 'a', x: 320, y: 300, w: 90, h: 40},
+            {stableid: 'a', x: 470, y: 300, w: 90, h: 40},
             {stableid: 'b', x: 130, y: 120, w: 120, h: 40},
             {stableid: 'c', x: 360, y: 320, w: 80, h: 40},
             {stableid: 'd', x: 250, y: 600, w: 80, h: 40},

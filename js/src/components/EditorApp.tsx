@@ -31,7 +31,7 @@ import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
 import {refineArrangement} from '../graph/refine/refine_arrange';
 import {
-    ContainerBox, parseGeometry, isNodePinnedForRearrange,
+    ContainerBox, parseGeometry, serializeGeometry, isNodePinnedForRearrange,
 } from '../canvas/container_geometry';
 import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg, extractMapData} from '../canvas/svg_export';
 import {EditorState, reduce} from '../store/reducer';
@@ -752,9 +752,11 @@ export function EditorApp(props: Props): React.ReactElement {
         // elements with re-arrange; a learner (or a previewing teacher) cannot.
         const enforcementActive = state.canmanage !== true || lockMode;
         const moveLockedContainerBoxes: ContainerBox[] = [];
+        const lockedContainers = new Set<string>();
         if (enforcementActive) {
             for (const c of containers) {
                 if (isGroupLocked(c.metadatajson, 'move')) {
+                    lockedContainers.add(c.stableid);
                     const b = parseGeometry(c.geometryjson);
                     if (b) {
                         moveLockedContainerBoxes.push(b);
@@ -773,11 +775,12 @@ export function EditorApp(props: Props): React.ReactElement {
 
         // Preservation-first refinement: gently improve the existing (human)
         // layout in place instead of re-seeding it. Container membership is read
-        // from the current geometry and kept by the interior/exterior potentials;
-        // boxes are not resized here.
+        // from the current geometry and kept by the interior/exterior potentials.
+        // Boxes may grow to keep their members enclosed (never shrink, so the
+        // human's chosen size is preserved); move-locked boxes are left untouched.
         const arranged = refineArrangement({
             nodes: state.nodes, relations: state.relations, containers,
-            profile: state.profile, positions: stored, sizes, pinned,
+            profile: state.profile, positions: stored, sizes, pinned, lockedContainers,
         });
         const auto: LayoutMap = {...arranged.positions};
         for (const n of state.nodes) {
@@ -786,10 +789,27 @@ export function EditorApp(props: Props): React.ReactElement {
             }
         }
 
-        // Container membership is preserved by the refiner (boxes stay fixed and
-        // each node is kept inside or pushed outside its region by the container
-        // potentials), so no container refit is emitted here.
+        // Emit a revisioned container_update for every box whose geometry the
+        // refiner grew. Move-locked boxes are excluded (their geometry change
+        // would be rejected server-side anyway).
         const refits: Array<{stableid: string; oldgeom: string; newgeom: string}> = [];
+        for (const c of containers) {
+            if (lockedContainers.has(c.stableid)) {
+                continue;
+            }
+            const g = arranged.containers[c.stableid];
+            if (!g) {
+                continue;
+            }
+            const old = parseGeometry(c.geometryjson);
+            if (!old || old.x !== g.x || old.y !== g.y || old.w !== g.w || old.h !== g.h) {
+                refits.push({
+                    stableid: c.stableid,
+                    oldgeom: c.geometryjson ?? '',
+                    newgeom: serializeGeometry(g),
+                });
+            }
+        }
 
         setStored(auto);
         refits.forEach(u => dispatch({kind: 'updateContainer', stableid: u.stableid, geometryjson: u.newgeom}));
