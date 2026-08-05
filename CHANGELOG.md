@@ -6,6 +6,29 @@
 > line; those entries are kept for historical reference only. The current
 > release is **0.8.6** (2026072776).
 
+## 0.8.13 (2026072783) — Elliptical containers use a true elliptical metric
+
+The layout refiner previously treated every container as its axis-aligned
+bounding box, so a node in the corner of an elliptical container's box counted
+as "inside" even though it sat outside the visible ellipse. Elliptical
+containers now use a radial elliptical metric throughout.
+
+- **Membership.** A node is a member of an ellipse container only when its centre
+  is inside the ellipse ((dx/a)^2 + (dy/b)^2 <= 1), not merely inside the box, so
+  corner nodes are no longer spurious members.
+- **Interior potential.** Members of an ellipse are confined by a flat-bottomed
+  radial well (zero inside the inner ellipse, quadratic once the elliptical
+  radius exceeds one) — they are kept inside the ellipse, not the box, without
+  being pulled to the centre.
+- **Exterior potential.** Non-members feel a radially-domed elliptical field that
+  pushes them out of the ellipse and is force-free beyond the margin.
+- **Fit.** An ellipse grows uniformly (centre fixed) until every member's box
+  corner lies inside it; grow-only by default, so the human's size is preserved.
+- Rectangular and rounded-rectangle containers keep the separable box metric.
+  Gradient checks now cover the elliptical interior and exterior; behavioural
+  tests cover ellipse confinement, non-member ejection, elliptical growth and the
+  corner-node membership distinction.
+
 ## 0.8.12 (2026072782) — Behat CI green: three real failures fixed
 
 The behat features added in 0.8.6 were only dry-run validated (the sandbox has

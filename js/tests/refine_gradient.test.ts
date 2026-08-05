@@ -123,6 +123,22 @@ describe('assembled energy gradient (finite-difference check)', () => {
         const prob = buildProblem(cnodes, edges, opts, containers);
         checkGradient(prob);
     });
+
+    test('gradient stays correct with an elliptical container', () => {
+        // 'a' is a member pushed past the ellipse wall (interior hinge active),
+        // 'c' a non-member off-centre inside (elliptical dome active).
+        const cnodes: RefineNode[] = [
+            {stableid: 'a', x: 470, y: 330, w: 90, h: 40},
+            {stableid: 'b', x: 120, y: 130, w: 120, h: 40},
+            {stableid: 'c', x: 330, y: 300, w: 80, h: 40},
+            {stableid: 'd', x: 250, y: 600, w: 80, h: 40},
+        ];
+        const containers: RefineContainer[] = [
+            {stableid: 'oval', x: 250, y: 250, w: 240, h: 170, members: ['a'], shape: 'ellipse'},
+        ];
+        const prob = buildProblem(cnodes, edges, opts, containers);
+        checkGradient(prob);
+    });
 });
 
 /** Compare the analytic gradient to a central finite difference at each node. */

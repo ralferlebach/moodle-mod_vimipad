@@ -65,6 +65,8 @@ export interface RefineContainer {
     w: number;
     h: number;
     members: string[];
+    /** Geometric shape: 'ellipse' uses an elliptical metric, otherwise a box. */
+    shape?: 'rect' | 'ellipse';
     /** If true the box geometry is never adjusted. */
     fixed?: boolean;
 }
@@ -209,6 +211,7 @@ export interface ProblemContainer {
     hx: number;
     hy: number;
     members: Set<number>;
+    ellipse: boolean;
     fixed: boolean;
 }
 
@@ -377,7 +380,7 @@ export function buildProblem(
             return {
                 cx: c.x + c.w / 2, cy: c.y + c.h / 2,
                 hx: Math.max(1, c.w / 2), hy: Math.max(1, c.h / 2),
-                members: memberSet, fixed: !!c.fixed,
+                members: memberSet, ellipse: c.shape === 'ellipse', fixed: !!c.fixed,
             };
         }),
         l, p0, arep, padx: opts.padFactor * l, pady: opts.padFactor * l,
@@ -519,11 +522,53 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
 
     // Containers: confine members inside without pulling them to the centre
     // (a flat-bottomed well: zero in the interior, rising past the inner wall),
-    // and push non-members outside (domed super-Gaussian). Boxes are fixed here.
+    // and push non-members outside (a domed field). Rectangular containers use a
+    // separable box metric; elliptical containers use a radial elliptical metric
+    // so a member in a box corner is correctly treated as outside the ellipse.
     const {containers, cIn, cOut, cDomeN, cPad} = prob;
     for (const c of containers) {
         for (let i = 0; i < n; i++) {
-            if (c.members.has(i)) {
+            const member = c.members.has(i);
+            if (c.ellipse) {
+                if (member) {
+                    // Interior: zero inside the inner ellipse, quadratic past it.
+                    const ax = Math.max(c.hx - (hw[i] + cPad), 0.15 * c.hx);
+                    const by = Math.max(c.hy - (hh[i] + cPad), 0.15 * c.hy);
+                    const dx = px[i] - c.cx;
+                    const dy = py[i] - c.cy;
+                    const rho = Math.sqrt((dx / ax) * (dx / ax) + (dy / by) * (dy / by));
+                    const o = rho - 1;
+                    if (o > 0) {
+                        e += cIn * o * o;
+                        if (gx && gy) {
+                            // dU/dx = cIn*2*o * (dx/ax^2)/rho ; rho>1 so no div-by-zero.
+                            const g = cIn * 2 * o / rho;
+                            gx[i] += g * dx / (ax * ax);
+                            gy[i] += g * dy / (by * by);
+                        }
+                    }
+                } else {
+                    // Exterior: domed in elliptical radius, force-free beyond margin.
+                    const ax = c.hx + hw[i] + cPad;
+                    const by = c.hy + hh[i] + cPad;
+                    const dx = px[i] - c.cx;
+                    const dy = py[i] - c.cy;
+                    const rho = Math.sqrt((dx / ax) * (dx / ax) + (dy / by) * (dy / by));
+                    const twoN = 2 * cDomeN;
+                    const arg = Math.pow(rho, twoN);
+                    if (arg > 40) {
+                        continue;
+                    }
+                    const val = Math.exp(-arg);
+                    e += cOut * val;
+                    if (gx && gy && rho > 1e-9) {
+                        // dU/drho = cOut*val*(-2n rho^{2n-1}); drho/dx = (dx/ax^2)/rho.
+                        const dUdrho = cOut * val * (-twoN * Math.pow(rho, twoN - 1));
+                        gx[i] += dUdrho * (dx / (ax * ax)) / rho;
+                        gy[i] += dUdrho * (dy / (by * by)) / rho;
+                    }
+                }
+            } else if (member) {
                 // Flat-bottom interior: exactly zero inside the inner wall (no pull
                 // toward the centre), quadratic once a member crosses the wall.
                 const inx = Math.max(c.hx - (hw[i] + cPad), 0.15 * c.hx);
@@ -605,6 +650,33 @@ export function fitContainers(prob: Problem, opts: RefineOptions): void {
         if (c.fixed || c.members.size === 0) {
             continue;
         }
+
+        if (c.ellipse) {
+            // Grow the ellipse (uniformly, centre fixed) until every member's box
+            // corner lies inside it: the required scale is the max elliptical
+            // radius of any corner. Grow-only by default; shrink only if enabled.
+            let s = 0;
+            for (const i of c.members) {
+                for (const sx of [-1, 1]) {
+                    for (const sy of [-1, 1]) {
+                        const dx = px[i] + sx * (hw[i] + cPad) - c.cx;
+                        const dy = py[i] + sy * (hh[i] + cPad) - c.cy;
+                        s = Math.max(s, Math.hypot(dx / c.hx, dy / c.hy));
+                    }
+                }
+            }
+            if (s > 1) {
+                const applied = Math.max(1 + grow * (s - 1), s); // hard-contain
+                c.hx = Math.max(1, c.hx * applied);
+                c.hy = Math.max(1, c.hy * applied);
+            } else if (shrink > 0 && s > 0) {
+                const applied = 1 + shrink * (s - 1);
+                c.hx = Math.max(1, c.hx * applied);
+                c.hy = Math.max(1, c.hy * applied);
+            }
+            continue;
+        }
+
         let reqL = Infinity;
         let reqR = -Infinity;
         let reqT = Infinity;

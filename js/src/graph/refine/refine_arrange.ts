@@ -32,6 +32,7 @@
 
 import {VimiNode, VimiRelation, VimiContainer, LayoutMap, SizeMap} from '../../types';
 import {parseGeometry} from '../../canvas/container_geometry';
+import {parseNodeStyle} from '../../canvas/node_style';
 import {nodeWidth, nodeHeight} from '../../canvas/node_geometry';
 import {
     refineLayout, RefineNode, RefineEdge, RefineContainer, RefineOptions, RefinedContainer,
@@ -148,24 +149,37 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
         source: r.sourceid, target: r.targetid, directed: prof.directed && r.direction !== 0,
     }));
 
-    // Container membership from the current geometry: a node whose centre sits in
-    // the box is a member. This captures the human's intended grouping.
+    // Container membership from the current geometry: a node whose centre sits
+    // inside the container's shape is a member. Ellipse containers use the true
+    // elliptical test, so a node in a box corner (outside the ellipse) is not a
+    // spurious member.
     const rcontainers: RefineContainer[] = [];
     for (const c of containers) {
         const box = c.geometryjson ? parseGeometry(c.geometryjson) : null;
         if (!box) {
             continue;
         }
+        const isEllipse = parseNodeStyle(c.metadatajson).shape === 'ellipse';
+        const inside = (p: {x: number; y: number}): boolean => {
+            if (isEllipse) {
+                const ax = box.w / 2;
+                const by = box.h / 2;
+                const dx = (p.x - (box.x + ax)) / (ax || 1);
+                const dy = (p.y - (box.y + by)) / (by || 1);
+                return dx * dx + dy * dy <= 1;
+            }
+            return pointInBox(p.x, p.y, box);
+        };
         const members: string[] = [];
         for (const nd of nodes) {
-            const p = posOf(nd.stableid);
-            if (pointInBox(p.x, p.y, box)) {
+            if (inside(posOf(nd.stableid))) {
                 members.push(nd.stableid);
             }
         }
         rcontainers.push({
             stableid: c.stableid, x: box.x, y: box.y, w: box.w, h: box.h,
-            members, fixed: !resizeContainers || (lockedContainers?.has(c.stableid) ?? false),
+            members, shape: isEllipse ? 'ellipse' : 'rect',
+            fixed: !resizeContainers || (lockedContainers?.has(c.stableid) ?? false),
         });
     }
 

@@ -130,4 +130,63 @@ describe('refineLayout containers', () => {
         const res = refineLayout(nodes, [], {}, containers);
         expect(res.containers.c).toEqual(box);
     });
+
+    describe('elliptical containers', () => {
+        // A wide ellipse centred at (360, 350) with semi-axes (150, 100).
+        const oval = {x: 210, y: 250, w: 300, h: 200};
+        const cx = oval.x + oval.w / 2;
+        const cy = oval.y + oval.h / 2;
+        const ellRadius = (p: {x: number; y: number}): number =>
+            Math.hypot((p.x - cx) / (oval.w / 2), (p.y - cy) / (oval.h / 2));
+
+        test('a member in the box corner (outside the ellipse) is pulled inside it', () => {
+            // Corner of the bounding box is well outside the ellipse (radius > 1).
+            const nodes: RefineNode[] = [
+                {stableid: 'm', x: oval.x + 20, y: oval.y + 20, w: 40, h: 30}, // top-left corner area
+                {stableid: 'anchor', x: cx, y: cy, w: 40, h: 30},
+            ];
+            const containers: RefineContainer[] = [
+                {stableid: 'c', ...oval, members: ['m', 'anchor'], shape: 'ellipse'},
+            ];
+            expect(ellRadius(nodes[0])).toBeGreaterThan(1); // starts outside the ellipse
+            const res = refineLayout(nodes, [], {stabilityScale: 0.2, containerIn: 3}, containers);
+            // It is drawn toward/into the ellipse (radius shrinks toward <= ~1).
+            expect(ellRadius(res.positions.m)).toBeLessThan(ellRadius(nodes[0]));
+        });
+
+        test('a non-member off-centre inside the ellipse is pushed out', () => {
+            const nodes: RefineNode[] = [
+                {stableid: 'f', x: cx + 30, y: cy - 20, w: 40, h: 30}, // inside, off-centre
+                {stableid: 'p', x: 900, y: 350, w: 40, h: 30},
+            ];
+            const containers: RefineContainer[] = [
+                {stableid: 'c', ...oval, members: [], shape: 'ellipse'},
+            ];
+            const before = ellRadius(nodes[0]);
+            const res = refineLayout(nodes, [{source: 'f', target: 'p'}],
+                {stabilityScale: 0.2, containerOut: 4}, containers);
+            expect(ellRadius(res.positions.f)).toBeGreaterThan(before);
+        });
+
+        test('the ellipse grows to enclose a member forced to its edge', () => {
+            const nodes: RefineNode[] = [
+                {stableid: 'm', x: oval.x + oval.w - 10, y: cy, w: 60, h: 40}, // near right edge
+                {stableid: 'n', x: cx - 40, y: cy, w: 40, h: 30},
+            ];
+            const containers: RefineContainer[] = [
+                {stableid: 'c', ...oval, members: ['m', 'n'], shape: 'ellipse'},
+            ];
+            const res = refineLayout(nodes, [], {stabilityScale: 1}, containers);
+            // Final ellipse contains the member's box corner (radius <= 1 with the
+            // grown geometry).
+            const g = res.containers.c;
+            const gcx = g.x + g.w / 2;
+            const gcy = g.y + g.h / 2;
+            const corner = Math.hypot(
+                (res.positions.m.x + 30 - gcx) / (g.w / 2),
+                (res.positions.m.y - gcy) / (g.h / 2)
+            );
+            expect(corner).toBeLessThanOrEqual(1.05);
+        });
+    });
 });

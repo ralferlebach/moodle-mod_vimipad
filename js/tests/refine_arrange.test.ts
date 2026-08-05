@@ -148,6 +148,42 @@ describe('refineArrangement', () => {
         expect(res.containers.c).toEqual(box);
     });
 
+    test('elliptical container: a box-corner node is not a member (not confined)', () => {
+        // A wide ellipse; 'corner' sits in the bounding-box corner, outside the
+        // ellipse. As a rect it would be a member (kept in); as an ellipse it is a
+        // non-member and the dome pushes it further from the centre.
+        const geom = {x: 100, y: 100, w: 300, h: 200};
+        const cx = geom.x + geom.w / 2;
+        const cy = geom.y + geom.h / 2;
+        const positions: LayoutMap = {
+            corner: {x: geom.x + 30, y: geom.y + 25}, // box corner, outside the ellipse
+            anchor: {x: cx, y: cy},
+        };
+        const sizes: SizeMap = {corner: {w: 40, h: 30}, anchor: {w: 40, h: 30}};
+        const nodes = [node('corner'), node('anchor')];
+        const distFromCentre = (p: {x: number; y: number}): number => Math.hypot(p.x - cx, p.y - cy);
+        const before = distFromCentre(positions.corner);
+
+        const asRect: VimiContainer[] = [{stableid: 'c', type: 'group', label: 'B',
+            geometryjson: JSON.stringify(geom), metadatajson: JSON.stringify({shape: 'rect'})} as VimiContainer];
+        const asEllipse: VimiContainer[] = [{stableid: 'c', type: 'group', label: 'B',
+            geometryjson: JSON.stringify(geom), metadatajson: JSON.stringify({shape: 'ellipse'})} as VimiContainer];
+
+        const rectRes = refineArrangement({
+            nodes, relations: [], containers: asRect, profile: 'mindmap', positions, sizes,
+            overrides: {stabilityScale: 0.2, containerOut: 4},
+        });
+        const ellRes = refineArrangement({
+            nodes, relations: [], containers: asEllipse, profile: 'mindmap', positions, sizes,
+            overrides: {stabilityScale: 0.2, containerOut: 4},
+        });
+
+        // As a rect member the corner is confined (stays ~put, flat interior).
+        expect(distFromCentre(rectRes.positions.corner)).toBeLessThan(before + 8);
+        // As an ellipse non-member it is pushed outward, away from the centre.
+        expect(distFromCentre(ellRes.positions.corner)).toBeGreaterThan(before);
+    });
+
     test('repeated application converges (container geometry settles)', () => {
         const nodes = [node('m1'), node('m2')];
         const box = {x: 100, y: 100, w: 140, h: 140};
