@@ -32,6 +32,7 @@ import {ApiClient} from '../api/service';
 import {AdaptiveConfig} from './adaptive';
 import {LockClient} from './lock_client';
 import {PollClient} from './poll_client';
+import {PushClient, pushAvailable} from './push_client';
 import {CollabConfig, Lease, PolledOperation} from '../types';
 
 /** A map from "type:stableid" to the user id holding it. */
@@ -120,6 +121,15 @@ export function useCollaboration(
 
     const adaptive = useMemo(() => toAdaptive(collab), [collab]);
 
+    // Push config, memoised on its primitive fields so a fresh collab object
+    // each render does not restart the effect.
+    const pushCfg = useMemo(() => ({
+        pushenabled: collab?.pushenabled,
+        pushendpoint: collab?.pushendpoint,
+        pushtopic: collab?.pushtopic,
+        pushtoken: collab?.pushtoken,
+    }), [collab?.pushenabled, collab?.pushendpoint, collab?.pushtopic, collab?.pushtoken]);
+
     useEffect(() => {
         if (!workspaceid) {
             return undefined;
@@ -175,12 +185,22 @@ export function useCollaboration(
         pollRef.current = poll;
         poll.start();
 
+        // Optional real-time accelerator: if an admin configured a hub, wake an
+        // immediate poll on each push event. Purely additive — the poll loop
+        // above stays the transport and the fallback.
+        let push: PushClient | null = null;
+        if (pushAvailable(pushCfg)) {
+            push = new PushClient(pushCfg, () => { void poll.pollOnce(); });
+            push.start();
+        }
+
         return () => {
+            push?.stop();
             poll.stop();
             pollRef.current = null;
             lockRef.current = null;
         };
-    }, [api, workspaceid, adaptive, handleError]);
+    }, [api, workspaceid, adaptive, handleError, pushCfg]);
 
     const isLockedByOther = useCallback((targettype: string, stableid: string): boolean => {
         const holder = presence[keyOf(targettype, stableid)];

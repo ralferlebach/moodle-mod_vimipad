@@ -112,10 +112,27 @@ Parameter-Validierung oder CSRF nach dem 0.7.30-Stand. Die zuvor gemeldeten
 Punkte (Journal-comment-Capability, GET-Mutationen, Lock-Takeover-Race inkl.
 Owner-Renewal-CAS, byte- vs. zeichenbasierte Payload-Grenze, Layout-/Viewport-
 Feldschema via `layout_policy` an der Service-Grenze, AI-Eingabe-/Ausgabegrenzen)
-sind behoben und durch Tests abgesichert. Verbleibende, **nicht
-sicherheitskritische** Punkte im Backlog (0.8.x): unpaginierte Lehrenden-/
-Historienansichten, Gradebook-Sync-Chunking bei sehr großen Kohorten, die
-vollständige CAS-Absicherung des Heartbeat-`renew()` (advisory Presence-Lock,
-keine Datenintegritätsfrage), sowie die strukturelle Vereinheitlichung der
-inline validierenden External-Functions auf die `validate_workspace_for_*`-Helper.
+sind behoben und durch Tests abgesichert.
+
+**0.8.19 — 0.7.30-Audit-Reste geschlossen:**
+
+- Der Heartbeat-`renew()` (`lock_service::renew`) ist jetzt vollständig
+  **CAS-abgesichert**: ein bedingtes `UPDATE … WHERE id AND userid AND
+  timeexpires` plus Re-Read; ein Takeover zwischen Read und Write wird nicht mehr
+  überschrieben, und der alte Halter erhält korrekt `acquired=false` mit dem
+  echten neuen Halter (Test `test_renew_after_takeover_reports_new_holder`).
+- Die `get_operations`-Zugriffsabdeckung ist um Gruppen-, Course-Workspace-,
+  Cross-Activity-, Guest-, unenrolled- und suspended-Fälle erweitert.
+- **Gastzugriff — bewusste Entscheidung, dokumentiert und erzwungen:** Das Lesen
+  jedes Workspaces (auch des geteilten Course-Workspaces) erfordert
+  `mod/vimipad:view` im Modul-Kontext. Gäste, nicht eingeschriebene und
+  suspendierte Nutzer werden abgewiesen — eine Kurs-Map ist Kursinhalt, kein
+  öffentliches Datum. Course-Workspaces sind ausschließlich unter eingeschriebenen
+  Teilnehmenden geteilt (Kommentar in `helper::validate_workspace_for_read`,
+  Tests in `get_operations_contract_test`).
+
+Verbleibende, **nicht sicherheitskritische** Punkte im Backlog (0.8.x):
+unpaginierte Lehrenden-/Historienansichten, Gradebook-Sync-Chunking bei sehr
+großen Kohorten, sowie die strukturelle Vereinheitlichung der inline
+validierenden External-Functions auf die `validate_workspace_for_*`-Helper.
 

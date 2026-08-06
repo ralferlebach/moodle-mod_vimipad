@@ -127,6 +127,18 @@ abstract class base {
     }
 
     /**
+     * The axis onto whose parallel line nodes are confined on arrange, as
+     * ['x' => float, 'y' => float], or null for none. Linear display types (e.g.
+     * timeline) override it so their events settle on a single line; all other
+     * forms leave it null.
+     *
+     * @return array|null
+     */
+    public function get_layout_line_axis(): ?array {
+        return null;
+    }
+
+    /**
      * The component name of the subplugin providing this definition.
      *
      * Derived from the concrete class namespace (e.g. vimipadform_tree\form
@@ -192,6 +204,10 @@ abstract class base {
         $orderaxis = $this->get_layout_order_axis();
         if ($orderaxis !== null) {
             $layout['orderaxis'] = ['x' => (float) $orderaxis['x'], 'y' => (float) $orderaxis['y']];
+        }
+        $lineaxis = $this->get_layout_line_axis();
+        if ($lineaxis !== null) {
+            $layout['lineaxis'] = ['x' => (float) $lineaxis['x'], 'y' => (float) $lineaxis['y']];
         }
         return [
             'profile' => $this->get_profile(),

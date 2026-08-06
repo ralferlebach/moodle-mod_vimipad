@@ -129,6 +129,46 @@ final class lock_service_test extends \advanced_testcase {
     }
 
     /**
+     * After the lease has been taken over by another user, the original holder's
+     * renewal fails and reports the real (new) holder rather than clobbering it.
+     * This is the observable contract the compare-and-swap in renew() protects.
+     *
+     * @return void
+     */
+    public function test_renew_after_takeover_reports_new_holder(): void {
+        global $DB;
+        $service = new lock_service();
+        $service->acquire($this->workspaceid, 'node', 'node_aaaaaaaaaaaa', 101, 15);
+
+        // Lapse the lease, then let user 202 take it over.
+        $DB->set_field(
+            'vimipad_lock',
+            'timeexpires',
+            time() - 1,
+            ['workspaceid' => $this->workspaceid, 'targetstableid' => 'node_aaaaaaaaaaaa']
+        );
+        $takeover = $service->acquire($this->workspaceid, 'node', 'node_aaaaaaaaaaaa', 202, 15);
+        $this->assertTrue($takeover->acquired);
+
+        // The original holder's renewal must fail and surface 202 as the holder,
+        // and must not have extended 202's lease.
+        $before = (int) $DB->get_field(
+            'vimipad_lock',
+            'timeexpires',
+            ['workspaceid' => $this->workspaceid, 'targetstableid' => 'node_aaaaaaaaaaaa']
+        );
+        $renewed = $service->renew($this->workspaceid, 'node', 'node_aaaaaaaaaaaa', 101, 999);
+        $this->assertFalse($renewed->acquired);
+        $this->assertSame(202, $renewed->userid);
+        $after = (int) $DB->get_field(
+            'vimipad_lock',
+            'timeexpires',
+            ['workspaceid' => $this->workspaceid, 'targetstableid' => 'node_aaaaaaaaaaaa']
+        );
+        $this->assertSame($before, $after, '202\'s lease must not be clobbered by 101\'s renew');
+    }
+
+    /**
      * An expired lease is treated as free: a different user may acquire it.
      *
      * @return void

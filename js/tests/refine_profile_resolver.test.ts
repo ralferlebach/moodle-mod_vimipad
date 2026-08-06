@@ -48,7 +48,7 @@ describe('resolveProfileRefine', () => {
             profile: 'tree',
             layout: {directed: true, direction: {x: 0, y: 1}, orderaxis: {x: 1, y: 0}},
         }));
-        expect(r).toEqual({directed: true, preferredDir: {x: 0, y: 1}, orderAxis: {x: 1, y: 0}, cyclicOrder: false});
+        expect(r).toEqual({directed: true, preferredDir: {x: 0, y: 1}, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null});
     });
 
     test('an order-only PHP layout (conceptmap-like) drops direction to null', () => {
@@ -56,24 +56,30 @@ describe('resolveProfileRefine', () => {
             profile: 'conceptmap',
             layout: {directed: false, orderaxis: {x: 1, y: 0}},
         }));
-        expect(r).toEqual({directed: false, preferredDir: null, orderAxis: {x: 1, y: 0}, cyclicOrder: false});
+        expect(r).toEqual({directed: false, preferredDir: null, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null});
     });
 
     test('a free PHP layout (radial) yields no direction and no order', () => {
         const r = resolveProfileRefine('mindmap', cfg({
             profile: 'mindmap', layout: {directed: false},
         }));
-        expect(r).toEqual({directed: false, preferredDir: null, orderAxis: null, cyclicOrder: false});
+        expect(r).toEqual({directed: false, preferredDir: null, orderAxis: null, cyclicOrder: false, lineAxis: null});
     });
 
-    test('the PHP layout overrides the built-in default for the same profile', () => {
-        // A profile whose built-in default is free, but whose PHP subplugin
-        // declares it directed: the config wins.
-        const r = resolveProfileRefine('mindmap', cfg({
-            profile: 'mindmap', layout: {directed: true, direction: {x: 0, y: 1}},
+    test('a line-confine PHP layout (timeline-like) sets lineAxis', () => {
+        const r = resolveProfileRefine('timeline', cfg({
+            profile: 'timeline',
+            layout: {directed: true, direction: {x: 1, y: 0}, lineaxis: {x: 1, y: 0}},
         }));
         expect(r.directed).toBe(true);
-        expect(r.preferredDir).toEqual({x: 0, y: 1});
-        expect(refineOptionsForProfile('mindmap').directed).toBe(false);
+        expect(r.preferredDir).toEqual({x: 1, y: 0});
+        expect(r.lineAxis).toEqual({x: 1, y: 0});
+    });
+
+    test('the built-in timeline default is directed with a line axis', () => {
+        const t = refineOptionsForProfile('timeline');
+        expect(t.directed).toBe(true);
+        expect(t.lineAxis).toEqual({x: 1, y: 0});
+        expect(t.preferredDir).toEqual({x: 1, y: 0});
     });
 });

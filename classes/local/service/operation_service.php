@@ -143,6 +143,10 @@ class operation_service {
 
         $transaction->allow_commit();
 
+        // Best-effort real-time notify (no-op unless an admin configured a hub);
+        // never affects the committed result.
+        push_service::publish($workspaceid, $newrevision);
+
         return ['revision' => $newrevision, 'stableid' => $stableid];
     }
 

@@ -40,19 +40,16 @@ Reifenachweis (kein Code-Befund):
   Tastaturbedienung, ARIA, Listen-/Tabellen-Alternative.
 - Browser-/DB-Matrix sowie Upgrade-/Backup-Restore-Tests in der CI.
 
-### Kleine, nicht-blockierende Restpunkte aus dem 0.7.30-Audit (für 0.8.x)
+### Kleine, nicht-blockierende Restpunkte aus dem 0.7.30-Audit — geschlossen (0.8.19)
 
-- **Heartbeat `renew()` vollständig CAS-sicher machen.** `acquire()` (inkl.
-  Owner-Renewal) ist CAS-abgesichert; `renew()` nutzt nach dem Read noch ein
-  unbedingtes `set_field()` nach ID. Bei sehr engem Ablauf-/Takeover-Interleaving
-  könnte der alte Client fälschlich `acquired=true` erhalten. Betrifft nur den
-  advisory Presence-Lock, nicht die semantische Datenintegrität (Workspace-Lock
-  + Revision sichern diese zusätzlich ab).
-- **Optionale Erweiterung der `get_operations`-Testabdeckung** um Gruppen-,
-  Course-Workspace-, Cross-Activity-, Guest-, unenrolled- und suspended-Fälle
-  (der grundlegende Contract-/Zugriffstest ist vorhanden).
-- **Gastzugriff auf Course-Workspaces** als bewusste Produkt-/Datenschutz-
-  entscheidung dokumentieren oder einschränken.
+- ✅ **Heartbeat `renew()` vollständig CAS-sicher gemacht** (`lock_service::renew`:
+  bedingtes `UPDATE … WHERE id AND userid AND timeexpires` + Re-Read; Test
+  `test_renew_after_takeover_reports_new_holder`).
+- ✅ **`get_operations`-Testabdeckung erweitert** um Gruppen-, Course-Workspace-,
+  Cross-Activity-, Guest-, unenrolled- und suspended-Fälle.
+- ✅ **Gastzugriff auf Course-Workspaces** als bewusste Entscheidung dokumentiert
+  und erzwungen (`:view` erforderlich; Gäste/unenrolled/suspended abgewiesen —
+  Kommentar in `helper::validate_workspace_for_read`, `security_review.md`).
 
 ## Als Nächstes (0.6.x-Autoren-Werkzeuge, teils vorgezogen)
 

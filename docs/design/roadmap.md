@@ -154,6 +154,21 @@ Die strategische/geschäftliche Ausbauplanung liegt in
   Feedbackvorlagen (Tonalität/Fachkontext), strukturelle Auto-Checks, Teacher
   Reference Model (light), Kommentar-Threads, Peer-Review-Vollausbau
   (`vimipadreview_peerplus`).
+- **1.1 — Anordnen-Mechanik: experimenteller rein-potenzialbasierter Umbau.**
+  Die heutige Anordnen-Engine (kräftefreier Kantentopf + kurzreichweitige
+  Abstoßung + separater Container-Fit + schwache Schwerpunkt-Gravitation) wird
+  durch ein **rein potenzialbasiertes Modell** ersetzt und experimentell
+  erprobt: durchgängige Fernanziehung (Stress-/MDS-Kern: All-Paar-Terme
+  `w_ij·(‖x_i−x_j‖ − δ_ij)²` mit Graphdistanz-Ruhelängen), Hooke-Verbinder statt
+  Topf, ein absolut verankertes Canvas-Grundpotential (flach-innen/steil-außen)
+  gegen Drift, und Container als vollwertige Potentialkörper *im Gradienten*
+  statt als Nachzieh-Fit. Der Solver soll auf einen garantiert absteigenden
+  Schritt umgestellt werden (Majorisierung/SMACOF bzw. optimale Schrittweite
+  `α* = ‖g‖²/(gᵀHg)`), um das mehrfache „Wandern bis zur Endposition" zu
+  beseitigen. Die profil­abhängigen Terme (Richtung, lineare/zyklische Ordnung)
+  bleiben als Aufsatz über die `LayoutPotentialProvider`-Contract. Herleitung,
+  Gradient/Hessematrix, Schrittweite und die Diagnose des heutigen Driftens
+  siehe [`potential-arrange-1.1.md`](potential-arrange-1.1.md).
 - **1.2 — weitere Diagrammprofile:** siehe 0.8.x (argument, process/flow,
   fishbone, systems, vennsets, timeline, affinity) plus profilabhängige
   Lehrerchecks.

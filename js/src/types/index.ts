@@ -63,6 +63,10 @@ export interface CollabConfig {
     leasetimeout: number;
     pushenabled: number;
     pushendpoint: string;
+    /** Per-workspace Mercure topic; empty when push is off. */
+    pushtopic?: string;
+    /** Scoped subscriber token for the hub; empty when push is off. */
+    pushtoken?: string;
 }
 
 export interface WorkspaceState {
@@ -120,6 +124,8 @@ export interface FormConfig {
         orderaxis?: {x: number; y: number};
         /** Preserve the cyclic order of a hub's neighbours (radial forms). */
         cyclicorder?: boolean;
+        /** Confine nodes onto a line parallel to this axis (linear forms). */
+        lineaxis?: {x: number; y: number};
     };
 }
 

@@ -127,4 +127,23 @@ if ($ADMIN->fulltree) {
         '',
         PARAM_URL
     ));
+
+    // Optional distinct URL the SERVER publishes to (e.g. an internal address of
+    // the same hub). Empty falls back to the subscribe endpoint above.
+    $settings->add(new admin_setting_configtext(
+        'mod_vimipad/pushpublishurl',
+        get_string('setting:pushpublishurl', 'mod_vimipad'),
+        get_string('setting:pushpublishurl_desc', 'mod_vimipad'),
+        '',
+        PARAM_URL
+    ));
+
+    // Shared HMAC secret used to sign the publisher and subscriber JWTs; must
+    // match the hub's publisher/subscriber JWT key.
+    $settings->add(new admin_setting_configpasswordunmask(
+        'mod_vimipad/pushjwtkey',
+        get_string('setting:pushjwtkey', 'mod_vimipad'),
+        get_string('setting:pushjwtkey_desc', 'mod_vimipad'),
+        ''
+    ));
 }

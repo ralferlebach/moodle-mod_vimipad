@@ -4,7 +4,95 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.18** (2026072788).
+> release is **0.8.21** (2026072791).
+
+## 0.8.21 (2026072791) — Erste neue Darstellungsform: Timeline (mit 1D-Linien-Confinement)
+
+Die erste der geplanten weiteren Darstellungsformen als eigenes
+`vimipadform_timeline`-Subplugin — und zugleich die Referenz für einen neuen,
+profil­abhängigen Potentialterm über die 0.8.16-Contract.
+
+- **Neuer Engine-Term: 1D-Linien-Confinement.** `refine_layout` bekommt die
+  Optionen `lineConfineStrength` + `lineConfineAxis`. Ist eine Achse gesetzt,
+  werden alle Knoten auf eine gemeinsame Linie parallel zur Achse durch ihren
+  Schwerpunkt gezogen (bestraft wird die Abweichung senkrecht zur Achse). Der
+  Mean-Kopplungsterm im Gradienten hebt sich exakt auf (Summe der senkrechten
+  Abweichungen = 0), sodass die Kraft je Knoten schlicht `k·d·perp` ist — ein
+  sauberes Flach-auf-eine-Linie ohne absolute y-Vorgabe. Gradient gegen Finite-
+  Differenzen geprüft.
+- **Contract erweitert:** `base::get_layout_line_axis()` (Default null), in
+  `to_array` als `layout.lineaxis` und in der `get_workspace`-Struktur
+  transportiert; clientseitig über `resolveProfileRefine` in
+  `lineConfineStrength`/`lineConfineAxis` aufgelöst. Nicht-lineare Formen sind
+  unberührt.
+- **Neues Subplugin `vimipadform_timeline`** (Zeitstrahl): gerichtet links→rechts
+  (Richtung +x), Ereignisse auf eine horizontale Linie confined; Standardform
+  roundrect, gerade Verbinder. Wird von der Registry automatisch erkannt und
+  erscheint in der Profilauswahl.
+- **Tests:** Gradient-Test (Linien-Confinement), Verhaltenstest (Ereignisse
+  kollabieren auf eine Linie; Term nur bei gesetzter Achse gebaut),
+  Resolver-Tests (timeline/lineAxis) und PHPUnit-Layout-Deklaration.
+
+## 0.8.20 (2026072790) — Optionaler Echtzeit-Push über Mercure (SSE)
+
+Setzt die zuvor nur als Einstellung angelegte Push-Funktion tatsächlich um — als
+Server→Client-Push über einen **Mercure**-Hub (SSE, kein WebSocket), rein additiv
+zum bestehenden Polling.
+
+- **Server:** neues `push_service` publiziert nach jeder committeten Operation
+  (`operation_service::apply_locked`) ein `{"revision":N}`-Ereignis an das
+  pro-Workspace-Thema `vimipad/workspace/{id}`. Publish ist best-effort mit engen
+  Timeouts (1 s Connect / 2 s), Fehler werden geschluckt — ein langsamer oder
+  toter Hub beeinflusst die Bearbeitung nie. JWTs (Publisher `publish:["*"]`,
+  Subscriber `subscribe:[topic]`) werden mit HS256 aus dem geteilten `pushjwtkey`
+  signiert (kein Fremd-Lib).
+- **Transport:** `collab_config` liefert pro Workspace `pushtopic` + einen
+  gescopeten `pushtoken`; die `get_workspace`-Struktur ist entsprechend erweitert.
+- **Client:** neuer `push_client` (EventSource) setzt den `mercureAuthorization`-
+  Cookie, abonniert das Thema und **weckt bei jeder neuen Revision ein sofortiges
+  Poll**; die eigentlichen Operationen kommen weiterhin über `get_operations`
+  (dem Hub wird nicht vertraut). Fällt der Hub aus, bleibt der Poll-Loop die
+  Transport- und Rückfallebene.
+- **Einstellungen:** neu `pushpublishurl` (optionale interne Publish-URL) und
+  `pushjwtkey` (geteiltes HMAC-Secret); `pushenabled`/`pushendpoint` wie gehabt.
+- **Keine Server-Software-Abhängigkeit:** Mercure ist ein eigenständiges Go-Binary
+  mit eigenem TLS; nginx/apache sind dem Plugin egal.
+- **Tests:** `push_service_test` (JWT-Struktur/Signatur, Topic-Scope,
+  publish_request, Gating) und `push_client.test.ts` (Wake-Logik, Verfügbarkeit,
+  Cookie, robuste Fehlerbehandlung).
+- **Handbuch:** Abschnitt 1.3 um die Mercure-Einrichtung (Installation als
+  systemd-Dienst, JWT-Keys, CORS, Cookie-/Subdomain-Hinweis, Plugin-Settings)
+  ergänzt.
+
+## 0.8.19 (2026072789) — 0.7.30-Audit-Reste geschlossen
+
+Schließt die drei nicht-blockierenden Restpunkte aus dem 0.7.30-Sicherheitsaudit.
+
+**Heartbeat `renew()` vollständig CAS-sicher.** `lock_service::renew()` nutzte
+nach dem Read ein unbedingtes `set_field()` nach ID; ein Lease-Takeover, der
+zwischen Read und Write schlüpfte, wurde überschrieben, und der alte Halter
+erhielt fälschlich `acquired=true`. `renew()` verwendet jetzt — wie `acquire()` —
+ein bedingtes `UPDATE … WHERE id AND userid AND timeexpires` plus Re-Read und
+meldet den echten aktuellen Halter. Betraf nur den advisory Presence-Lock, nicht
+die Datenintegrität (Workspace-Lock + Revision sichern diese zusätzlich).
+
+**`get_operations`-Zugriffsabdeckung erweitert** um Gruppen-Workspace (Mitglied
+liest, Nicht-Mitglied braucht `:grade`), Course-Workspace (jede eingeschriebene
+Person mit `:view` liest den geteilten Stand), Cross-Activity-Isolation (fremder
+Workspace über die falsche cm wird abgewiesen) sowie Guest-, unenrolled- und
+suspended-Nutzer (alle abgewiesen).
+
+**Gastzugriff auf Course-Workspaces — bewusste Entscheidung, dokumentiert und
+erzwungen.** Das Lesen jedes Workspaces (auch des geteilten Course-Workspaces)
+erfordert `mod/vimipad:view`; Gäste, nicht eingeschriebene und suspendierte
+Nutzer werden abgewiesen (Kurs-Map ist Kursinhalt, kein öffentliches Datum).
+Dokumentiert im Code (`helper::validate_workspace_for_read`) und in
+`security_review.md`.
+
+Außerdem: Handbuch-Korrektur zum Push-/WebSocket-Status (die Einstellungen
+`pushenabled`/`pushendpoint` existieren als Gerüst und werden zum Client
+durchgereicht, aber der clientseitige Push-Verbinder ist noch nicht
+implementiert — der Editor pollt weiterhin immer).
 
 ## 0.8.18 (2026072788) — Container shrink-on-arrange is now optional
 

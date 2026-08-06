@@ -135,6 +135,15 @@ final class form_registry_test extends \advanced_testcase {
         $this->assertArrayNotHasKey('orderaxis', $semantic);
         $this->assertFalse($semantic['cyclicorder']);
 
+        // Timeline: directed left-to-right, events confined onto one line (+x),
+        // no linear sibling order and no cyclic order.
+        $timeline = registry::for_profile('timeline')->to_array()['layout'];
+        $this->assertTrue($timeline['directed']);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $timeline['direction']);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $timeline['lineaxis']);
+        $this->assertArrayNotHasKey('orderaxis', $timeline);
+        $this->assertFalse($timeline['cyclicorder']);
+
         // An unknown profile falls back to the free-form default too.
         $fallback = registry::for_profile('doesnotexist')->to_array()['layout'];
         $this->assertFalse($fallback['directed']);

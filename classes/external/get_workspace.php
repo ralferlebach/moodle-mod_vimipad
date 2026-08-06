@@ -112,7 +112,7 @@ class get_workspace extends external_api {
             'canmanage' => $canmanage,
             'lockmodeforlearners' => $lockmodeforlearners,
             'journalallowprivate' => !empty($instance->journalallowprivate),
-            'collab' => helper::collab_config(),
+            'collab' => helper::collab_config((int) $workspace->id),
         ];
     }
 
@@ -142,7 +142,7 @@ class get_workspace extends external_api {
             'canmanage' => $canmanage,
             'lockmodeforlearners' => $lockmodeforlearners,
             'journalallowprivate' => !empty($instance->journalallowprivate),
-            'collab' => helper::collab_config(),
+            'collab' => helper::collab_config((int) $workspace->id),
         ];
     }
 
@@ -228,6 +228,10 @@ class get_workspace extends external_api {
                         'x' => new external_value(PARAM_FLOAT, 'Order axis x component'),
                         'y' => new external_value(PARAM_FLOAT, 'Order axis y component'),
                     ], 'Cross-axis along which sibling order is preserved', VALUE_OPTIONAL),
+                    'lineaxis' => new external_single_structure([
+                        'x' => new external_value(PARAM_FLOAT, 'Line axis x component'),
+                        'y' => new external_value(PARAM_FLOAT, 'Line axis y component'),
+                    ], 'Axis onto whose parallel line nodes are confined', VALUE_OPTIONAL),
                 ], 'Layout-potential parameters for the arrange refiner'),
             ]),
             'layoutjson' => new external_value(PARAM_RAW, 'Stored layout JSON, empty if none'),
@@ -278,6 +282,8 @@ class get_workspace extends external_api {
                 'leasetimeout' => new external_value(PARAM_INT, 'Lease timeout (s)'),
                 'pushenabled' => new external_value(PARAM_INT, '1 if push is enabled'),
                 'pushendpoint' => new external_value(PARAM_RAW, 'Push endpoint URL'),
+                'pushtopic' => new external_value(PARAM_RAW, 'Per-workspace push topic (empty if push off)', VALUE_OPTIONAL),
+                'pushtoken' => new external_value(PARAM_RAW, 'Scoped subscriber token (empty if push off)', VALUE_OPTIONAL),
             ]),
         ]);
     }

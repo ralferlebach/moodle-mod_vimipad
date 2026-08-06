@@ -163,6 +163,15 @@ export interface RefineOptions {
      * linear orderAxis chain, which cannot express "around a hub".
      */
     cyclicStrength: number;
+    /**
+     * 1D line-confinement strength for linear profiles (e.g. timeline); 0
+     * disables it. When positive with lineConfineAxis set, nodes are pulled onto
+     * a common line parallel to that axis through their centroid — the deviation
+     * perpendicular to the axis is penalised — so events settle on one time line.
+     */
+    lineConfineStrength: number;
+    /** Direction of the confinement line (e.g. (1,0) for a horizontal timeline). */
+    lineConfineAxis: {x: number; y: number} | null;
     /** Enable the restrictive-swap repair pass after the descent. */
     swaps: boolean;
     /** Max swap passes. */
@@ -216,6 +225,8 @@ const DEFAULTS: RefineOptions = {
     orderStrength: 1,
     orderMarginFactor: 0.1,
     cyclicStrength: 0,
+    lineConfineStrength: 0,
+    lineConfineAxis: null,
     swaps: false,
     swapMaxPasses: 4,
     swapEnergyBudget: 2,
@@ -289,6 +300,10 @@ export interface Problem {
      */
     cyclic: {h: number; a: number; b: number; margin: number}[];
     kCyclic: number;
+    /** 1D line confinement: strength and the precomputed unit axis perpendicular to the line. */
+    lineK: number;
+    linePerpX: number;
+    linePerpY: number;
 }
 
 /** The median of a numeric array (0 for an empty array). */
@@ -451,7 +466,17 @@ export function buildProblem(
         cDomeN: opts.containerDomeN, cCap: opts.containerCoshCap, cPad: opts.containerPadFactor * l,
         order: [], kOrder: opts.orderStrength,
         cyclic: [], kCyclic: opts.cyclicStrength,
+        lineK: 0, linePerpX: 0, linePerpY: 1,
     };
+    if (opts.lineConfineStrength > 0 && opts.lineConfineAxis) {
+        const ax = opts.lineConfineAxis.x;
+        const ay = opts.lineConfineAxis.y;
+        const al = Math.hypot(ax, ay) || 1;
+        // Unit axis perpendicular to the line: rotate (ax,ay) by 90 degrees.
+        prob.lineK = opts.lineConfineStrength;
+        prob.linePerpX = -ay / al;
+        prob.linePerpY = ax / al;
+    }
 
     // Order preservation: chain adjacent nodes along the profile's cross-axis so
     // the reference layout's left/right (or cyclic-band) order is kept. Only
@@ -814,6 +839,32 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
                 gy[cc.b] += dEdcross * axhx;
                 gx[cc.h] += dEdcross * (ayhy - byhy);
                 gy[cc.h] += dEdcross * (bxhx - axhx);
+            }
+        }
+    }
+
+    // 1D line confinement (e.g. timeline): pull every node onto a common line
+    // parallel to the confine axis through the centroid, by penalising the
+    // component of (x_i - x-bar) perpendicular to the axis. The mean-coupling in
+    // the gradient cancels exactly (sum of signed perpendicular deviations is 0),
+    // so the per-node force is simply k * d_i * perp with d_i the perpendicular
+    // deviation — a clean flatten-onto-a-line, no absolute y is imposed.
+    const {lineK, linePerpX, linePerpY} = prob;
+    if (lineK > 0 && n > 0) {
+        let mx = 0;
+        let my = 0;
+        for (let i = 0; i < n; i++) {
+            mx += px[i];
+            my += py[i];
+        }
+        mx /= n;
+        my /= n;
+        for (let i = 0; i < n; i++) {
+            const di = (px[i] - mx) * linePerpX + (py[i] - my) * linePerpY;
+            e += 0.5 * lineK * di * di;
+            if (gx && gy) {
+                gx[i] += lineK * di * linePerpX;
+                gy[i] += lineK * di * linePerpY;
             }
         }
     }

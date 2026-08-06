@@ -125,6 +125,29 @@ describe('assembled energy gradient (finite-difference check)', () => {
         checkGradient(prob);
     });
 
+    test('gradient stays correct with 1D line confinement active', () => {
+        // A horizontal timeline: nodes off the line feel a perpendicular pull;
+        // the analytic gradient must match finite differences.
+        const copts: RefineOptions = {
+            ...opts, orderAxis: null,
+            lineConfineStrength: 3, lineConfineAxis: {x: 1, y: 0},
+        };
+        const lnodes: RefineNode[] = [
+            {stableid: 'a', x: 100, y: 180, w: 60, h: 40},
+            {stableid: 'b', x: 260, y: 300, w: 60, h: 40},
+            {stableid: 'c', x: 420, y: 240, w: 60, h: 40},
+            {stableid: 'd', x: 580, y: 360, w: 60, h: 40},
+        ];
+        const ledges: RefineEdge[] = [
+            {source: 'a', target: 'b', directed: true},
+            {source: 'b', target: 'c', directed: true},
+            {source: 'c', target: 'd', directed: true},
+        ];
+        const prob = buildProblem(lnodes, ledges, copts);
+        expect(prob.lineK).toBeGreaterThan(0);
+        checkGradient(prob);
+    });
+
     test('gradient stays correct with cyclic order active around a hub', () => {
         // A hub with four neighbours spread around it: the cyclic-order term is
         // active (three chained cross-product constraints), so its analytic

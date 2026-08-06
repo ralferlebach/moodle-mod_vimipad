@@ -174,4 +174,151 @@ final class get_operations_contract_test extends externallib_advanced_testcase {
         $this->assertLessThanOrEqual(get_operations::MAX_BATCH, count($result['operations']));
         $this->assertCount(5, $result['operations']);
     }
+
+    /**
+     * A user not enrolled in the course cannot read a workspace.
+     *
+     * @return void
+     */
+    public function test_unenrolled_user_is_rejected(): void {
+        $owner = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        $wsid = $this->workspace_with_ops((int) $owner->id, 2);
+        $outsider = $this->getDataGenerator()->create_user();
+        $this->setUser($outsider);
+
+        $this->expectException(\moodle_exception::class);
+        get_operations::execute($this->cm->id, $wsid, 2);
+    }
+
+    /**
+     * A suspended enrolment does not grant read access.
+     *
+     * @return void
+     */
+    public function test_suspended_user_is_rejected(): void {
+        $owner = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        $wsid = $this->workspace_with_ops((int) $owner->id, 2);
+        $suspended = $this->getDataGenerator()->create_and_enrol(
+            $this->course,
+            'student',
+            null,
+            'manual',
+            0,
+            0,
+            ENROL_USER_SUSPENDED
+        );
+        $this->setUser($suspended);
+
+        $this->expectException(\moodle_exception::class);
+        get_operations::execute($this->cm->id, $wsid, 2);
+    }
+
+    /**
+     * The guest user cannot read a workspace.
+     *
+     * @return void
+     */
+    public function test_guest_is_rejected(): void {
+        $owner = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        $wsid = $this->workspace_with_ops((int) $owner->id, 2);
+        $this->setGuestUser();
+
+        $this->expectException(\moodle_exception::class);
+        get_operations::execute($this->cm->id, $wsid, 2);
+    }
+
+    /**
+     * A workspace belonging to a different activity is not readable through this
+     * activity's course-module id (cross-activity isolation).
+     *
+     * @return void
+     */
+    public function test_cross_activity_workspace_is_rejected(): void {
+        $user = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        // A second activity in the same course, with its own workspace.
+        $other = $this->getDataGenerator()->create_module('vimipad', [
+            'course' => $this->course->id, 'collaborationmode' => 0,
+        ]);
+        global $DB;
+        $now = time();
+        $foreignws = (int) $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $other->id, 'userid' => (int) $user->id, 'groupid' => 0,
+            'currentrevision' => 1, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $this->setUser($user);
+
+        // Requesting the other activity's workspace via this cm must fail.
+        $this->expectException(\dml_missing_record_exception::class);
+        get_operations::execute($this->cm->id, $foreignws, 1);
+    }
+
+    /**
+     * In group mode a group member reads the group workspace; a non-member
+     * without grading is refused.
+     *
+     * @return void
+     */
+    public function test_group_workspace_access(): void {
+        global $DB;
+        $groupinstance = $this->getDataGenerator()->create_module('vimipad', [
+            'course' => $this->course->id,
+            'collaborationmode' => \mod_vimipad\local\service\workspace_service::MODE_GROUP,
+        ]);
+        $groupcm = get_coursemodule_from_instance('vimipad', $groupinstance->id);
+        $group = $this->getDataGenerator()->create_group(['courseid' => $this->course->id]);
+        $member = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        $nonmember = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        $this->getDataGenerator()->create_group_member(['groupid' => $group->id, 'userid' => $member->id]);
+
+        $now = time();
+        $wsid = (int) $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $groupinstance->id, 'userid' => 0, 'groupid' => (int) $group->id,
+            'currentrevision' => 1, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('vimipad_operation', (object) [
+            'workspaceid' => $wsid, 'revision' => 1, 'operationtype' => 'node_create',
+            'payloadjson' => json_encode(['stableid' => 'node_000000000001', 'label' => 'N']),
+            'userid' => (int) $member->id, 'timecreated' => $now,
+        ]);
+
+        // Member reads the group workspace.
+        $this->setUser($member);
+        $result = get_operations::execute($groupcm->id, $wsid, 1);
+        $this->assertCount(1, $result['operations']);
+
+        // Non-member (no grading capability) is refused.
+        $this->setUser($nonmember);
+        $this->expectException(\required_capability_exception::class);
+        get_operations::execute($groupcm->id, $wsid, 1);
+    }
+
+    /**
+     * In course mode the single shared workspace is readable by any enrolled
+     * user with view (no grading needed).
+     *
+     * @return void
+     */
+    public function test_course_workspace_readable_by_any_enrolled(): void {
+        global $DB;
+        $courseinstance = $this->getDataGenerator()->create_module('vimipad', [
+            'course' => $this->course->id,
+            'collaborationmode' => \mod_vimipad\local\service\workspace_service::MODE_COURSE,
+        ]);
+        $coursecm = get_coursemodule_from_instance('vimipad', $courseinstance->id);
+        $now = time();
+        $wsid = (int) $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $courseinstance->id, 'userid' => 0, 'groupid' => 0,
+            'currentrevision' => 1, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $DB->insert_record('vimipad_operation', (object) [
+            'workspaceid' => $wsid, 'revision' => 1, 'operationtype' => 'node_create',
+            'payloadjson' => json_encode(['stableid' => 'node_000000000001', 'label' => 'N']),
+            'userid' => 0, 'timecreated' => $now,
+        ]);
+
+        $other = $this->getDataGenerator()->create_and_enrol($this->course, 'student');
+        $this->setUser($other);
+        $result = get_operations::execute($coursecm->id, $wsid, 1);
+        $this->assertCount(1, $result['operations']);
+    }
 }

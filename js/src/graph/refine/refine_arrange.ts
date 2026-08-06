@@ -48,6 +48,8 @@ export interface ProfileRefine {
     orderAxis: {x: number; y: number} | null;
     /** Preserve the cyclic (angular) order of a hub's neighbours (radial forms). */
     cyclicOrder: boolean;
+    /** Confine nodes onto a line parallel to this axis (linear forms, e.g. timeline). */
+    lineAxis: {x: number; y: number} | null;
 }
 
 /**
@@ -65,19 +67,23 @@ export interface ProfileRefine {
 export function refineOptionsForProfile(profile: string): ProfileRefine {
     switch (profile) {
         case 'tree':
-            return {preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false};
+            return {preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null};
         case 'conceptmap':
             // Concept maps are hierarchical but their cross-links point every
             // which way; forcing a global direction would rotate the map. Keep
             // the sibling order axis, but do not impose a direction.
-            return {preferredDir: null, directed: false, orderAxis: {x: 1, y: 0}, cyclicOrder: false};
+            return {preferredDir: null, directed: false, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null};
         case 'mindmap':
         case 'bubblemap':
             // Radial forms: no linear order axis, but keep the cyclic order of a
             // hub's branches so the fan cannot scramble on arrange.
-            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: true};
+            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: true, lineAxis: null};
+        case 'timeline':
+            // Linear time flow: directed left-to-right, and confine events onto a
+            // single horizontal time line.
+            return {preferredDir: {x: 1, y: 0}, directed: true, orderAxis: null, cyclicOrder: false, lineAxis: {x: 1, y: 0}};
         default:
-            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: false};
+            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: false, lineAxis: null};
     }
 }
 
@@ -102,6 +108,7 @@ export function resolveProfileRefine(profile: string, config?: FormConfig): Prof
         preferredDir: layout.direction ?? null,
         orderAxis: layout.orderaxis ?? null,
         cyclicOrder: layout.cyclicorder ?? false,
+        lineAxis: layout.lineaxis ?? null,
     };
 }
 
@@ -240,6 +247,9 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
         orderAxis: prof.orderAxis,
         // Radial forms keep their branches' cyclic order around each hub.
         cyclicStrength: prof.cyclicOrder ? 2 : 0,
+        // Linear forms (timeline) confine events onto one line.
+        lineConfineStrength: prof.lineAxis ? 1.5 : 0,
+        lineConfineAxis: prof.lineAxis,
         swaps: true,
         // "Anordnen" is an explicit rearrange request, so pull the layout toward a
         // clean force-directed state: edges converge toward a common length (via a
