@@ -75,6 +75,30 @@ abstract class base {
     abstract public function get_bifurcation(): string;
 
     /**
+     * The relation types this display type offers, in menu order. The default
+     * is a single untyped link; argument maps override this with support and
+     * attack. The frontend uses it to offer relation types and to decide layout
+     * behaviour (e.g. attack relations repel).
+     *
+     * @return string[]
+     */
+    public function get_relation_types(): array {
+        return ['link'];
+    }
+
+    /**
+     * Per-relation-type layout hints for typed forms, keyed by type. Each entry
+     * may set 'directed' (bool) and/or 'restscale' (float). Example for an
+     * ontology: ['isa' => ['directed' => true], 'partof' => ['restscale' => 0.6]].
+     * The arrange refiner applies these per edge. Default: none.
+     *
+     * @return array
+     */
+    public function get_relation_layout(): array {
+        return [];
+    }
+
+    /**
      * The preferred flow direction for directed edges, as ['x' => float,
      * 'y' => float], or null for none.
      *
@@ -139,6 +163,39 @@ abstract class base {
     }
 
     /**
+     * Whether directed edges should be pushed into discrete rank layers on
+     * arrange. Flow/process charts override this to true; all other forms use a
+     * continuous directional gradient (false).
+     *
+     * @return bool
+     */
+    public function get_layout_rank_layered(): bool {
+        return false;
+    }
+
+    /**
+     * Whether container members should cohere toward their cluster centroid on
+     * arrange. Affinity boards override this to true; all other forms leave it
+     * false.
+     *
+     * @return bool
+     */
+    public function get_layout_clustered(): bool {
+        return false;
+    }
+
+    /**
+     * Whether edges should get alternating per-branch diagonal directions on
+     * arrange (fishbone/Ishikawa bones). Only the fishbone form overrides this;
+     * all others use a single global direction (false).
+     *
+     * @return bool
+     */
+    public function get_layout_fishbone(): bool {
+        return false;
+    }
+
+    /**
      * The component name of the subplugin providing this definition.
      *
      * Derived from the concrete class namespace (e.g. vimipadform_tree\form
@@ -196,6 +253,9 @@ abstract class base {
         $layout = [
             'directed' => $this->is_layout_directed(),
             'cyclicorder' => $this->get_layout_cyclic_order(),
+            'ranklayered' => $this->get_layout_rank_layered(),
+            'clustered' => $this->get_layout_clustered(),
+            'fishbone' => $this->get_layout_fishbone(),
         ];
         $direction = $this->get_layout_direction();
         if ($direction !== null) {
@@ -209,6 +269,17 @@ abstract class base {
         if ($lineaxis !== null) {
             $layout['lineaxis'] = ['x' => (float) $lineaxis['x'], 'y' => (float) $lineaxis['y']];
         }
+        $relationlayout = [];
+        foreach ($this->get_relation_layout() as $type => $hints) {
+            $entry = ['type' => (string) $type];
+            if (array_key_exists('directed', $hints)) {
+                $entry['directed'] = (bool) $hints['directed'];
+            }
+            if (array_key_exists('restscale', $hints)) {
+                $entry['restscale'] = (float) $hints['restscale'];
+            }
+            $relationlayout[] = $entry;
+        }
         return [
             'profile' => $this->get_profile(),
             'name' => $this->get_name(),
@@ -216,6 +287,8 @@ abstract class base {
             'defaultshape' => $this->get_default_shape(),
             'line' => $this->get_line_style(),
             'bifurcation' => $this->get_bifurcation(),
+            'relationtypes' => array_values($this->get_relation_types()),
+            'relationlayout' => $relationlayout,
             'layout' => $layout,
         ];
     }

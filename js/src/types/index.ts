@@ -110,6 +110,10 @@ export interface FormConfig {
     line: string;
     /** Bifurcation behaviour: 'individual' | 'shared' | 'radial'. */
     bifurcation: string;
+    /** Relation types this display type offers (e.g. ['support','attack']). */
+    relationtypes?: string[];
+    /** Per-relation-type layout hints (directed / rest scale) for typed forms. */
+    relationlayout?: {type: string; directed?: boolean; restscale?: number}[];
     /**
      * Layout-potential parameters for the arrange refiner, supplied by the
      * form's PHP subplugin. Absent for legacy transports; the refiner then
@@ -126,6 +130,12 @@ export interface FormConfig {
         cyclicorder?: boolean;
         /** Confine nodes onto a line parallel to this axis (linear forms). */
         lineaxis?: {x: number; y: number};
+        /** Enforce discrete rank layers for directed edges (flow/process). */
+        ranklayered?: boolean;
+        /** Cluster container members toward their centroid (affinity boards). */
+        clustered?: boolean;
+        /** Alternating per-branch diagonal bone directions (fishbone). */
+        fishbone?: boolean;
     };
 }
 

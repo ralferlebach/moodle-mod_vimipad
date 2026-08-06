@@ -180,13 +180,25 @@ Bifurkation und ihr Layout-Verhalten (Richtung/Ordnung) selbst.
 | **Strukturbaum** | Hierarchie | gerichtet abwärts, Geschwister links→rechts |
 | **Semantisches Netz** | frei vernetzt | frei (nur Kante + Abstoßung) |
 | **Bubble Map** | zentraler Begriff, Attribut-Bläschen | zyklischer Ordnungserhalt |
+| **Timeline** (Zeitstrahl) | Ereignisse auf einer Zeitachse | gerichtet →, 1D-Linien-Confinement |
+| **Argument Map** (Argumentkarte) | Behauptung + Stütz-/Angriffsgründe | gerichtet ↑, Ordnung →, Angriffe repellieren |
+| **Flow chart** (Flussdiagramm) | gerichteter Prozess in Ebenen | gerichtet ↓, Rang-Layering, orthogonale Verbinder |
+| **Affinity board** (Affinitätsdiagramm) | Notizen in Clustern | ungerichtet, Cluster-Kohäsion je Container |
+| **Fishbone** (Fischgrätendiagramm) | Ursache-Wirkung mit Rückgrat | gerichtete Spine →, alternierende Gräten |
+| **Causal / system map** (Wirkungsdiagramm) | gerichtetes Netz mit Rückkopplungen | frei, gerichtete Relationen, geschwungen |
+| **Venn / Mengen** | Elemente in (überlappenden) Mengen | Mengen = Container, Cluster-Kohäsion, Schnittmengen |
+| **Ontologie** (Wissensnetz) | typisierte Wissensrelationen | is-a gerichtet, part-of eng gebunden, assoziiert neutral |
 
-**Geplant 🔭** (jeweils als eigenes `vimipadform`-Subplugin; Layout-Zusatzterme
-in Klammern): Argument Map (typisierte Kanten Stütz/Angriff), Flow/Process
-(starke Richtung, Rang-Layering), Fishbone/Ishikawa (zweigweise Richtung,
-Rückgrat), Causal/System Map (gerichtet, Zyklen), Timeline (1D-Linien-
-Confinement), Venn/Mengen (Mengen-Container), Affinity/Cluster (Cluster-
-Anziehung). Details und Formeln: [`design/potential-arrange-1.1.md`](design/potential-arrange-1.1.md).
+**Typisierte Relationen:** Mehrere Formen bieten feste Relationstypen: Argumentkarte *Stütze*/*Angriff*,
+Wirkungskarte *positiv (+)*/*negativ (−)*, Ontologie und semantisches Netz
+*is-a*/*Instanz-von*/*part-of*/*hat-Eigenschaft*/*assoziiert*, Flussdiagramm
+*Abfolge*/*Ja*/*Nein*. Einige tragen Layout-Wirkung (Angriff stößt ab, is-a
+gerichtet in der Ontologie, part-of bindet enger). Angriffskanten ruhen länger (Zweig-
+Repulsion), sodass angreifende Äste weiter abstehen. Der Auswahl-Dialog zum
+Setzen des Relationstyps und die farbliche Unterscheidung folgen als nächster
+Schritt; die Layout- und Contract-Grundlage ist umgesetzt.
+
+Damit sind alle für 0.8.x geplanten Darstellungsformen umgesetzt (Details und Formeln der Layout-Terme: [`design/potential-arrange-1.1.md`](design/potential-arrange-1.1.md)).
 
 **So wählen/prüfen Sie eine Form:**
 1. Beim Anlegen unter **Standard-Profil** wählen (1.5).

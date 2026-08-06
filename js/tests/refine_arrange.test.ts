@@ -36,7 +36,7 @@ function rel(stableid: string, sourceid: string, targetid: string): VimiRelation
 describe('refineOptionsForProfile', () => {
     test('tree flows down and keeps sibling order', () => {
         expect(refineOptionsForProfile('tree')).toEqual({
-            preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null,
+            preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null, attackRepel: false, rankLayered: false, clustered: false, fishbone: false, relationLayout: [],
         });
     });
     test('conceptmap keeps sibling order but is not direction-forced', () => {

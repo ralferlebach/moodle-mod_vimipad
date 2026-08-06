@@ -36,6 +36,7 @@ import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} fr
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas} from '../graph/autolayout';
 import {EditorState} from '../store/reducer';
 import {LayoutMap, Point, Size, SizeMap, FormConfig} from '../types';
+import {relationTypeStyle} from '../relation_types';
 import {formClampShape, formLine, formShared, LineStyle} from '../canvas/form_config';
 import {
     clampSize, clampView, edgePoint, nodeHeight, nodeWidth, profileLine, relLinePath, treeBusPath,
@@ -91,6 +92,8 @@ interface Props {
     onCreateRelation?: (sourceid: string, targetid: string) => void;
     /** Set a relation's arrow direction (0 none, 1 forward, -1 reverse, 2 both). */
     onChangeDirection?: (stableid: string, direction: number) => void;
+    /** Set a relation's type (e.g. 'support' | 'attack'); argument-style profiles. */
+    onChangeRelationType?: (stableid: string, type: string) => void;
     t: (key: string) => string;
     /** True if a node is held by another collaborator (renders as locked). */
     isLockedByOther?: (targettype: string, stableid: string) => boolean;
@@ -170,7 +173,7 @@ export function CanvasView(props: Props): React.ReactElement {
         state, layout, profile, formconfig, sizes, disabled, onNodeMoved, onNodeResized,
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
-        onCreateRelation, onChangeDirection,
+        onCreateRelation, onChangeDirection, onChangeRelationType,
         onUndo, onRedo, canUndo, canRedo, onReArrange, arrangeBusy,
         onExportSvg, onExportPng, onExportPdf,
     } = props;
@@ -1272,12 +1275,17 @@ export function CanvasView(props: Props): React.ReactElement {
                 const to = shifted.to;
                 const selected = isSelected(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
+                // Typed relations (argument/causal maps) get a colour and, for
+                // some types, a dash — from the shared relation-type style map.
+                const relStyle = relationTypeStyle(rel.type);
+                const typeColor = relStyle?.color ?? 'currentColor';
+                const relDash = relStyle?.dash;
                 const path = isTree
                     ? treeBusPath(fromC, fromSize, toC, toSize)
                     : (relLine === 'curved'
                         ? freeConnectorPath(from, to, ARROW_STUB)
                         : relLinePath(from, to, relLine));
-                const stroke = selected ? selColor : 'currentColor';
+                const stroke = selected ? selColor : typeColor;
                 const strokeWidth = selected ? 2.5 : 1.5;
                 const markerStart = d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
                 const markerEnd = d === 1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
@@ -1289,6 +1297,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                 fill="none"
                                 stroke={stroke}
                                 strokeWidth={strokeWidth}
+                                strokeDasharray={relDash}
                                 markerStart={markerStart}
                                 markerEnd={markerEnd}
                             />
@@ -1300,6 +1309,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                 y2={to.y}
                                 stroke={stroke}
                                 strokeWidth={strokeWidth}
+                                strokeDasharray={relDash}
                                 markerStart={markerStart}
                                 markerEnd={markerEnd}
                             />
@@ -1747,6 +1757,9 @@ export function CanvasView(props: Props): React.ReactElement {
                                     canLock={Boolean(props.onSetElementLock && props.canLock)}
                                     onEditText={() => startRelationEdit(rel.stableid, rel.label)}
                                     onChangeDirection={onChangeDirection}
+                                    type={rel.type}
+                                    relationTypes={props.formconfig?.relationtypes}
+                                    onChangeType={onChangeRelationType}
                                     onDelete={onDeleteRelation
                                         ? () => onDeleteRelation(rel.stableid) : undefined}
                                     onToggleLockGroup={props.onSetElementLock && props.canLock

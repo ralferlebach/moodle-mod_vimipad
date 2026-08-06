@@ -127,4 +127,12 @@ describe('reducer node style/content', () => {
         const same = reduce(base, {kind: 'setProfile', profile: base.profile});
         expect(same).toBe(base);
     });
+
+    it('updateRelation changes the relation type (support/attack) immutably', () => {
+        const next = reduce(base, {kind: 'updateRelation', stableid: 'rel_1', type: 'attack'});
+        expect(next.relations[0].type).toBe('attack');
+        expect(base.relations[0].type).toBe('related'); // original untouched
+        // Other fields are preserved when only the type changes.
+        expect(next.relations[0].direction).toBe(1);
+    });
 });

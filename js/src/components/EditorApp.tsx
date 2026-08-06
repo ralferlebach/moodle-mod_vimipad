@@ -699,6 +699,21 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [runOperation, pushHistory]);
 
+    const changeType = useCallback(async (stableid: string, type: string) => {
+        const prev = stateRef.current.relations.find(r => r.stableid === stableid)?.type ?? 'link';
+        if (prev === type) {
+            return;
+        }
+        const res = await runOperation('relation_update', {stableid, type},
+            () => dispatch({kind: 'updateRelation', stableid, type}));
+        if (res) {
+            pushHistory({
+                undo: [{type: 'relation_update', payload: {stableid, type: prev}}],
+                redo: [{type: 'relation_update', payload: {stableid, type}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
     const changeDirection = useCallback(async (stableid: string, direction: number) => {
         const prev = stateRef.current.relations.find(r => r.stableid === stableid)?.direction ?? 1;
         const res = await runOperation('relation_update', {stableid, direction},
@@ -1017,6 +1032,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         onDuplicateNode={duplicateNode}
                         onCreateRelation={createRelation}
                         onChangeDirection={changeDirection}
+                        onChangeRelationType={changeType}
                         onDeleteNode={deleteNode}
                         onDeleteRelation={deleteRelation}
                         onRenameNode={renameNode}
@@ -1073,6 +1089,8 @@ export function EditorApp(props: Props): React.ReactElement {
                         onDeleteRelation={deleteRelation}
                         onRetarget={retarget}
                         onRenameRelation={renameRelation}
+                        relationTypes={state.formconfig?.relationtypes}
+                        onChangeType={changeType}
                         t={t}
                     />
                     <JournalPanel

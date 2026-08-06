@@ -32,6 +32,7 @@
 import React, {useState} from 'react';
 import {FA, Icon} from '../canvas/icons';
 import {isGroupLocked, readGroupLocks} from '../canvas/element_lock';
+import {relationTypeStyle} from '../relation_types';
 import {LockSubmenu} from './LockSubmenu';
 
 interface Props {
@@ -44,12 +45,19 @@ interface Props {
     disabled: boolean;
     /** Whether the current user may change template locks. */
     canLock: boolean;
+    /** The relation's current type (e.g. 'support' | 'attack' | 'link'). */
+    type?: string;
+    /** Relation types this display type offers; a typed picker shows when >1 non-link. */
+    relationTypes?: string[];
     onEditText: () => void;
     onChangeDirection?: (stableid: string, direction: number) => void;
+    onChangeType?: (stableid: string, type: string) => void;
     onDelete?: () => void;
     onToggleLockGroup?: (group: 'move' | 'text') => void;
     t: (key: string) => string;
 }
+
+
 
 /** The direction options, in dock order. */
 const DIRECTIONS: {value: number; icon: string; label: string}[] = [
@@ -67,12 +75,17 @@ const DIRECTIONS: {value: number; icon: string; label: string}[] = [
  */
 export function RelationMenu(props: Props): React.ReactElement {
     const {stableid, direction, metadatajson, disabled, canLock,
-        onEditText, onChangeDirection, onDelete, onToggleLockGroup, t} = props;
+        type, relationTypes, onEditText, onChangeDirection, onChangeType,
+        onDelete, onToggleLockGroup, t} = props;
     const [lockPanel, setLockPanel] = useState(false);
     const textLocked = isGroupLocked(metadatajson, 'text');
     const moveLocked = isGroupLocked(metadatajson, 'move');
     const locks = readGroupLocks(metadatajson);
     const anyLocked = locks.move || locks.text;
+    // Typed relations (e.g. support/attack) are offered only when the profile
+    // declares more than the single default 'link' type.
+    const typeChoices = (relationTypes ?? []).filter(rt => rt !== 'link');
+    const showTypes = onChangeType && typeChoices.length > 0;
 
     return (
         <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:relation')}>
@@ -87,6 +100,27 @@ export function RelationMenu(props: Props): React.ReactElement {
                         onClick={onEditText}
                     ><Icon name={FA.text} /></button>
                 )}
+                {showTypes && typeChoices.map(rt => (
+                    <button
+                        key={`reltype-${rt}`}
+                        type="button"
+                        className={`vimipad-dock-btn${type === rt ? ' active' : ''}`}
+                        aria-pressed={type === rt}
+                        disabled={disabled}
+                        title={t(`editor:reltype_${rt}`)}
+                        aria-label={t(`editor:reltype_${rt}`)}
+                        onClick={() => onChangeType(stableid, rt)}
+                    >
+                        <span
+                            aria-hidden="true"
+                            style={{
+                                display: 'inline-block', width: '0.8em', height: '0.8em',
+                                borderRadius: '50%',
+                                background: relationTypeStyle(rt)?.color ?? 'currentColor',
+                            }}
+                        />
+                    </button>
+                ))}
                 {!moveLocked && onChangeDirection && DIRECTIONS.map(d => (
                     <button
                         key={d.value}

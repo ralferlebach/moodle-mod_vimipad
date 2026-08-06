@@ -47,6 +47,10 @@ interface Props {
     onDeleteRelation: (stableid: string) => void;
     onRetarget: (stableid: string, change: {sourceid?: string; targetid?: string}) => void;
     onRenameRelation: (stableid: string, label: string) => void;
+    /** Relation types offered by the active profile (e.g. ['support','attack']). */
+    relationTypes?: string[];
+    /** Set a relation's type; enables the per-row type selector. */
+    onChangeType?: (stableid: string, type: string) => void;
     t: (key: string) => string;
 }
 
@@ -59,8 +63,13 @@ const DND_MIME = 'application/x-vimipad-node';
  * @returns The rendered list view.
  */
 export function RelationListView(props: Props): React.ReactElement {
-    const {state, disabled, enforced, onDeleteRelation, onRetarget, onRenameRelation, t} = props;
+    const {state, disabled, enforced, onDeleteRelation, onRetarget, onRenameRelation,
+        relationTypes, onChangeType, t} = props;
     const [editing, setEditing] = useState<string | null>(null);
+    // Typed relations (support/attack) are offered only when the profile
+    // declares more than the single default 'link' type.
+    const typeChoices = (relationTypes ?? []).filter(rt => rt !== 'link');
+    const showTypes = Boolean(onChangeType) && typeChoices.length > 0;
 
     if (state.relations.length === 0) {
         return <p className="text-muted">{t('editor:norelations')}</p>;
@@ -209,6 +218,21 @@ export function RelationListView(props: Props): React.ReactElement {
                                 >
                                     {anyLocked && (
                                         <Icon name={FA.lock} title={lockTitle} className="text-muted mr-1" />
+                                    )}
+                                    {showTypes && !relSkip && (
+                                        <select
+                                            className="custom-select custom-select-sm mr-1 vimipad-reltype-select"
+                                            style={{width: 'auto', display: 'inline-block'}}
+                                            disabled={disabled || moveLocked}
+                                            title={t('editor:relationtype')}
+                                            aria-label={t('editor:relationtype')}
+                                            value={typeChoices.includes(rel.type) ? rel.type : typeChoices[0]}
+                                            onChange={e => onChangeType?.(rel.stableid, e.target.value)}
+                                        >
+                                            {typeChoices.map(rt => (
+                                                <option key={rt} value={rt}>{t(`editor:reltype_${rt}`)}</option>
+                                            ))}
+                                        </select>
                                     )}
                                     {isEd ? (
                                         <button

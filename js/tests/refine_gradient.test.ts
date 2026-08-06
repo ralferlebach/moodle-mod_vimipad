@@ -125,6 +125,67 @@ describe('assembled energy gradient (finite-difference check)', () => {
         checkGradient(prob);
     });
 
+    test('gradient stays correct with per-edge directions (fishbone bones)', () => {
+        // Each directed edge carries its own preferred direction; the analytic
+        // gradient of the per-edge directional term must match finite differences.
+        const copts: RefineOptions = {...opts, preferredDir: {x: 1, y: 0}, directionFloor: 0.15};
+        const fnodes: RefineNode[] = [
+            {stableid: 'h', x: 400, y: 250, w: 60, h: 40},
+            {stableid: 'a', x: 250, y: 150, w: 60, h: 40},
+            {stableid: 'b', x: 250, y: 350, w: 60, h: 40},
+        ];
+        const fedges: RefineEdge[] = [
+            {source: 'a', target: 'h', directed: true, dir: {x: 1, y: 1}},  // upper bone
+            {source: 'b', target: 'h', directed: true, dir: {x: 1, y: -1}}, // lower bone
+        ];
+        const prob = buildProblem(fnodes, fedges, copts);
+        // Bones point in different directions, so the two edges must not share
+        // one global axis — verify per-edge dirs were stored distinctly.
+        expect(prob.edges[0].diry).not.toBeCloseTo(prob.edges[1].diry);
+        checkGradient(prob);
+    });
+
+    test('gradient stays correct with cluster cohesion active', () => {
+        // Two containers, each with members off their centroid: the cohesion
+        // gradient must match finite differences.
+        const copts: RefineOptions = {...opts, clusterStrength: 0.4};
+        const cnodes: RefineNode[] = [
+            {stableid: 'a', x: 100, y: 100, w: 50, h: 30},
+            {stableid: 'b', x: 180, y: 140, w: 50, h: 30},
+            {stableid: 'c', x: 400, y: 300, w: 50, h: 30},
+            {stableid: 'd', x: 460, y: 360, w: 50, h: 30},
+        ];
+        const cedges: RefineEdge[] = [];
+        const containers: RefineContainer[] = [
+            {stableid: 'g1', x: 60, y: 60, w: 200, h: 160, members: ['a', 'b']},
+            {stableid: 'g2', x: 360, y: 260, w: 200, h: 160, members: ['c', 'd']},
+        ];
+        const prob = buildProblem(cnodes, cedges, copts, containers);
+        expect(prob.kCluster).toBeGreaterThan(0);
+        checkGradient(prob);
+    });
+
+    test('gradient stays correct with rank layering active', () => {
+        // A directed chain flowing downward with rank layering: the analytic
+        // gradient of the min-separation term must match finite differences.
+        const copts: RefineOptions = {
+            ...opts, preferredDir: {x: 0, y: 1}, directionFloor: 0.15,
+            rankStrength: 2, rankGap: 1.2,
+        };
+        const rnodes: RefineNode[] = [
+            {stableid: 'a', x: 200, y: 100, w: 60, h: 40},
+            {stableid: 'b', x: 230, y: 150, w: 60, h: 40}, // too close to a in flow
+            {stableid: 'c', x: 210, y: 320, w: 60, h: 40},
+        ];
+        const redges: RefineEdge[] = [
+            {source: 'a', target: 'b', directed: true},
+            {source: 'b', target: 'c', directed: true},
+        ];
+        const prob = buildProblem(rnodes, redges, copts);
+        expect(prob.kRank).toBeGreaterThan(0);
+        checkGradient(prob);
+    });
+
     test('gradient stays correct with 1D line confinement active', () => {
         // A horizontal timeline: nodes off the line feel a perpendicular pull;
         // the analytic gradient must match finite differences.

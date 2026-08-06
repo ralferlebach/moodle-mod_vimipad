@@ -50,6 +50,16 @@ export interface ProfileRefine {
     cyclicOrder: boolean;
     /** Confine nodes onto a line parallel to this axis (linear forms, e.g. timeline). */
     lineAxis: {x: number; y: number} | null;
+    /** Whether "attack" relations should repel (rest longer) — argument maps. */
+    attackRepel: boolean;
+    /** Whether directed edges enforce discrete rank layers — flow/process charts. */
+    rankLayered: boolean;
+    /** Whether container members cohere toward their cluster centroid — affinity boards. */
+    clustered: boolean;
+    /** Whether edges get alternating per-branch diagonal directions — fishbone. */
+    fishbone: boolean;
+    /** Per-relation-type layout hints (directed/rest scale) for typed forms. */
+    relationLayout: {type: string; directed?: boolean; restscale?: number}[];
 }
 
 /**
@@ -67,24 +77,111 @@ export interface ProfileRefine {
 export function refineOptionsForProfile(profile: string): ProfileRefine {
     switch (profile) {
         case 'tree':
-            return {preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null};
+            return {preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null, attackRepel: false, rankLayered: false, clustered: false, fishbone: false, relationLayout: []};
         case 'conceptmap':
             // Concept maps are hierarchical but their cross-links point every
             // which way; forcing a global direction would rotate the map. Keep
             // the sibling order axis, but do not impose a direction.
-            return {preferredDir: null, directed: false, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null};
+            return {preferredDir: null, directed: false, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null, attackRepel: false, rankLayered: false, clustered: false, fishbone: false, relationLayout: []};
         case 'mindmap':
         case 'bubblemap':
             // Radial forms: no linear order axis, but keep the cyclic order of a
             // hub's branches so the fan cannot scramble on arrange.
-            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: true, lineAxis: null};
+            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: true, lineAxis: null, attackRepel: false, rankLayered: false, clustered: false, fishbone: false, relationLayout: []};
         case 'timeline':
             // Linear time flow: directed left-to-right, and confine events onto a
             // single horizontal time line.
-            return {preferredDir: {x: 1, y: 0}, directed: true, orderAxis: null, cyclicOrder: false, lineAxis: {x: 1, y: 0}};
+            return {preferredDir: {x: 1, y: 0}, directed: true, orderAxis: null, cyclicOrder: false, lineAxis: {x: 1, y: 0}, attackRepel: false, rankLayered: false, clustered: false, fishbone: false, relationLayout: []};
+        case 'argument':
+            // Argument maps flow upward (claim on top, reasons below pointing up),
+            // siblings ordered along +x; attack relations repel (branch apart).
+            return {preferredDir: {x: 0, y: -1}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null, attackRepel: true, rankLayered: false, clustered: false, fishbone: false, relationLayout: []};
+        case 'flow':
+            // Flow/process charts flow top to bottom in discrete rank layers,
+            // with siblings ordered along +x.
+            return {preferredDir: {x: 0, y: 1}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null, attackRepel: false, rankLayered: true, clustered: false, fishbone: false, relationLayout: []};
+        case 'affinity':
+            // Affinity boards cluster free notes: undirected, no order; members of
+            // each container cohere toward their cluster centroid.
+            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: false, lineAxis: null, attackRepel: false, rankLayered: false, clustered: true, fishbone: false, relationLayout: []};
+        case 'fishbone':
+            // Fishbone: a horizontal spine toward the head (+x); bones get
+            // alternating diagonal directions per branch (assigned per edge).
+            return {preferredDir: {x: 1, y: 0}, directed: true, orderAxis: null, cyclicOrder: false, lineAxis: null, attackRepel: false, rankLayered: false, clustered: false, fishbone: true, relationLayout: []};
+        case 'ontology':
+            // Ontology: is-a forms an upward taxonomy (directed), part-of binds
+            // parts tightly (shorter rest); associated is neutral.
+            return {preferredDir: {x: 0, y: -1}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false, lineAxis: null, attackRepel: false, rankLayered: false, clustered: false, fishbone: false,
+                relationLayout: [{type: 'isa', directed: true}, {type: 'partof', directed: false, restscale: 0.6}, {type: 'associated', directed: false}]};
+        case 'venn':
+            // Venn/sets reuse cluster cohesion (sets are containers); free otherwise.
+            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: false, lineAxis: null, attackRepel: false, rankLayered: false, clustered: true, fishbone: false, relationLayout: []};
         default:
-            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: false, lineAxis: null};
+            return {preferredDir: null, directed: false, orderAxis: null, cyclicOrder: false, lineAxis: null, attackRepel: false, rankLayered: false, clustered: false, fishbone: false, relationLayout: []};
     }
+}
+
+/**
+ * Assign alternating diagonal directions to fishbone bones.
+ *
+ * The head is taken as the highest in-degree node (the effect everything points
+ * to). Its direct sources are the main bones; they alternate above/below the
+ * spine, and each bone's ancestors inherit its side. Every edge whose source has
+ * a side gets a diagonal preferred direction (+x toward the head, ±y by side),
+ * producing the characteristic alternating bones. Spine/undecided edges keep the
+ * global spine direction. Returns a map keyed by `source\0target`.
+ *
+ * @param relations The relations.
+ * @returns Per-edge direction overrides.
+ */
+export function fishboneEdgeDirs(relations: VimiRelation[]): Map<string, {x: number; y: number}> {
+    const dirs = new Map<string, {x: number; y: number}>();
+    const incoming = new Map<string, string[]>();
+    const indeg = new Map<string, number>();
+    for (const r of relations) {
+        if (!incoming.has(r.targetid)) {
+            incoming.set(r.targetid, []);
+        }
+        incoming.get(r.targetid)!.push(r.sourceid);
+        indeg.set(r.targetid, (indeg.get(r.targetid) ?? 0) + 1);
+        if (!indeg.has(r.sourceid)) {
+            indeg.set(r.sourceid, 0);
+        }
+    }
+    // Head = max in-degree; nothing to do without a clear sink.
+    let head: string | null = null;
+    let best = 0;
+    for (const [node, deg] of indeg) {
+        if (deg > best) {
+            best = deg;
+            head = node;
+        }
+    }
+    if (!head) {
+        return dirs;
+    }
+    const side = new Map<string, number>();
+    const mains = [...(incoming.get(head) ?? [])].sort();
+    mains.forEach((m, i) => side.set(m, i % 2 === 0 ? -1 : 1));
+    // Propagate each main bone's side up its incoming ancestry.
+    const queue = [...mains];
+    while (queue.length) {
+        const n = queue.shift() as string;
+        for (const s of incoming.get(n) ?? []) {
+            if (!side.has(s)) {
+                side.set(s, side.get(n) as number);
+                queue.push(s);
+            }
+        }
+    }
+    const slope = 0.8;
+    for (const r of relations) {
+        const sd = side.get(r.sourceid);
+        if (sd !== undefined) {
+            dirs.set(`${r.sourceid}\u0000${r.targetid}`, {x: 1, y: -sd * slope});
+        }
+    }
+    return dirs;
 }
 
 /**
@@ -109,6 +206,12 @@ export function resolveProfileRefine(profile: string, config?: FormConfig): Prof
         orderAxis: layout.orderaxis ?? null,
         cyclicOrder: layout.cyclicorder ?? false,
         lineAxis: layout.lineaxis ?? null,
+        // Attack relations repel iff the form declares an "attack" relation type.
+        attackRepel: (config?.relationtypes ?? []).includes('attack'),
+        rankLayered: layout.ranklayered ?? false,
+        clustered: layout.clustered ?? false,
+        fishbone: layout.fishbone ?? false,
+        relationLayout: config?.relationlayout ?? [],
     };
 }
 
@@ -203,9 +306,19 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
         };
     });
 
-    const redges: RefineEdge[] = relations.map(r => ({
-        source: r.sourceid, target: r.targetid, directed: prof.directed && r.direction !== 0,
-    }));
+    const boneDirs = prof.fishbone ? fishboneEdgeDirs(relations) : null;
+    const relLayout = new Map(prof.relationLayout.map(rl => [rl.type, rl]));
+    const redges: RefineEdge[] = relations.map(r => {
+        const rl = relLayout.get(r.type);
+        return {
+            source: r.sourceid, target: r.targetid,
+            // A typed layout may force an edge directed regardless of its arrowhead.
+            directed: rl?.directed ?? (prof.directed && r.direction !== 0),
+            attack: prof.attackRepel && r.type === 'attack',
+            restScale: rl?.restscale,
+            dir: boneDirs?.get(`${r.sourceid}\u0000${r.targetid}`),
+        };
+    });
 
     // Container membership from the current geometry: a node whose centre sits
     // inside the container's shape is a member. Ellipse containers use the true
@@ -250,6 +363,12 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
         // Linear forms (timeline) confine events onto one line.
         lineConfineStrength: prof.lineAxis ? 1.5 : 0,
         lineConfineAxis: prof.lineAxis,
+        // Argument maps push "attack" branches apart via a longer rest length.
+        attackRestScale: prof.attackRepel ? 1.8 : 1,
+        // Flow/process charts push directed edges into discrete rank layers.
+        rankStrength: prof.rankLayered ? 2 : 0,
+        // Affinity boards keep each container's members clustered together.
+        clusterStrength: prof.clustered ? 0.25 : 0,
         swaps: true,
         // "Anordnen" is an explicit rearrange request, so pull the layout toward a
         // clean force-directed state: edges converge toward a common length (via a

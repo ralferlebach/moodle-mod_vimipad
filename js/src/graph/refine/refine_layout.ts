@@ -77,6 +77,12 @@ export interface RefineEdge {
     target: string;
     /** If true the edge prefers to point along the profile direction. */
     directed?: boolean;
+    /** If true the edge is an "attack" (argument maps) and rests longer. */
+    attack?: boolean;
+    /** Explicit rest-length multiplier for this edge; overrides the attack rule. */
+    restScale?: number;
+    /** Per-edge preferred direction (fishbone bones); overrides the global one. */
+    dir?: {x: number; y: number};
 }
 
 /** Tunable options; every length is interpreted relative to the master scale L. */
@@ -172,6 +178,28 @@ export interface RefineOptions {
     lineConfineStrength: number;
     /** Direction of the confinement line (e.g. (1,0) for a horizontal timeline). */
     lineConfineAxis: {x: number; y: number} | null;
+    /**
+     * Rest-length multiplier applied to edges flagged as "attack" (argument
+     * maps); 1 disables the effect. >1 pushes an attacking node further from its
+     * target than a supporting one — a minimal branch repulsion.
+     */
+    attackRestScale: number;
+    /**
+     * Rank-layering strength for flow/process charts; 0 disables it. When
+     * positive (with a preferred direction as the flow axis), every directed
+     * edge is pushed to advance at least rankGap*L along the flow, so nodes
+     * settle into discrete layers instead of a continuous gradient.
+     */
+    rankStrength: number;
+    /** Minimum forward separation per directed edge, as a fraction of L. */
+    rankGap: number;
+    /**
+     * Cluster-cohesion strength for affinity boards; 0 disables it. When
+     * positive, each container's members are pulled toward their shared centroid
+     * so a cluster stays visually tight, while non-members are still pushed out
+     * by the existing container exterior potential (intra attract, inter repel).
+     */
+    clusterStrength: number;
     /** Enable the restrictive-swap repair pass after the descent. */
     swaps: boolean;
     /** Max swap passes. */
@@ -227,6 +255,10 @@ const DEFAULTS: RefineOptions = {
     cyclicStrength: 0,
     lineConfineStrength: 0,
     lineConfineAxis: null,
+    attackRestScale: 1,
+    rankStrength: 0,
+    rankGap: 1.2,
+    clusterStrength: 0,
     swaps: false,
     swapMaxPasses: 4,
     swapEnergyBudget: 2,
@@ -268,7 +300,7 @@ export interface Problem {
     hh: Float64Array;
     wstab: Float64Array;
     fixed: boolean[];
-    edges: {s: number; t: number; directed: boolean; rest: number}[];
+    edges: {s: number; t: number; directed: boolean; rest: number; restScale: number; dirx: number; diry: number}[];
     containers: ProblemContainer[];
     l: number;
     p0: number;
@@ -304,6 +336,13 @@ export interface Problem {
     lineK: number;
     linePerpX: number;
     linePerpY: number;
+    /** Rank layering: strength, min gap (canvas units) and the flow unit axis. */
+    kRank: number;
+    rankGapL: number;
+    rankFx: number;
+    rankFy: number;
+    /** Cluster cohesion strength (affinity boards); 0 disables it. */
+    kCluster: number;
 }
 
 /** The median of a numeric array (0 for an empty array). */
@@ -374,7 +413,7 @@ export function buildProblem(
         });
     }
 
-    const e: {s: number; t: number; directed: boolean; rest: number}[] = [];
+    const e: {s: number; t: number; directed: boolean; rest: number; restScale: number; dirx: number; diry: number}[] = [];
     const degree = new Int32Array(n);
     for (const edge of edges) {
         const s = index.get(edge.source);
@@ -382,7 +421,15 @@ export function buildProblem(
         if (s === undefined || tt === undefined || s === tt) {
             continue;
         }
-        e.push({s, t: tt, directed: !!edge.directed, rest: 0});
+        let edx = NaN;
+        let edy = NaN;
+        if (edge.dir) {
+            const ddl = Math.hypot(edge.dir.x, edge.dir.y) || 1;
+            edx = edge.dir.x / ddl;
+            edy = edge.dir.y / ddl;
+        }
+        e.push({s, t: tt, directed: !!edge.directed, rest: 0,
+            restScale: edge.restScale ?? (edge.attack ? opts.attackRestScale : 1), dirx: edx, diry: edy});
         degree[s]++; degree[tt]++;
     }
 
@@ -407,7 +454,7 @@ export function buildProblem(
     const beta = opts.edgeTargetBlend;
     for (const ed of e) {
         const len = Math.hypot(px0[ed.s] - px0[ed.t], py0[ed.s] - py0[ed.t]) || l;
-        ed.rest = (1 - beta) * len + beta * l;
+        ed.rest = ((1 - beta) * len + beta * l) * ed.restScale;
     }
 
     const stabW = opts.stabilityScale / (l * l);
@@ -441,6 +488,13 @@ export function buildProblem(
         ux = opts.preferredDir.x / dl;
         uy = opts.preferredDir.y / dl;
     }
+    // Edges without their own direction inherit the global preferred direction.
+    for (const ed of e) {
+        if (Number.isNaN(ed.dirx)) {
+            ed.dirx = ux;
+            ed.diry = uy;
+        }
+    }
 
     const prob: Problem = {
         n, px, py, px0, py0, hw, hh, wstab, fixed, edges: e,
@@ -467,7 +521,18 @@ export function buildProblem(
         order: [], kOrder: opts.orderStrength,
         cyclic: [], kCyclic: opts.cyclicStrength,
         lineK: 0, linePerpX: 0, linePerpY: 1,
+        kRank: 0, rankGapL: 0, rankFx: 1, rankFy: 0,
+        kCluster: opts.clusterStrength,
     };
+    if (opts.rankStrength > 0 && opts.preferredDir) {
+        const fx = opts.preferredDir.x;
+        const fy = opts.preferredDir.y;
+        const fl = Math.hypot(fx, fy) || 1;
+        prob.kRank = opts.rankStrength;
+        prob.rankGapL = opts.rankGap * l;
+        prob.rankFx = fx / fl;
+        prob.rankFy = fy / fl;
+    }
     if (opts.lineConfineStrength > 0 && opts.lineConfineAxis) {
         const ax = opts.lineConfineAxis.x;
         const ay = opts.lineConfineAxis.y;
@@ -603,7 +668,7 @@ function regulariseCoincidences(prob: Problem, nodes: RefineNode[]): void {
  * @returns The total energy.
  */
 export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Array]): number {
-    const {n, px, py, px0, py0, hw, hh, wstab, edges, l, p0, arep, padx, pady, epsReg, ux, uy, directed, dirFloor, kSpring,
+    const {n, px, py, px0, py0, hw, hh, wstab, edges, l, p0, arep, padx, pady, epsReg, directed, dirFloor, kSpring,
         gravCx, gravCy, kGrav} = prob;
     let gx: Float64Array | null = null;
     let gy: Float64Array | null = null;
@@ -636,7 +701,7 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
     }
 
     // Edge length (and, for directed edges, direction).
-    for (const {s, t, directed: ed, rest} of edges) {
+    for (const {s, t, directed: ed, rest, dirx, diry} of edges) {
         const dx = px[t] - px[s];
         const dy = py[t] - py[s];
         const r = Math.sqrt(dx * dx + dy * dy + epsReg * epsReg);
@@ -645,13 +710,15 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
         const pt = edgePotential(r, rest, p0);
         const ptd = edgePotentialDeriv(r, rest, p0);
         if (directed && ed) {
-            const c = ex * ux + ey * uy;
+            // Each edge aligns to its own preferred direction (dirx,diry), which
+            // defaults to the global one but is overridden per branch (fishbone).
+            const c = ex * dirx + ey * diry;
             const g = dirFactor(c, dirFloor);
             const gp = dirFactorDeriv(dirFloor);
             e += pt * g;
             if (gx && gy) {
-                const gjx = g * ptd * ex + pt * gp * (ux - c * ex) / r;
-                const gjy = g * ptd * ey + pt * gp * (uy - c * ey) / r;
+                const gjx = g * ptd * ex + pt * gp * (dirx - c * ex) / r;
+                const gjy = g * ptd * ey + pt * gp * (diry - c * ey) / r;
                 gx[t] += gjx; gy[t] += gjy;
                 gx[s] -= gjx; gy[s] -= gjy;
             }
@@ -865,6 +932,62 @@ export function energyAndGradient(prob: Problem, grad?: [Float64Array, Float64Ar
             if (gx && gy) {
                 gx[i] += lineK * di * linePerpX;
                 gy[i] += lineK * di * linePerpY;
+            }
+        }
+    }
+
+    // Rank layering (flow/process): every directed edge must advance at least
+    // rankGapL along the flow axis. A softplus^2 penalty on the shortfall is ~0
+    // once the gap is met and grows smoothly below it, so nodes settle into
+    // discrete layers rather than a continuous directional gradient.
+    const {kRank, rankGapL, rankFx, rankFy} = prob;
+    if (kRank > 0) {
+        for (const {s, t, directed: ed} of edges) {
+            if (!ed) {
+                continue;
+            }
+            const progress = (px[t] - px[s]) * rankFx + (py[t] - py[s]) * rankFy;
+            const arg = rankGapL - progress;
+            const sp = softplus(arg);
+            e += kRank * sp * sp;
+            if (gx && gy) {
+                // dE/dprogress = -2 kRank sp sigmoid(arg); progress is linear.
+                const dEdp = -2 * kRank * sp * sigmoid(arg);
+                gx[t] += dEdp * rankFx;
+                gy[t] += dEdp * rankFy;
+                gx[s] -= dEdp * rankFx;
+                gy[s] -= dEdp * rankFy;
+            }
+        }
+    }
+
+    // Cluster cohesion (affinity boards): pull each container's members toward
+    // their shared centroid so a cluster stays tight. Like the line term, the
+    // mean-coupling in the gradient cancels within the member set (the signed
+    // deviations sum to zero), so the per-member force is simply k*(x_i - centroid).
+    const kCluster = prob.kCluster;
+    if (kCluster > 0) {
+        for (const c of containers) {
+            const m = c.members.size;
+            if (m < 2) {
+                continue;
+            }
+            let mx = 0;
+            let my = 0;
+            for (const i of c.members) {
+                mx += px[i];
+                my += py[i];
+            }
+            mx /= m;
+            my /= m;
+            for (const i of c.members) {
+                const dx = px[i] - mx;
+                const dy = py[i] - my;
+                e += 0.5 * kCluster * (dx * dx + dy * dy);
+                if (gx && gy) {
+                    gx[i] += kCluster * dx;
+                    gy[i] += kCluster * dy;
+                }
             }
         }
     }

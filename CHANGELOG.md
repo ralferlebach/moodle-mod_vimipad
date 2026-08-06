@@ -4,7 +4,230 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.21** (2026072791).
+> release is **0.8.31** (2026072801).
+
+## 0.8.31 (2026072801) — Typisierte Relationen für Flow und semantisches Netz
+
+Rundet die typisierten Relationen über die Formen ab, bei denen ein festes
+Typ-Set fachlich Standard ist. Bewusst NICHT typisiert bleiben Formen, deren
+Modell freie oder gar keine Relationstypen vorsieht (Concept Map – freie
+Verbindungswörter; Mindmap/Tree/Bubble/Timeline/Affinity/Fishbone/Venn).
+
+- **Flow chart:** Relationstypen **Abfolge** (neutral), **Ja** und **Nein** – die
+  Entscheidungszweige eines Flussdiagramms. Ja grün/durchgezogen, Nein
+  rot/gestrichelt; Abfolge bleibt neutral. Kein Layout-Effekt (die Rang-Schichtung
+  ordnet die Struktur bereits).
+- **Semantisches Netz:** die klassischen typisierten Links **is-a**, **Instanz-von**,
+  **part-of**, **hat-Eigenschaft**, **assoziiert**. part-of bindet enger
+  (Ruhelänge 0.6); das Netz bleibt frei (keine globale Richtung erzwungen), is-a
+  wird also eingefärbt, aber nicht in eine Hierarchie gezwungen (das leistet die
+  Ontologie-Form).
+- Neue Stile (instanceof türkis, hasproperty orange-gepunktet, yes grün, no
+  rot-gestrichelt) im generischen Modul; Strings `editor:reltype_*` (en/de).
+- **Tests:** Stilkarte (yes/no/sequence, instanceof/hasproperty) und PHPUnit-
+  Deklarationen (flow sequence/yes/no; semantisches Netz mit part-of-Ruhelänge).
+
+## 0.8.30 (2026072800) — Typisiertes Set MIT Layout-Effekt: Ontologie (deklarativ)
+
+Kombiniert typisierte Relationen mit einem *per-Typ-Layout-Effekt* – deklarativ
+über die Contract, sodass jede Form künftig pro Relationstyp Layout-Verhalten
+erklären kann. Als Referenz die neue Ontologie-Form.
+
+- **Neuer Contract-Baustein: per-Typ-Layout.** `base::get_relation_layout()`
+  (Default `[]`) bildet Relationstypen auf Layout-Hinweise ab
+  (`['isa' => ['directed' => true], 'partof' => ['restscale' => 0.6]]`); in
+  `to_array` als Liste `relationlayout` und in der `get_workspace`-Struktur
+  transportiert. Der Adapter wendet sie je Kante an: `directed` kann eine Kante
+  unabhängig vom Pfeil gerichtet erzwingen, `restscale` skaliert ihre Ruhelänge.
+- **Engine verallgemeinert:** `RefineEdge.restScale` (expliziter Multiplikator)
+  löst den bisherigen Angriffs-Sonderweg ab – die interne Ruhelänge nutzt
+  `edge.restScale ?? (edge.attack ? attackRestScale : 1)` (Argument-Verhalten
+  unverändert).
+- **Neues Subplugin `vimipadform_ontology`** (Ontologie / Wissensnetz): Typen
+  **is-a**, **part-of**, **assoziiert**. is-a bildet eine nach oben gerichtete
+  Taxonomie (gerichtet), part-of bindet Teile eng (Ruhelänge 0.6), assoziiert
+  ist neutral. Typ-UI und -Farben kommen automatisch aus dem generischen Modul.
+- Stile für isa/partof/associated (blau/violett-gestrichelt/grau) + Strings
+  `editor:reltype_isa` / `_partof` / `_associated` (en/de).
+- **Tests:** per-Typ-restScale (part-of enger als assoziiert), Ontologie-Resolver
+  (is-a directed, part-of restscale<1; PHP-relationlayout transportiert) und
+  PHPUnit-Deklaration.
+
+## 0.8.29 (2026072799) — Typisierte Relationen verallgemeinert + Causal-Polarität (+/−)
+
+Weitet die typisierten Relationen (bisher nur Argumentkarte) auf die Wirkungs-/
+Systemkarte aus und macht die Typ-Darstellung generisch.
+
+- **Gemeinsames Stilmodul `relation_types.ts`:** eine einzige Quelle für Farbe
+  und Strich je Relationstyp. Relations-Menü, Listenansicht und Canvas lesen von
+  hier; ein neuer typisierter Relationstyp braucht nur einen Eintrag plus einen
+  Lang-String `editor:reltype_<key>` – kein Sonderfall je Komponente mehr. Die
+  bisher hartcodierten support/attack-Farben wurden hierher gezogen (Verhalten
+  unverändert).
+- **Causal-/Systemkarte: Link-Polarität.** `vimipadform_causal` deklariert jetzt
+  die Relationstypen **positiv (+)** und **negativ (−)** – der Klassiker im
+  Causal-Loop-Diagramm. Positiv wird grün/durchgezogen, negativ rot/gestrichelt
+  dargestellt; die vorhandene generische Typ-UI (Dock + Liste) bietet die Auswahl
+  automatisch an, die Persistenz (relation_update) läuft unverändert.
+- **Export-sicher:** die Polaritätsfarben nutzen CSS-Variablen mit Literal-
+  Fallback wie die übrigen, erscheinen also korrekt im PNG/SVG-Export.
+- Neue Strings `editor:reltype_positive` / `editor:reltype_negative` (en/de).
+- **Tests:** `relation_types.test.ts` (Stilkarte: support/attack/positiv/negativ,
+  Export-sichere Farben) und PHPUnit-Deklaration (causal relationtypes).
+
+## 0.8.28 (2026072798) — Letzte geplante Formen: Causal/System und Venn/Mengen
+
+Schließt den 0.8.x-Formenkatalog ab. Beide Formen kommen ohne neuen Engine-Term
+aus — sie kombinieren vorhandene Bausteine.
+
+- **`vimipadform_causal` (Wirkungs-/Systemdiagramm):** gerichtetes Netz mit
+  erlaubten Rückkopplungen. Es wird bewusst KEINE globale Flussrichtung erzwungen
+  (das würde gegen die Zyklen arbeiten), das Layout ist also frei wie ein
+  semantisches Netz; Relationen sind standardmäßig gerichtet und geschwungene
+  Verbinder lesen Feedback-Schleifen klar.
+- **`vimipadform_venn` (Venn/Mengen):** Mengen sind (Ellipsen-)Container, Elemente
+  sind Knoten. Die vorhandene Cluster-Kohäsion (0.8.26) zieht die Mitglieder jeder
+  Menge zu ihrem Schwerpunkt, während die Container-Außenkuppel Nicht-Mitglieder
+  fernhält; ein Element, das zu zwei überlappenden Mengen gehört, wird in beide
+  gezogen und setzt sich in deren Schnittmenge. Mitgliedschaftsbasiert, nicht
+  geometrische Mengenalgebra (Letztere ist bewusst außerhalb des Rahmens).
+- Beide werden von der Registry automatisch erkannt und erscheinen in der
+  Profilauswahl; `refineOptionsForProfile` kennt zusätzlich den venn-Fallback
+  (clustered) für Aufrufe ohne transportierte Config.
+- **Tests:** Resolver-Fallback (venn geclustert, causal frei) und PHPUnit-
+  Deklaration (causal frei/geschwungen, venn geclustert/Ellipse).
+
+## 0.8.27 (2026072797) — Sechste neue Darstellungsform: Fishbone (per-Kante-Richtung)
+
+Das Fischgrätendiagramm als `vimipadform_fishbone`-Subplugin; der neue Baustein
+ist eine **per-Kante-Richtung** im Refiner (statt einer einzigen globalen).
+
+- **Neue Engine-Fähigkeit: per-Kante-Richtung.** `RefineEdge.dir` überschreibt je
+  Kante die Vorzugsrichtung; intern trägt jede Kante `dirx/diry` (Default = globale
+  Spine-Richtung). Der Richtungsterm nutzt jetzt die kantenweite Richtung. Rein
+  additiv — ohne `dir` verhält sich alles wie zuvor (bestehende Richtungs-
+  Gradiententests bleiben grün; neuer Gradient-Test für per-Kante-Richtung).
+- **Fishbone-Zuweisung (`fishboneEdgeDirs`).** Kopf = Knoten mit höchstem
+  Eingangsgrad (der Effekt); dessen direkte Quellen sind die Haupt-Gräten, die
+  oben/unten alternieren; Unter-Ursachen erben die Seite per BFS. Jede Kante mit
+  bekannter Seite erhält eine diagonale Richtung `(1, ∓slope)` → das typische
+  alternierende Gräten-Muster. Spine-/unentschiedene Kanten behalten die globale
+  Richtung.
+- **Contract erweitert:** `base::get_layout_fishbone()` (Default false), in
+  `to_array` als `fishbone` und in der `get_workspace`-Struktur transportiert;
+  clientseitig über `resolveProfileRefine` in `ProfileRefine.fishbone` aufgelöst,
+  das den Adapter die per-Kante-Richtungen bauen lässt.
+- **Neues Subplugin `vimipadform_fishbone`** (Fischgrätendiagramm): gerichtete
+  Spine +x, per-Zweig-Gräten. Von der Registry automatisch erkannt.
+- **Tests:** Gradient-Test (per-Kante-Richtung), Adapter-Test (Haupt-Gräten
+  alternieren, Unter-Ursachen erben die Seite), Resolver- und PHPUnit-Layout-
+  Deklaration.
+
+## 0.8.26 (2026072796) — Fünfte neue Darstellungsform: Affinity board (Cluster-Anziehung)
+
+Das Affinitätsdiagramm als `vimipadform_affinity`-Subplugin, mit dem neuen
+deklarativen Term Cluster-Kohäsion — zugleich ein Vorgriff auf den All-Paar-
+Stress-Kern von 1.1 (hier block-diagonal je Container).
+
+- **Neuer Engine-Term: Cluster-Kohäsion.** `refine_layout` bekommt
+  `clusterStrength`. Ist sie positiv, werden die Mitglieder jedes Containers zu
+  ihrem gemeinsamen Schwerpunkt gezogen (`E = ½k·Σ|x_i − Cluster-Schwerpunkt|²`);
+  die Mean-Kopplung im Gradienten hebt sich innerhalb des Clusters exakt auf, die
+  Kraft je Mitglied ist damit `k·(x_i − Schwerpunkt)`. Nicht-Mitglieder werden
+  weiter von der bestehenden Container-Außenkuppel abgestoßen (intra anziehend,
+  inter abstoßend). Gradient gegen Finite-Differenzen geprüft.
+- **Contract erweitert:** `base::get_layout_clustered()` (Default false), in
+  `to_array` als `clustered` und in der `get_workspace`-Struktur transportiert;
+  clientseitig über `resolveProfileRefine` in `clusterStrength` aufgelöst.
+- **Neues Subplugin `vimipadform_affinity`** (Affinitätsdiagramm): ungerichtet,
+  ohne erzwungene Ordnung; Container = Cluster, deren Mitglieder beim Anordnen
+  zusammenrücken. Von der Registry automatisch erkannt.
+- **Tests:** Gradient-Test (Cluster-Term), Verhaltenstest (Cluster rückt enger
+  zusammen; Term nur bei positiver Stärke gebaut), Resolver-Tests
+  (affinity/clustered) und PHPUnit-Layout-Deklaration.
+
+## 0.8.25 (2026072795) — Vierte neue Darstellungsform: Flow/Process (Rang-Layering)
+
+Das Flussdiagramm als `vimipadform_flow`-Subplugin, mit einem neuen deklarativen
+Potentialterm: Rang-Layering.
+
+- **Neuer Engine-Term: Rang-Layering.** `refine_layout` bekommt `rankStrength` +
+  `rankGap`. Bei positiver Stärke (mit Vorzugsrichtung als Flussachse) muss jede
+  gerichtete Kante entlang der Flussachse mindestens `rankGap·L` vorrücken; eine
+  softplus²-Strafe auf den Fehlbetrag ist ~0, sobald der Abstand erreicht ist,
+  und wächst darunter glatt — so setzen sich die Knoten in diskrete Ebenen statt
+  in einen kontinuierlichen Richtungsgradienten. Gradient gegen Finite-
+  Differenzen geprüft.
+- **Contract erweitert:** `base::get_layout_rank_layered()` (Default false), in
+  `to_array` als `ranklayered` und in der `get_workspace`-Struktur transportiert;
+  clientseitig über `resolveProfileRefine` in `rankStrength` aufgelöst.
+- **Neues Subplugin `vimipadform_flow`** (Flussdiagramm): gerichtet top-down (+y),
+  Geschwister links→rechts geordnet, rang-geschichtet, orthogonale Verbinder,
+  Rechteck-Boxen. Von der Registry automatisch erkannt.
+- **Tests:** Gradient-Test (Rang-Term), Verhaltenstest (gerichtete Kette bildet
+  Ebenen; Term nur mit Flussachse + Stärke gebaut), Resolver-Tests
+  (flow/rankLayered) und PHPUnit-Layout-Deklaration.
+
+## 0.8.24 (2026072794) — Relationstyp: Listenansicht-Umschalter & Export-Parität
+
+Rundet die typisierten Relationen (0.8.22/0.8.23) ab.
+
+- **Listenansicht (barrierearme Zweitoberfläche):** Jede Relationszeile hat jetzt
+  einen Typ-Auswahl-`<select>` (Stütze/Angriff), sichtbar wenn die Form typisierte
+  Relationen anbietet. Damit ist der Relationstyp auch tastatur-/screenreader-
+  freundlich über die Tabelle bearbeitbar, gleichwertig zum Canvas-Dock.
+- **PNG/SVG-Export:** Die Typfarben und der Angriffs-Strich erscheinen im Export
+  bereits korrekt — der Export klont das gerenderte SVG, und die Relationen tragen
+  die Farbe als inline `stroke`/`strokeDasharray` mit CSS-Variablen-Fallback
+  (`var(--vimipad-relation-attack, #c0392b)` bzw. `…-support, #2e7d32`), demselben
+  etablierten Muster wie die Selektionsfarbe. Keine Codeänderung nötig; hier nur
+  verifiziert und dokumentiert.
+- Neuer String `editor:relationtype` (en/de).
+
+## 0.8.23 (2026072793) — Relationstyp-Auswahl und -Darstellung (Argument Map nutzbar)
+
+Vervollständigt die typisierten Relationen aus 0.8.22 um die fehlende Bedienung
+und Darstellung — die Argumentkarte ist damit voll nutzbar.
+
+- **Auswahl im Relations-Menü:** Bietet die aktive Darstellungsform typisierte
+  Relationen an (deklariert über `relationtypes`), zeigt das Relations-Dock je
+  Typ (außer `link`) einen farbigen Umschalter — für die Argumentkarte Stütze
+  (grün) und Angriff (rot). Tastaturbedienbar (Buttons mit aria-pressed/label).
+- **Darstellung auf dem Canvas:** Relationen werden nach Typ eingefärbt; Angriffe
+  zusätzlich gestrichelt. Farben über CSS-Variablen `--vimipad-relation-support`
+  / `--vimipad-relation-attack` überschreibbar.
+- **Persistenz:** Der Typwechsel läuft über eine `relation_update`-Operation
+  (mit Undo/Redo) — die gesamte Kette (Backend-Validierung, apply, reconstruct,
+  Remote-Anwendung, Reducer) unterstützte `type` bereits; hier kommen Bedienung
+  und Rendering hinzu.
+- **Wirkung:** Ein als „Angriff" gesetzter Verbinder aktiviert die Zweig-
+  Repulsion aus 0.8.22 (längere Ruhelänge) beim Anordnen.
+- Neue Strings `editor:reltype_support`/`editor:reltype_attack` (en/de).
+
+## 0.8.22 (2026072792) — Zweite neue Darstellungsform: Argument Map (typisierte Kanten)
+
+Die Argumentkarte als `vimipadform_argument`-Subplugin — und die Einführung
+*typisierter Relationen* (Stütze/Angriff) über die Contract, mit einem
+zugehörigen Layout-Effekt.
+
+- **Neuer Contract-Baustein: Relationstypen.** `base::get_relation_types()`
+  (Default `['link']`) wird in `to_array` als `relationtypes` und in der
+  `get_workspace`-formconfig-Struktur transportiert. Die Argumentkarte deklariert
+  `['support','attack']`.
+- **Typisierte Kanten im Refiner.** `RefineEdge` bekommt ein `attack`-Flag;
+  Angriffskanten erhalten eine längere Ruhelänge (`attackRestScale`, Default 1;
+  Argument 1.8) — eine minimale Zweig-Repulsion, sodass angreifende Äste weiter
+  abstehen. `refine_arrange` markiert Angriffe aus `relation.type === 'attack'`,
+  und `resolveProfileRefine` leitet `attackRepel` daraus ab, ob die Form einen
+  `attack`-Relationstyp deklariert.
+- **Neues Subplugin `vimipadform_argument`** (Argumentkarte): gerichtet aufwärts
+  (Gründe zeigen zur Behauptung, Richtung -y), Geschwister links→rechts geordnet,
+  Relationstypen Stütze/Angriff. Von der Registry automatisch erkannt.
+- **Tests:** Verhaltenstest (Angriffskante ruht länger als Stützkante; bei
+  Skala 1 gleich), Resolver-Tests (argument/attackRepel aus relationtypes) und
+  PHPUnit-Layout-/Relationstyp-Deklaration.
+- **Handbuch:** Darstellungsformen um Timeline und Argument (umgesetzt) ergänzt,
+  inkl. Hinweis auf den noch folgenden Relationstyp-Auswahl-Dialog.
 
 ## 0.8.21 (2026072791) — Erste neue Darstellungsform: Timeline (mit 1D-Linien-Confinement)
 

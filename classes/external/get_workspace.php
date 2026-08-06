@@ -217,9 +217,25 @@ class get_workspace extends external_api {
                 'defaultshape' => new external_value(PARAM_ALPHA, 'Default node shape key'),
                 'line' => new external_value(PARAM_ALPHA, 'Connector line style'),
                 'bifurcation' => new external_value(PARAM_ALPHA, 'Bifurcation behaviour'),
+                'relationtypes' => new external_multiple_structure(
+                    new external_value(PARAM_ALPHA, 'Relation type key'),
+                    'Relation types this display type offers',
+                    VALUE_OPTIONAL
+                ),
+                'relationlayout' => new external_multiple_structure(
+                    new external_single_structure([
+                        'type' => new external_value(PARAM_ALPHA, 'Relation type key'),
+                        'directed' => new external_value(PARAM_BOOL, 'Force edges of this type directed', VALUE_OPTIONAL),
+                        'restscale' => new external_value(PARAM_FLOAT, 'Rest-length multiplier for this type', VALUE_OPTIONAL),
+                    ]),
+                    'Per-type layout hints',
+                    VALUE_OPTIONAL
+                ),
                 'layout' => new external_single_structure([
                     'directed' => new external_value(PARAM_BOOL, 'Treat relations as directed for layout'),
                     'cyclicorder' => new external_value(PARAM_BOOL, 'Preserve cyclic order of a hub\'s neighbours'),
+                    'ranklayered' => new external_value(PARAM_BOOL, 'Enforce discrete rank layers (flow/process)'),
+                    'clustered' => new external_value(PARAM_BOOL, 'Cluster container members (affinity boards)'),
                     'direction' => new external_single_structure([
                         'x' => new external_value(PARAM_FLOAT, 'Preferred direction x component'),
                         'y' => new external_value(PARAM_FLOAT, 'Preferred direction y component'),

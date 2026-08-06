@@ -71,4 +71,24 @@ class form extends \mod_vimipad\local\form\base {
     public function get_bifurcation(): string {
         return 'individual';
     }
+
+    /**
+     * The classic typed links of a semantic network.
+     *
+     * @return string[]
+     */
+    public function get_relation_types(): array {
+        return ['isa', 'instanceof', 'partof', 'hasproperty', 'associated'];
+    }
+
+    /**
+     * Part-of links bind their members a little tighter; the rest are neutral.
+     * The network stays free-form (no global direction is imposed), so is-a is
+     * coloured but not forced into a hierarchy here.
+     *
+     * @return array
+     */
+    public function get_relation_layout(): array {
+        return ['partof' => ['restscale' => 0.6]];
+    }
 }
