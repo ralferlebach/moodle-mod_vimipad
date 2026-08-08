@@ -26,7 +26,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {ConstraintStatus, JournalEntry, Lease, PolledOperation, ServiceTransport, WorkspaceState} from '../types';
+import {ConstraintStatus, JournalEntry, Lease, PolledOperation, ServiceTransport, VimiContainer, VimiNode, VimiRelation, WorkspaceState} from '../types';
 import {Operation} from '../graph/reconstruct';
 import {AdaptiveConfig} from '../collab/adaptive';
 import {PollClient} from '../collab/poll_client';
@@ -118,12 +118,67 @@ export class ApiClient {
      * @param targetuserid Optional owner user to view read-only (0 = self).
      */
     async getWorkspace(groupid = 0, targetuserid = 0): Promise<WorkspaceState> {
-        const result = await this.transport('mod_vimipad_get_workspace', {
+        // Fetch workspace metadata plus element counts first (a small, fast
+        // response), then page the nodes/relations/containers separately. This
+        // keeps any single request bounded in size, memory and return-validation
+        // cost — a large map no longer arrives as one multi-thousand-row payload.
+        const meta = await this.transport('mod_vimipad_get_workspace', {
             cmid: this.cmid,
             groupid,
             targetuserid,
-        });
-        return result as WorkspaceState;
+            includeelements: false,
+        }) as WorkspaceState & {counts?: {nodes: number; relations: number; containers: number}};
+
+        // The empty-workspace path (and any backend that ignores the flag) returns
+        // no counts; then the inline arrays it did return are authoritative.
+        if (!meta.counts) {
+            return meta as WorkspaceState;
+        }
+
+        const [nodes, relations, containers] = await Promise.all([
+            this.pageElements(meta.workspaceid, 'nodes', meta.counts.nodes),
+            this.pageElements(meta.workspaceid, 'relations', meta.counts.relations),
+            this.pageElements(meta.workspaceid, 'containers', meta.counts.containers),
+        ]);
+
+        return {
+            ...meta,
+            nodes: nodes as VimiNode[],
+            relations: relations as VimiRelation[],
+            containers: containers as VimiContainer[],
+        } as WorkspaceState;
+    }
+
+    /**
+     * Fetch every element of one kind by paging get_workspace_elements. Stops as
+     * soon as the server reports no more rows, so a stale count cannot loop it.
+     *
+     * @param workspaceid The workspace id.
+     * @param kind Element kind: nodes, relations or containers.
+     * @param total The reported total, used to bound the page loop.
+     */
+    private async pageElements(
+        workspaceid: number,
+        kind: 'nodes' | 'relations' | 'containers',
+        total: number
+    ): Promise<unknown[]> {
+        const pagesize = 500;
+        const out: unknown[] = [];
+        for (let offset = 0; offset < total; offset += pagesize) {
+            const page = await this.transport('mod_vimipad_get_workspace_elements', {
+                cmid: this.cmid,
+                workspaceid,
+                kind,
+                offset,
+                limit: pagesize,
+            }) as {hasmore: boolean; [key: string]: unknown};
+            const chunk = (page[kind] as unknown[]) ?? [];
+            out.push(...chunk);
+            if (!page.hasmore) {
+                break;
+            }
+        }
+        return out;
     }
 
     /**

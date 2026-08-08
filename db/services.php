@@ -33,6 +33,14 @@ $functions = [
         'ajax' => true,
         'capabilities' => 'mod/vimipad:view',
     ],
+    'mod_vimipad_get_workspace_elements' => [
+        'classname' => 'mod_vimipad\external\get_workspace_elements',
+        'methodname' => 'execute',
+        'description' => 'Return one page of a workspace\'s nodes, relations or containers.',
+        'type' => 'read',
+        'ajax' => true,
+        'capabilities' => 'mod/vimipad:view',
+    ],
     'mod_vimipad_get_constraint_status' => [
         'classname' => 'mod_vimipad\\external\\get_constraint_status',
         'methodname' => 'execute',

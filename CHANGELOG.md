@@ -4,7 +4,32 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.33** (2026072803).
+> release is **0.8.34** (2026072804).
+
+## 0.8.34 (2026072804) — Paginiertes Laden gro{ß}er Maps
+
+`get_workspace` liefert eine gro{ß}e Map bisher als einen einzigen Payload mit
+Tausenden validierten Zeilen — unter Nebenläufigkeit der teuerste Endpunkt
+(Speicher + Rückgabe-Validierung pro Request). Neu wird die Map **seitenweise**
+geladen, mit **vollständig validierter** Payload (kein `PARAM_RAW`, jede Zeile
+geht durch `clean_returnvalue`):
+
+* `get_workspace` erhält einen additiven Parameter `includeelements` (Default
+  `true` = unverändertes Verhalten, rückwärtskompatibel). Mit `false` liefert er
+  nur Metadaten plus `counts` (Knoten/Relationen/Container).
+* Neue Lesefunktion `mod_vimipad_get_workspace_elements(cmid, workspaceid, kind,
+  offset, limit)` gibt **validierte** Seiten je Elementart zurück (max. 500 pro
+  Seite), geordnet nach id (stabile Seiten).
+* Der API-Client lädt zuerst die Metadaten (`includeelements=false`), pagt dann
+  Knoten/Relationen/Container parallel und setzt daraus die volle
+  `WorkspaceState` zusammen — **Editor, Reducer und Rendering bleiben
+  unverändert**. Fällt `counts` (leerer Workspace/altes Backend), werden die
+  inline gelieferten Arrays direkt genutzt.
+
+Wirkung: Jeder einzelne Request ist in Grö{ß}e, Speicher und Validierungskosten
+begrenzt — das senkt vor allem die Tail-Latenz unter gleichzeitigen
+Ladevorgängen. Live verifiziert: eine 1000-Knoten-Map lädt über zwei
+Element-Seiten und rendert vollständig im Browser.
 
 ## 0.8.33 (2026072803) — Performance: schlankeres get_workspace
 
