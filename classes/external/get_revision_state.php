@@ -77,17 +77,23 @@ class get_revision_state extends external_api {
 
         $state = (new reconstruction_service())->reconstruct((int) $workspace->id, $revision);
 
+        // Populate the historical node layout so the reconstructed state renders
+        // with the topology it actually had at this revision, not a recomputed
+        // auto-layout. Empty when nothing was recorded that early.
+        $layoutjson = (new \mod_vimipad\local\service\layout_service())
+            ->layout_at_revision((int) $workspace->id, $instance->defaultprofile, $revision);
+
         return [
             'workspaceid' => (int) $workspace->id,
             'revision' => $revision,
             'locked' => 1,
             'profile' => $instance->defaultprofile,
             'formconfig' => registry::for_profile($instance->defaultprofile)->to_array(),
-            'layoutjson' => '',
+            'layoutjson' => $layoutjson,
             'nodes' => array_map([get_workspace::class, 'map_node'], $state['nodes']),
             'relations' => array_map([get_workspace::class, 'map_relation'], $state['relations']),
             'containers' => array_map([get_workspace::class, 'map_container'], $state['containers']),
-            'collab' => helper::collab_config(),
+            'collab' => helper::collab_config((int) $workspace->id),
         ];
     }
 

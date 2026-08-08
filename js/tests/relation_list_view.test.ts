@@ -47,13 +47,19 @@ function stateWith(relations: VimiRelation[]): EditorState {
     };
 }
 
-function render(root: Root, state: EditorState): void {
+function render(root: Root, state: EditorState, enforced = true): void {
     act(() => {
         root.render(React.createElement(RelationListView, {
-            state, disabled: false, onDeleteRelation: noop, onRetarget: noop,
+            state, disabled: false, enforced, onDeleteRelation: noop, onRetarget: noop,
             onRenameRelation: noop, t,
         }));
     });
+}
+
+/** Find an action button by its (lock-independent) aria-label. */
+function button(container: HTMLElement, arialabel: string): HTMLButtonElement | null {
+    return Array.from(container.querySelectorAll('button'))
+        .find(b => b.getAttribute('aria-label') === arialabel) ?? null;
 }
 
 describe('RelationListView double-arrow merging', () => {
@@ -96,46 +102,56 @@ describe('RelationListView double-arrow merging', () => {
         expect(spanned.length).toBe(2); // label cell + actions cell
     });
 
-    test('a move-locked relation offers no reverse button and no retarget', () => {
+    test('a move-locked relation disables reverse and delete but not rename', () => {
         render(root, stateWith([
             {
                 stableid: 'r3', sourceid: 'a', targetid: 'b', type: 'link', label: 'rel', direction: 1,
                 metadatajson: JSON.stringify({locked: true, locks: {move: true, color: false, text: false}}),
             },
         ]));
-        // Reverse button (title "editor:reverse") must be gone.
-        const titles = Array.from(container.querySelectorAll('button')).map(b => b.getAttribute('title'));
-        expect(titles).not.toContain('editor:reverse');
-        // Rename (edit) is still offered because text is not locked.
-        expect(titles).toContain('editor:reledit');
-        // Delete is gone because the relation carries a lock.
-        expect(titles).not.toContain('editor:deleterelation');
+        // Controls are shown but disabled, so the editor can see the lock.
+        expect(button(container, 'editor:reverse')?.disabled).toBe(true);
+        expect(button(container, 'editor:deleterelation')?.disabled).toBe(true);
+        // Rename (edit) stays enabled because text is not locked.
+        expect(button(container, 'editor:reledit')?.disabled).toBe(false);
+        // A lock badge is shown for the row.
+        expect(container.querySelector('.fa-lock')).not.toBeNull();
     });
 
-    test('a text-locked relation offers no rename', () => {
+    test('a text-locked relation disables rename but not reverse', () => {
         render(root, stateWith([
             {
                 stableid: 'r4', sourceid: 'a', targetid: 'b', type: 'link', label: 'rel', direction: 1,
                 metadatajson: JSON.stringify({locked: true, locks: {move: false, color: false, text: true}}),
             },
         ]));
-        const titles = Array.from(container.querySelectorAll('button')).map(b => b.getAttribute('title'));
-        // No rename (edit) button.
-        expect(titles).not.toContain('editor:reledit');
-        // Reverse is still available because move is not locked.
-        expect(titles).toContain('editor:reverse');
+        expect(button(container, 'editor:reledit')?.disabled).toBe(true);
+        expect(button(container, 'editor:reverse')?.disabled).toBe(false);
     });
 
-    test('a legacy globally-locked relation offers no action buttons at all', () => {
+    test('a legacy globally-locked relation disables every action button', () => {
         render(root, stateWith([
             {
                 stableid: 'r5', sourceid: 'a', targetid: 'b', type: 'link', label: 'rel', direction: 1,
                 metadatajson: JSON.stringify({locked: true}),
             },
         ]));
-        const titles = Array.from(container.querySelectorAll('button')).map(b => b.getAttribute('title'));
-        expect(titles).not.toContain('editor:reledit');
-        expect(titles).not.toContain('editor:reverse');
-        expect(titles).not.toContain('editor:deleterelation');
+        expect(button(container, 'editor:reledit')?.disabled).toBe(true);
+        expect(button(container, 'editor:reverse')?.disabled).toBe(true);
+        expect(button(container, 'editor:deleterelation')?.disabled).toBe(true);
+    });
+
+    test('with enforcement off (manager authoring) a locked relation stays fully editable', () => {
+        render(root, stateWith([
+            {
+                stableid: 'r6', sourceid: 'a', targetid: 'b', type: 'link', label: 'rel', direction: 1,
+                metadatajson: JSON.stringify({locked: true}),
+            },
+        ]), false);
+        // No lock binds when enforcement is off, so every control is enabled.
+        expect(button(container, 'editor:reledit')?.disabled).toBe(false);
+        expect(button(container, 'editor:reverse')?.disabled).toBe(false);
+        expect(button(container, 'editor:deleterelation')?.disabled).toBe(false);
+        expect(container.querySelector('.fa-lock')).toBeNull();
     });
 });

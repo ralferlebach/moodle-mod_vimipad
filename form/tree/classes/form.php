@@ -71,4 +71,31 @@ class form extends \mod_vimipad\local\form\base {
     public function get_bifurcation(): string {
         return 'shared';
     }
+
+    /**
+     * Trees flow downward: directed edges are aligned along +y.
+     *
+     * @return array|null
+     */
+    public function get_layout_direction(): ?array {
+        return ['x' => 0.0, 'y' => 1.0];
+    }
+
+    /**
+     * Trees treat relations as directed (parent to child).
+     *
+     * @return bool
+     */
+    public function is_layout_directed(): bool {
+        return true;
+    }
+
+    /**
+     * Siblings are ordered left to right, so the order axis is +x.
+     *
+     * @return array|null
+     */
+    public function get_layout_order_axis(): ?array {
+        return ['x' => 1.0, 'y' => 0.0];
+    }
 }

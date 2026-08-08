@@ -78,6 +78,8 @@ export function mount(element: HTMLElement, config: MountConfig): void {
         groupid={config.groupid ?? 0}
         initialView={config.initialView ?? 'canvas'}
         targetUserid={config.targetUserid ?? 0}
+        arrangeIterations={config.arrangeIterations}
+        arrangeShrink={config.arrangeShrink}
     />);
 }
 

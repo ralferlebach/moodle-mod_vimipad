@@ -24,6 +24,7 @@ use core_external\external_value;
 use stdClass;
 use mod_vimipad\local\access;
 use mod_vimipad\local\service\consensus_service;
+use mod_vimipad\local\service\push_service;
 use mod_vimipad\local\service\workspace_service;
 
 /**
@@ -199,6 +200,12 @@ class helper {
         [, $cm] = get_course_and_cm_from_cmid($cmid, 'vimipad');
         $context = \context_module::instance($cm->id);
         external_api::validate_context($context);
+        // Deliberate access decision: reading any workspace — including the
+        // shared course-mode workspace — requires mod/vimipad:view in this
+        // module's context. Guests, unenrolled and suspended users therefore do
+        // not get in (they lack the capability), because a course map is course
+        // content, not public data. Course workspaces are shared among enrolled
+        // participants only; cross-course/guest access is intentionally refused.
         require_capability('mod/vimipad:view', $context);
 
         $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);
@@ -241,13 +248,21 @@ class helper {
      * All poll intervals are returned in milliseconds for the client. Falls back
      * to sensible defaults when settings are unset.
      *
+     * @param int|null $workspaceid The workspace, to derive the per-workspace push
+     *                              topic and scoped subscriber token; null omits them.
      * @return array The collaboration settings bundle (all poll values in ms).
      */
-    public static function collab_config(): array {
+    public static function collab_config(?int $workspaceid = null): array {
         $get = static function (string $name, int $default): int {
             $value = (int) get_config('mod_vimipad', $name);
             return $value > 0 ? $value : $default;
         };
+        $pushtopic = '';
+        $pushtoken = '';
+        if ($workspaceid !== null && push_service::is_enabled()) {
+            $pushtopic = push_service::topic($workspaceid);
+            $pushtoken = push_service::subscriber_token($workspaceid);
+        }
         return [
             'pollinterval' => $get('pollinterval', 1) * 1000,
             'polladaptive' => (int) get_config('mod_vimipad', 'polladaptive'),
@@ -256,6 +271,8 @@ class helper {
             'leasetimeout' => self::lease_ttl(),
             'pushenabled' => (int) get_config('mod_vimipad', 'pushenabled'),
             'pushendpoint' => (string) get_config('mod_vimipad', 'pushendpoint'),
+            'pushtopic' => $pushtopic,
+            'pushtoken' => $pushtoken,
         ];
     }
 }

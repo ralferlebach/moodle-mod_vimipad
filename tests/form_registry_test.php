@@ -91,6 +91,134 @@ final class form_registry_test extends \advanced_testcase {
         $this->assertSame('rect', $array['defaultshape']);
         $this->assertSame('orthogonal', $array['line']);
         $this->assertSame('shared', $array['bifurcation']);
+        $this->assertArrayHasKey('layout', $array);
+        $this->assertTrue($array['layout']['directed']);
+    }
+
+    /**
+     * Each bundled subplugin declares the layout-potential parameters the
+     * arrange refiner reads (directed flag, preferred direction, order axis).
+     * Hierarchical forms flow/order; radial and free forms declare neither.
+     *
+     * @return void
+     */
+    public function test_layout_potential_declarations(): void {
+        registry::reset_cache();
+
+        // Tree: directed, flows downward (+y), siblings ordered along +x, linear.
+        $tree = registry::for_profile('tree')->to_array()['layout'];
+        $this->assertTrue($tree['directed']);
+        $this->assertSame(['x' => 0.0, 'y' => 1.0], $tree['direction']);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $tree['orderaxis']);
+        $this->assertFalse($tree['cyclicorder']);
+
+        // Concept map: undirected, no forced direction, keeps sibling order, linear.
+        $concept = registry::for_profile('conceptmap')->to_array()['layout'];
+        $this->assertFalse($concept['directed']);
+        $this->assertArrayNotHasKey('direction', $concept);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $concept['orderaxis']);
+        $this->assertFalse($concept['cyclicorder']);
+
+        // Radial forms: undirected, no linear order axis, but cyclic order on.
+        foreach (['mindmap', 'bubblemap'] as $profile) {
+            $layout = registry::for_profile($profile)->to_array()['layout'];
+            $this->assertFalse($layout['directed'], "$profile should be undirected");
+            $this->assertArrayNotHasKey('direction', $layout, "$profile should force no direction");
+            $this->assertArrayNotHasKey('orderaxis', $layout, "$profile should keep no linear order axis");
+            $this->assertTrue($layout['cyclicorder'], "$profile should preserve cyclic order");
+        }
+
+        // Semantic network: free — undirected, no direction, no order of any kind.
+        $semantic = registry::for_profile('semanticnetwork')->to_array()['layout'];
+        $this->assertFalse($semantic['directed']);
+        $this->assertArrayNotHasKey('direction', $semantic);
+        $this->assertArrayNotHasKey('orderaxis', $semantic);
+        $this->assertFalse($semantic['cyclicorder']);
+
+        // Timeline: directed left-to-right, events confined onto one line (+x),
+        // no linear sibling order and no cyclic order.
+        $timeline = registry::for_profile('timeline')->to_array()['layout'];
+        $this->assertTrue($timeline['directed']);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $timeline['direction']);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $timeline['lineaxis']);
+        $this->assertArrayNotHasKey('orderaxis', $timeline);
+        $this->assertFalse($timeline['cyclicorder']);
+
+        // Argument map: directed upward (reasons point to the claim), siblings
+        // ordered along +x, and it offers typed support/attack relations.
+        $argcfg = registry::for_profile('argument')->to_array();
+        $argument = $argcfg['layout'];
+        $this->assertTrue($argument['directed']);
+        $this->assertSame(['x' => 0.0, 'y' => -1.0], $argument['direction']);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $argument['orderaxis']);
+        $this->assertSame(['support', 'attack'], $argcfg['relationtypes']);
+
+        // Untyped forms default to a single link relation type.
+        $this->assertSame(['link'], registry::for_profile('tree')->to_array()['relationtypes']);
+
+        // Flow/process: directed top-down, siblings along +x, rank-layered.
+        $flow = registry::for_profile('flow')->to_array()['layout'];
+        $this->assertTrue($flow['directed']);
+        $this->assertSame(['x' => 0.0, 'y' => 1.0], $flow['direction']);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $flow['orderaxis']);
+        $this->assertTrue($flow['ranklayered']);
+        $this->assertFalse(registry::for_profile('tree')->to_array()['layout']['ranklayered']);
+        // Flow offers the neutral sequence link plus yes/no decision branches.
+        $this->assertSame(['sequence', 'yes', 'no'], registry::for_profile('flow')->to_array()['relationtypes']);
+
+        // Semantic network offers the classic typed links; part-of binds tighter.
+        $semcfg = registry::for_profile('semanticnetwork')->to_array();
+        $this->assertSame(['isa', 'instanceof', 'partof', 'hasproperty', 'associated'], $semcfg['relationtypes']);
+        $sembytype = [];
+        foreach ($semcfg['relationlayout'] as $entry) {
+            $sembytype[$entry['type']] = $entry;
+        }
+        $this->assertEqualsWithDelta(0.6, $sembytype['partof']['restscale'], 0.001);
+
+        // Affinity: undirected, clustered (members cohere), no order.
+        $affinity = registry::for_profile('affinity')->to_array()['layout'];
+        $this->assertFalse($affinity['directed']);
+        $this->assertTrue($affinity['clustered']);
+        $this->assertArrayNotHasKey('orderaxis', $affinity);
+        $this->assertFalse(registry::for_profile('tree')->to_array()['layout']['clustered']);
+
+        // Fishbone: directed spine (+x) with per-branch bone directions.
+        $fishbone = registry::for_profile('fishbone')->to_array()['layout'];
+        $this->assertTrue($fishbone['directed']);
+        $this->assertSame(['x' => 1.0, 'y' => 0.0], $fishbone['direction']);
+        $this->assertTrue($fishbone['fishbone']);
+        $this->assertFalse(registry::for_profile('tree')->to_array()['layout']['fishbone']);
+
+        // Causal/system: free layout (no imposed direction), curved connectors.
+        $causalcfg = registry::for_profile('causal')->to_array();
+        $this->assertFalse($causalcfg['layout']['directed']);
+        $this->assertArrayNotHasKey('direction', $causalcfg['layout']);
+        $this->assertSame('curved', $causalcfg['line']);
+        $this->assertSame(['positive', 'negative'], $causalcfg['relationtypes']);
+
+        // Venn/sets: clustered (sets are containers), ellipse items.
+        $venncfg = registry::for_profile('venn')->to_array();
+        $this->assertTrue($venncfg['layout']['clustered']);
+        $this->assertSame('ellipse', $venncfg['defaultshape']);
+
+        // Ontology: typed relations with per-type layout hints.
+        $ontcfg = registry::for_profile('ontology')->to_array();
+        $this->assertSame(['isa', 'partof', 'associated'], $ontcfg['relationtypes']);
+        $bytype = [];
+        foreach ($ontcfg['relationlayout'] as $entry) {
+            $bytype[$entry['type']] = $entry;
+        }
+        $this->assertTrue($bytype['isa']['directed']);
+        $this->assertEqualsWithDelta(0.6, $bytype['partof']['restscale'], 0.001);
+        // Untyped forms declare no per-type layout.
+        $this->assertSame([], registry::for_profile('tree')->to_array()['relationlayout']);
+
+        // An unknown profile falls back to the free-form default too.
+        $fallback = registry::for_profile('doesnotexist')->to_array()['layout'];
+        $this->assertFalse($fallback['directed']);
+        $this->assertArrayNotHasKey('direction', $fallback);
+        $this->assertArrayNotHasKey('orderaxis', $fallback);
+        $this->assertFalse($fallback['cyclicorder']);
     }
 
     /**

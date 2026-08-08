@@ -1,0 +1,12 @@
+apache-jmeter-*/
+jmeter.tgz
+*.jtl
+vimipad-load-results.jtl
+.load-env
+.load-seed.out
+k6
+k6.tgz
+# jMeter writes its run log here. It echoes every -J property at startup,
+# including the REST token, so it must never be committed.
+jmeter.log
+*.log

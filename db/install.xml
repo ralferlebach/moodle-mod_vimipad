@@ -181,6 +181,26 @@
       </INDEXES>
     </TABLE>
 
+    <TABLE NAME="vimipad_layouthist" COMMENT="Append-only history of node layouts, so past revisions replay with their real topology">
+      <FIELDS>
+        <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+        <FIELD NAME="workspaceid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="profile" TYPE="char" LENGTH="64" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="revision" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="Workspace semantic revision current at the time this layout was saved"/>
+        <FIELD NAME="layoutjson" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="modifiedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workspaceid" TYPE="foreign" FIELDS="workspaceid" REFTABLE="vimipad_workspace" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workspaceid-profile-revision" UNIQUE="false" FIELDS="workspaceid, profile, revision"/>
+      </INDEXES>
+    </TABLE>
+
+
     <TABLE NAME="vimipad_operation" COMMENT="Server-validated operation log (source of truth for changes)">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>

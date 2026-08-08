@@ -23,3 +23,4 @@
  */
 
 $string['pluginname'] = 'Tree';
+$string['privacy:metadata'] = 'The tree display-type subplugin does not store any personal data.';

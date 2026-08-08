@@ -40,10 +40,10 @@ import Notification from 'core/notification';
 const STRING_KEYS = [
     'constraint:hintsheading',
     'editor:concepts', 'editor:conceptsandrelations',
-    'editor:containers', 'editor:drawcontainer', 'editor:drawcontainerdone',
+    'editor:containers', 'editor:drawcontainer', 'editor:drawcontainerdone', 'editor:newcontainer',
     'editor:node', 'editor:templatelocks', 'editor:templatelockshint', 'editor:lockallowlabel',
     'editor:importnovimidata', 'editor:authortools',
-    'editor:lockmode', 'editor:lockelement', 'editor:unlockelement',
+    'editor:lockmode', 'editor:lockelement', 'editor:unlockelement', 'editor:elementlocked',
     'editor:lockgroup_move', 'editor:lockgroup_color', 'editor:lockgroup_text',
     'editor:fmt_fontsans', 'editor:fmt_fontserif', 'editor:fmt_fontmono',
     'editor:add', 'editor:addnode', 'editor:addrelation', 'editor:actions',
@@ -137,6 +137,8 @@ export const init = async(cmid, selector = 'vimipad-editor-root') => {
             initialView,
             readonly: element.dataset.readonly === '1',
             targetUserid: parseInt(element.dataset.targetuserid || '0', 10),
+            arrangeIterations: parseInt(element.dataset.arrangeiterations || '0', 10) || undefined,
+            arrangeShrink: element.dataset.arrangeshrink !== '0',
             callService: buildTransport(),
             // Return undefined for unknown keys so the bundle's own English
             // fallbacks apply. Echoing the key here would surface raw ids like

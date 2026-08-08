@@ -153,6 +153,33 @@
     flex-wrap: nowrap;
 }
 
+/* Struck-through function glyph for the lock submenu: the function icon with a
+   diagonal slash laid over it ("no-parking sign" look), so a lock control shows
+   which function it forbids. The slash is muted at rest and turns into the theme
+   danger colour when the group is actually locked (button .active). */
+.vimipad-struck {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    line-height: 1;
+}
+
+.vimipad-struck-slash {
+    position: absolute;
+    top: 0;
+    left: 0;
+    color: var(--vimipad-danger, #dc3545);
+    opacity: 0.85;
+    pointer-events: none;
+}
+
+.vimipad-dock-btn.active .vimipad-struck-slash {
+    opacity: 1;
+}
+
 /* Confirm actions read as "outline success": green-on-white at rest so they are
    distinguishable from the neutral dock buttons, and they light up solid green
    on hover/focus. Applies to every confirm button in the canvas menus. */

@@ -22,6 +22,7 @@ use html_writer;
 use html_table;
 use moodle_url;
 use stdClass;
+use mod_vimipad\local\policy\request_policy;
 use mod_vimipad\local\service\ai_feedback_service;
 use mod_vimipad\local\assess\registry;
 use mod_vimipad\local\assess\result;
@@ -85,7 +86,15 @@ class grading_panel {
 
         // A mutating grading handler enforces its own core requirement rather
         // than relying on the calling page to have filtered access already.
+        // Authorization comes first: who may act is independent of how the
+        // request arrived, so an unauthorized caller is rejected either way.
         require_capability('mod/vimipad:grade', $context);
+
+        // Every action below changes state, so a non-POST request is inert:
+        // mutations must never be reachable by GET (prefetch, history, URL reuse).
+        if (!request_policy::is_mutating_request()) {
+            return;
+        }
 
         $snapshotid = (int) $snapshot->id;
         $pageurl = self::detail_url($cm, $snapshotid);

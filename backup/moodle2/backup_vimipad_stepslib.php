@@ -92,6 +92,11 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             'profile', 'viewportjson', 'layoutjson', 'modifiedby', 'timemodified',
         ]);
 
+        $layouthists = new backup_nested_element('layouthists');
+        $layouthist = new backup_nested_element('layouthist', ['id'], [
+            'profile', 'revision', 'layoutjson', 'modifiedby', 'timecreated',
+        ]);
+
         $operations = new backup_nested_element('operations');
         $operation = new backup_nested_element('operation', ['id'], [
             'revision', 'operationtype', 'payloadjson', 'userid', 'timecreated',
@@ -148,6 +153,8 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
         $memberships->add_child($membership);
         $workspace->add_child($layouts);
         $layouts->add_child($layout);
+        $workspace->add_child($layouthists);
+        $layouthists->add_child($layouthist);
         $workspace->add_child($operations);
         $operations->add_child($operation);
         $workspace->add_child($snapshots);
@@ -175,6 +182,7 @@ class backup_vimipad_activity_structure_step extends backup_activity_structure_s
             $container->set_source_table('vimipad_container', ['workspaceid' => backup::VAR_PARENTID]);
             $membership->set_source_table('vimipad_membership', ['containerid' => backup::VAR_PARENTID]);
             $layout->set_source_table('vimipad_layout', ['workspaceid' => backup::VAR_PARENTID]);
+            $layouthist->set_source_table('vimipad_layouthist', ['workspaceid' => backup::VAR_PARENTID]);
             $operation->set_source_table('vimipad_operation', ['workspaceid' => backup::VAR_PARENTID]);
             $snapshot->set_source_table('vimipad_snapshot', ['workspaceid' => backup::VAR_PARENTID]);
             $annotation->set_source_table('vimipad_annotation', ['snapshotid' => backup::VAR_PARENTID]);

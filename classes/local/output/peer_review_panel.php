@@ -20,6 +20,7 @@ use cm_info;
 use context_module;
 use html_table;
 use html_writer;
+use mod_vimipad\local\policy\request_policy;
 use mod_vimipad\local\service\peer_review_service;
 use moodle_url;
 use stdClass;
@@ -65,6 +66,10 @@ class peer_review_panel {
         stdClass $instance,
         int $userid
     ): void {
+        // Saving a review changes state, so only a POST may trigger it.
+        if (!request_policy::is_mutating_request()) {
+            return;
+        }
         if (!optional_param('savereview', 0, PARAM_BOOL) || !confirm_sesskey()) {
             return;
         }

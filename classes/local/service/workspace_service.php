@@ -265,9 +265,17 @@ class workspace_service {
         global $DB;
 
         $workspace = $DB->get_record('vimipad_workspace', ['id' => $workspaceid], '*', MUST_EXIST);
-        $nodes = $DB->get_records('vimipad_node', ['workspaceid' => $workspaceid, 'deleted' => 0]);
-        $relations = $DB->get_records('vimipad_relation', ['workspaceid' => $workspaceid, 'deleted' => 0]);
-        $containers = $DB->get_records('vimipad_container', ['workspaceid' => $workspaceid, 'deleted' => 0]);
+        // Fetch only the columns the external mappers actually use. The full map
+        // can run to thousands of rows, so skipping the unused audit ids and
+        // timestamps measurably cuts both the query time and the per-request
+        // memory footprint under concurrent workspace loads.
+        $nodefields = 'id, stableid, type, label, content, contentformat, metadatajson';
+        $relationfields = 'id, stableid, sourceid, targetid, type, label, direction, metadatajson';
+        $containerfields = 'id, stableid, type, label, geometryjson, metadatajson';
+        $conditions = ['workspaceid' => $workspaceid, 'deleted' => 0];
+        $nodes = $DB->get_records('vimipad_node', $conditions, '', $nodefields);
+        $relations = $DB->get_records('vimipad_relation', $conditions, '', $relationfields);
+        $containers = $DB->get_records('vimipad_container', $conditions, '', $containerfields);
 
         return [
             'workspace' => $workspace,
@@ -275,5 +283,48 @@ class workspace_service {
             'relations' => array_values($relations),
             'containers' => array_values($containers),
         ];
+    }
+
+    /**
+     * Count a workspace's live elements by kind. Cheap COUNT queries used by the
+     * paginated get_workspace path so a client knows how many pages to fetch.
+     *
+     * @param int $workspaceid The workspace id.
+     * @return array Associative array with keys nodes, relations, containers.
+     */
+    public function count_elements(int $workspaceid): array {
+        global $DB;
+        $cond = ['workspaceid' => $workspaceid, 'deleted' => 0];
+        return [
+            'nodes' => $DB->count_records('vimipad_node', $cond),
+            'relations' => $DB->count_records('vimipad_relation', $cond),
+            'containers' => $DB->count_records('vimipad_container', $cond),
+        ];
+    }
+
+    /**
+     * Fetch one page of a workspace's live elements of a kind, ordered by id so
+     * pages are stable across calls. Selects only the columns the external
+     * mappers use.
+     *
+     * @param int $workspaceid The workspace id.
+     * @param string $kind One of nodes, relations, containers.
+     * @param int $offset Zero-based row offset.
+     * @param int $limit Maximum number of rows to return.
+     * @return array Zero-indexed list of records (possibly empty).
+     */
+    public function get_elements_page(int $workspaceid, string $kind, int $offset, int $limit): array {
+        global $DB;
+        $map = [
+            'nodes' => ['vimipad_node', 'id, stableid, type, label, content, contentformat, metadatajson'],
+            'relations' => ['vimipad_relation', 'id, stableid, sourceid, targetid, type, label, direction, metadatajson'],
+            'containers' => ['vimipad_container', 'id, stableid, type, label, geometryjson, metadatajson'],
+        ];
+        if (!isset($map[$kind])) {
+            throw new \invalid_parameter_exception('unknown element kind');
+        }
+        [$table, $fields] = $map[$kind];
+        $cond = ['workspaceid' => $workspaceid, 'deleted' => 0];
+        return array_values($DB->get_records($table, $cond, 'id ASC', $fields, $offset, $limit));
     }
 }

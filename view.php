@@ -137,6 +137,7 @@ if ($targetuserid) {
 // the create_snapshot external function.
 if (
     $tab === 'journal' && $canedit && $cansubmit && !$readonly
+        && \mod_vimipad\local\policy\request_policy::is_mutating_request()
         && optional_param('dosubmit', 0, PARAM_BOOL) && confirm_sesskey()
 ) {
     $journalurl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']);
@@ -169,6 +170,7 @@ if (
 $consensusaction = optional_param('consensus', '', PARAM_ALPHA);
 if (
     $tab === 'journal' && $canedit && $cansubmit && !$readonly
+        && \mod_vimipad\local\policy\request_policy::is_mutating_request()
         && in_array($consensusaction, ['start', 'confirm', 'cancel'], true) && confirm_sesskey()
 ) {
     $journalurl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']);
@@ -333,6 +335,8 @@ switch ($tab) {
                     'data-view' => $tab,
                     'data-readonly' => $readonly ? 1 : 0,
                     'data-targetuserid' => $targetuserid,
+                    'data-arrangeiterations' => (int) (get_config('mod_vimipad', 'arrangeiterations') ?: 500),
+                    'data-arrangeshrink' => get_config('mod_vimipad', 'arrangeshrink') === '0' ? 0 : 1,
                 ]
             );
         } else {
@@ -383,12 +387,31 @@ switch ($tab) {
             echo html_writer::div($allocateform, 'mb-3');
         }
 
+        // The submission overview is paginated: a large cohort would otherwise
+        // load every submission row and decode every frozen snapshot JSON on a
+        // single page request. Ordering includes s.id so pages stay stable when
+        // several submissions share a timestamp.
+        $subsperpage = 50;
+        $subspage = optional_param('subspage', 0, PARAM_INT);
+        $countsql = "SELECT COUNT(1)
+                       FROM {vimipad_snapshot} s
+                       JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
+                      WHERE ws.vimipadid = :vid AND s.id = ws.submittedsnapshotid";
+        $substotal = (int) $DB->count_records_sql($countsql, ['vid' => $instance->id]);
+        if ($subspage < 0 || $subspage * $subsperpage >= max(1, $substotal)) {
+            $subspage = 0;
+        }
         $sql = "SELECT s.id AS snapshotid, s.status, s.timecreated, ws.id AS workspaceid, ws.userid, ws.groupid
                   FROM {vimipad_snapshot} s
                   JOIN {vimipad_workspace} ws ON ws.id = s.workspaceid
                  WHERE ws.vimipadid = :vid AND s.id = ws.submittedsnapshotid
-              ORDER BY s.timecreated DESC";
-        $submissions = $DB->get_records_sql($sql, ['vid' => $instance->id]);
+              ORDER BY s.timecreated DESC, s.id DESC";
+        $submissions = $DB->get_records_sql(
+            $sql,
+            ['vid' => $instance->id],
+            $subspage * $subsperpage,
+            $subsperpage
+        );
 
         // Structure metrics (nodes/relations) computed from the frozen snapshot
         // of each submission, not the live tables: after a reopen the workspace
@@ -469,6 +492,10 @@ switch ($tab) {
                 ];
             }
             echo html_writer::table($table);
+            if ($substotal > $subsperpage) {
+                $pagingurl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'grade']);
+                echo $OUTPUT->paging_bar($substotal, $subspage, $subsperpage, $pagingurl, 'subspage');
+            }
         }
         break;
 
@@ -588,9 +615,28 @@ switch ($tab) {
 
         // Journal display: entries in growing, collapsible time buckets.
         echo $OUTPUT->heading(get_string('tab:journal', 'mod_vimipad'), 4);
+        // Journal history is paginated: it grows without bound over a course, so
+        // a long-running workspace must not load every entry into one page.
+        $journalperpage = 50;
+        $journalpage = optional_param('journalpage', 0, PARAM_INT);
+        $journaltotal = 0;
+        if ($ws !== null) {
+            $journaltotal = $readonly
+                ? $journalservice->count_teacher_visible((int) $ws->id)
+                : $journalservice->count_entries_for_user((int) $ws->id, (int) $USER->id);
+        }
+        if ($journalpage < 0 || $journalpage * $journalperpage >= max(1, $journaltotal)) {
+            $journalpage = 0;
+        }
+        $journalfrom = $journalpage * $journalperpage;
         $entries = ($ws === null) ? [] : ($readonly
-            ? $journalservice->get_teacher_visible((int) $ws->id)
-            : $journalservice->get_entries_for_user((int) $ws->id, (int) $USER->id));
+            ? $journalservice->get_teacher_visible((int) $ws->id, $journalfrom, $journalperpage)
+            : $journalservice->get_entries_for_user(
+                (int) $ws->id,
+                (int) $USER->id,
+                $journalfrom,
+                $journalperpage
+            ));
 
         if (empty($entries)) {
             echo html_writer::tag('p', get_string('journal:none', 'mod_vimipad'), ['class' => 'text-muted']);
@@ -651,6 +697,17 @@ switch ($tab) {
                 echo html_writer::end_tag('div');
             }
             echo html_writer::end_tag('details');
+        }
+
+        if ($journaltotal > $journalperpage) {
+            $journalpagingurl = new moodle_url('/mod/vimipad/view.php', $baseparams + ['tab' => 'journal']);
+            echo $OUTPUT->paging_bar(
+                $journaltotal,
+                $journalpage,
+                $journalperpage,
+                $journalpagingurl,
+                'journalpage'
+            );
         }
 
         if ($hasrevisionbuttons) {

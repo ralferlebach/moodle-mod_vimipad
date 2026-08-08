@@ -75,6 +75,7 @@ export const FA = {
     lineStraight: 'fa-solid fa-minus',
     lineCurved: 'fa-solid fa-bezier-curve',
     lineOrthogonal: 'fa-solid fa-stairs',
+    slash: 'fa-solid fa-slash',
 } as const;
 
 /**
@@ -83,16 +84,80 @@ export const FA = {
  * @param props The icon class name and optional extra classes.
  * @returns The icon element.
  */
-export function Icon({name, className}: {name: string; className?: string}): React.ReactElement {
-    return <i className={`${name}${className ? ' ' + className : ''}`} aria-hidden="true" />;
+export function Icon({name, className, title}: {name: string; className?: string; title?: string}): React.ReactElement {
+    return <i className={`${name}${className ? ' ' + className : ''}`} title={title} aria-hidden="true" />;
 }
 
 /**
- * A small inline-SVG preview of a node shape, for the shape picker.
+ * A function glyph overlaid with a diagonal slash — a "no-parking sign" look —
+ * used in the lock submenu so a lock control shows *which* function it forbids
+ * (the same icon as the function, struck through). Decorative; the hosting
+ * button carries the accessible label.
  *
- * @param props The shape and pixel size.
- * @returns The shape glyph element.
+ * @param props The base icon class name, optional extra classes and title.
+ * @returns The struck-through icon element.
  */
+export function StruckIcon(
+    {name, className, title}: {name: string; className?: string; title?: string}
+): React.ReactElement {
+    return (
+        <span className={`vimipad-struck${className ? ' ' + className : ''}`} title={title} aria-hidden="true">
+            <i className={name} />
+            <i className={`${FA.slash} vimipad-struck-slash`} />
+        </span>
+    );
+}
+
+/**
+ * A small grey padlock with a white outline, drawn in SVG user space so it can
+ * be placed as an overlay on the canvas. Used to mark a locked element at its
+ * top-right corner, on a layer above all elements but below the menu overlay.
+ * Purely decorative; the element itself carries the accessible state.
+ *
+ * @param props The badge centre (x, y) and optional pixel size.
+ * @returns The badge group element.
+ */
+export function SvgLockBadge(
+    {x, y, size = 15}: {x: number; y: number; size?: number}
+): React.ReactElement {
+    const s = size / 15;
+    return (
+        <g
+            transform={`translate(${x}, ${y}) scale(${s})`}
+            pointerEvents="none"
+            aria-hidden="true"
+            className="vimipad-lock-badge"
+        >
+            {/* Shackle: white halo first, then grey on top. */}
+            <path
+                d="M -3 0 V -3 A 3 3 0 0 1 3 -3 V 0"
+                fill="none"
+                stroke="var(--vimipad-lock-badge-outline, #ffffff)"
+                strokeWidth={3.4}
+                strokeLinecap="round"
+            />
+            <path
+                d="M -3 0 V -3 A 3 3 0 0 1 3 -3 V 0"
+                fill="none"
+                stroke="var(--vimipad-lock-badge, #6c757d)"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+            />
+            {/* Body: grey fill with a white outline (stroke painted behind). */}
+            <rect
+                x={-5}
+                y={-1}
+                width={10}
+                height={8}
+                rx={1.6}
+                fill="var(--vimipad-lock-badge, #6c757d)"
+                stroke="var(--vimipad-lock-badge-outline, #ffffff)"
+                strokeWidth={1.6}
+                paintOrder="stroke"
+            />
+        </g>
+    );
+}
 export function ShapeGlyph({shape, size = 20}: {shape: NodeShape; size?: number}): React.ReactElement {
     const common = {fill: 'none', stroke: 'currentColor', strokeWidth: 1.6};
     return (

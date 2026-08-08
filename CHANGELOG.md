@@ -4,7 +4,963 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.7.31** (2026072770).
+> release is **0.9.0** (2026080800).
+
+## 0.9.0 (2026080800) — Beta-Schnitt
+
+Erstes Release der Beta-Linie. Inhaltlich identisch mit 0.8.35; dieser Schnitt
+setzt den Reifegrad und vereinheitlicht die Versionierung über das gesamte
+Paket.
+
+* `mod_vimipad` steht auf **`MATURITY_BETA`**, Release `0.9.0`,
+  Versionsnummer `2026080800`.
+* **Alle 19 gebündelten Subplugins** (13 `vimipadform_*`, 6 `vimipadassess_*`)
+  tragen denselben Reifegrad, dasselbe Release und dieselbe Versionsnummer, und
+  ihre Abhängigkeit auf den Kern verweist auf `2026080800`. Damit zeigt die
+  Moodle-Plugin-Übersicht ein konsistentes Bild, statt ein Beta-Produkt aus 19
+  Alpha-Bestandteilen zusammenzusetzen.
+* `package.json` / `package-lock.json` folgen dem Release (`0.9.0`).
+* README erhält einen Status-Abschnitt, der benennt, was Beta hier heißt und
+  wofür sie da ist (Feld-, Browser-, Last- und Barrierefreiheitsvalidierung).
+* Roadmap und Backlog sind auf den Beta-Stand gezogen; die Release-Checkliste
+  formuliert die Upgrade-Prüfung so, dass sie beim ersten öffentlichen Release
+  eine leere Menge beschreibt statt eine unerfuellbare Bedingung.
+* `tests/load/.gitignore` schließt `jmeter.log` (und `*.log`) aus: der jMeter-
+  Startlog protokolliert jede `-J`-Property im Klartext, einschließlich des
+  REST-Tokens.
+
+Voraussetzung dieses Schnitts waren die in 0.8.33-0.8.35 geschlossenen
+P1-Befunde des externen Audits; Einzelheiten in den jeweiligen Einträgen.
+
+## 0.8.35 (2026072805) — Audit-Befunde: Bugfix, POST-Härtung, Paginierung
+
+Umsetzung der P1-Befunde des externen Audits vor dem 0.9-Beta-Schnitt.
+
+**Fehlerbehebung (P1.1).** `get_workspace::empty_state()` griff auf eine dort
+nicht existierende Variable `$workspace` zu. Der Pfad ist real: eine Lehrkraft
+öffnet eine Lernende, die die Aktivität noch nie geöffnet hat. Der Aufruf
+liefert jetzt `collab_config(null)` — kein Push-Kanal für Workspace 0 — und ist
+durch einen Regressionstest abgesichert.
+
+**POST-Härtung (P1.2).** Alle zustandsändernden klassischen PHP-Handler
+(Abgabe, Gruppenkonsens, Annotation, Referenzmodell, KI-Entwurf/-Übernahme,
+Bewertung speichern, Wiederöffnen, Peer-Review speichern) prüfen jetzt zentral
+über `local\policy\request_policy::is_mutating_request()`, dass die Anfrage ein
+POST ist. `sesskey` war bereits vorhanden; damit sind Mutationen zusätzlich
+gegen Prefetch, History-Replay und URL-Wiederverwendung inert (fail closed,
+wenn die Methode fehlt).
+
+**Paginierung produktionskritischer Ansichten (P1/§12).** Drei Ansichten luden
+unbegrenzt viele Zeilen in einen Seitenaufruf:
+
+* Submissionübersicht (`view.php`): lud jede Abgabe **und** dekodierte pro Zeile
+  das eingefrorene Snapshot-JSON — jetzt 50 pro Seite mit `paging_bar`.
+* Journalhistorie: wächst über einen Kurs hinweg unbegrenzt — jetzt 50 pro
+  Seite; `journal_service` erhielt Limit- und Count-Methoden.
+* Statistik-Übersicht (`report.php`): eine Zeile je Workspace, also je
+  Teilnehmendem — jetzt 50 pro Seite.
+
+Reviewerlisten wurden bewusst **nicht** paginiert: sie sind durch die Zahl der
+Allokationen je Reviewer begrenzt, nicht durch die Kohortengröße.
+
+**Lasttest-Schwellenwerte (P1.3).** Fachliche Fehler werden nicht mehr in die
+globale Check-Rate hineingemittelt, wo einzelne echte Exceptions hinter
+Tausenden bestandenen Latenz-Checks verschwanden. Neue Metriken
+`vimipad_exceptions` und `vimipad_http_errors` mit **Nulltoleranz**
+(`rate==0`); Latenz bleibt statistisch (`p(95)`). Der Server-Fehlertext wird
+protokolliert, damit ein Verstoß diagnostizierbar ist.
+
+**Release-Hygiene (P1.4).** `package.json`/`package-lock.json` (0.7.31) sind
+wieder mit `version.php` synchron.
+
+**Paketierung.** Neue `.gitattributes`: `tests/load` und `tests/playwright`
+(Seeder, Token-Erzeugung, Testnutzer-Zugangsdaten) sowie `docs`, `tools`,
+`.github` und `js/tests` werden nicht mehr ausgeliefert; `amd/src` und `js/src`
+dagegen schon, damit die eingecheckten Build-Artefakte aus dem Paket heraus
+nachvollzogen werden können. PHPUnit- und Behat-Tests bleiben enthalten.
+
+## 0.8.34 (2026072804) — Paginiertes Laden gro{ß}er Maps
+
+`get_workspace` liefert eine gro{ß}e Map bisher als einen einzigen Payload mit
+Tausenden validierten Zeilen — unter Nebenläufigkeit der teuerste Endpunkt
+(Speicher + Rückgabe-Validierung pro Request). Neu wird die Map **seitenweise**
+geladen, mit **vollständig validierter** Payload (kein `PARAM_RAW`, jede Zeile
+geht durch `clean_returnvalue`):
+
+* `get_workspace` erhält einen additiven Parameter `includeelements` (Default
+  `true` = unverändertes Verhalten, rückwärtskompatibel). Mit `false` liefert er
+  nur Metadaten plus `counts` (Knoten/Relationen/Container).
+* Neue Lesefunktion `mod_vimipad_get_workspace_elements(cmid, workspaceid, kind,
+  offset, limit)` gibt **validierte** Seiten je Elementart zurück (max. 500 pro
+  Seite), geordnet nach id (stabile Seiten).
+* Der API-Client lädt zuerst die Metadaten (`includeelements=false`), pagt dann
+  Knoten/Relationen/Container parallel und setzt daraus die volle
+  `WorkspaceState` zusammen — **Editor, Reducer und Rendering bleiben
+  unverändert**. Fällt `counts` (leerer Workspace/altes Backend), werden die
+  inline gelieferten Arrays direkt genutzt.
+
+Wirkung: Jeder einzelne Request ist in Grö{ß}e, Speicher und Validierungskosten
+begrenzt — das senkt vor allem die Tail-Latenz unter gleichzeitigen
+Ladevorgängen. Live verifiziert: eine 1000-Knoten-Map lädt über zwei
+Element-Seiten und rendert vollständig im Browser.
+
+## 0.8.33 (2026072803) — Performance: schlankeres get_workspace
+
+`workspace_service::get_state()` — die Datenquelle von `get_workspace` — lud
+bisher via `get_records(...)` **alle** Spalten der Knoten/Relationen/Container,
+obwohl die externen Mapper nur einen Teil nutzen. Bei gro{ß}en Maps (Tausende
+Zeilen) lädt es jetzt nur noch die tatsächlich benötigten Felder (Audit-IDs und
+Zeitstempel entfallen). Messbar: Query-Zeit der Zustandsabfrage ≈ −40%, Peak-
+Speicher pro Request ≈ −13% — was vor allem unter gleichzeitigen Ladevorgängen
+den Speicherdruck und die Tail-Latenz senkt. Rückgabe-Struktur und Verhalten
+sind unverändert.
+
+Hinweis: Der grö{ß}te verbleibende Posten pro Aufruf ist Moodles Rückgabe-
+Validierung (`clean_returnvalue`) über die volle Map; ihn zu senken hie{ß}e, die
+Rückgabe-Struktur zu ändern (API-Freeze 0.7.27) und ist daher bewusst nicht
+Teil dieser Änderung.
+
+## 0.8.32 (2026072802) — Fix: Container wandern beim (Re-)Load
+
+Behebt ein sichtbares Fehlverhalten beim Laden/Neuladen eines ViMis: Container
+(und andere Elemente) „wanderten" mehrere Sekunden lang durch ihre
+Bearbeitungshistorie — gro{ß} wurden, schrumpften und verschoben sich — bis sich
+das Bild beruhigte.
+
+**Ursache:** Der Poll-Client startete seinen Revisions-Cursor bei 0. Der erste
+Poll holte damit `get_operations` ab Revision 0, also den **kompletten Op-Log**,
+und wandte jede historische Container-Verschiebung/-Grö{ß}enänderung erneut an —
+bei jedem (Re-)Load.
+
+**Fix:** `useCollaboration` erhält die beim Laden bereits angewandte Revision und
+setzt den Poll-Cursor **vor** dem Start darauf. Der erste Poll fragt dadurch nur
+noch **neuere** Operationen ab; die Historie wird nicht mehr abgespielt. Regressions-
+test (`use_collaboration_baserevision`) sichert die Verdrahtung ab.
+
+## 0.8.31 (2026072801) — Typisierte Relationen für Flow und semantisches Netz
+
+Rundet die typisierten Relationen über die Formen ab, bei denen ein festes
+Typ-Set fachlich Standard ist. Bewusst NICHT typisiert bleiben Formen, deren
+Modell freie oder gar keine Relationstypen vorsieht (Concept Map – freie
+Verbindungswörter; Mindmap/Tree/Bubble/Timeline/Affinity/Fishbone/Venn).
+
+- **Flow chart:** Relationstypen **Abfolge** (neutral), **Ja** und **Nein** – die
+  Entscheidungszweige eines Flussdiagramms. Ja grün/durchgezogen, Nein
+  rot/gestrichelt; Abfolge bleibt neutral. Kein Layout-Effekt (die Rang-Schichtung
+  ordnet die Struktur bereits).
+- **Semantisches Netz:** die klassischen typisierten Links **is-a**, **Instanz-von**,
+  **part-of**, **hat-Eigenschaft**, **assoziiert**. part-of bindet enger
+  (Ruhelänge 0.6); das Netz bleibt frei (keine globale Richtung erzwungen), is-a
+  wird also eingefärbt, aber nicht in eine Hierarchie gezwungen (das leistet die
+  Ontologie-Form).
+- Neue Stile (instanceof türkis, hasproperty orange-gepunktet, yes grün, no
+  rot-gestrichelt) im generischen Modul; Strings `editor:reltype_*` (en/de).
+- **Tests:** Stilkarte (yes/no/sequence, instanceof/hasproperty) und PHPUnit-
+  Deklarationen (flow sequence/yes/no; semantisches Netz mit part-of-Ruhelänge).
+
+## 0.8.30 (2026072800) — Typisiertes Set MIT Layout-Effekt: Ontologie (deklarativ)
+
+Kombiniert typisierte Relationen mit einem *per-Typ-Layout-Effekt* – deklarativ
+über die Contract, sodass jede Form künftig pro Relationstyp Layout-Verhalten
+erklären kann. Als Referenz die neue Ontologie-Form.
+
+- **Neuer Contract-Baustein: per-Typ-Layout.** `base::get_relation_layout()`
+  (Default `[]`) bildet Relationstypen auf Layout-Hinweise ab
+  (`['isa' => ['directed' => true], 'partof' => ['restscale' => 0.6]]`); in
+  `to_array` als Liste `relationlayout` und in der `get_workspace`-Struktur
+  transportiert. Der Adapter wendet sie je Kante an: `directed` kann eine Kante
+  unabhängig vom Pfeil gerichtet erzwingen, `restscale` skaliert ihre Ruhelänge.
+- **Engine verallgemeinert:** `RefineEdge.restScale` (expliziter Multiplikator)
+  löst den bisherigen Angriffs-Sonderweg ab – die interne Ruhelänge nutzt
+  `edge.restScale ?? (edge.attack ? attackRestScale : 1)` (Argument-Verhalten
+  unverändert).
+- **Neues Subplugin `vimipadform_ontology`** (Ontologie / Wissensnetz): Typen
+  **is-a**, **part-of**, **assoziiert**. is-a bildet eine nach oben gerichtete
+  Taxonomie (gerichtet), part-of bindet Teile eng (Ruhelänge 0.6), assoziiert
+  ist neutral. Typ-UI und -Farben kommen automatisch aus dem generischen Modul.
+- Stile für isa/partof/associated (blau/violett-gestrichelt/grau) + Strings
+  `editor:reltype_isa` / `_partof` / `_associated` (en/de).
+- **Tests:** per-Typ-restScale (part-of enger als assoziiert), Ontologie-Resolver
+  (is-a directed, part-of restscale<1; PHP-relationlayout transportiert) und
+  PHPUnit-Deklaration.
+
+## 0.8.29 (2026072799) — Typisierte Relationen verallgemeinert + Causal-Polarität (+/−)
+
+Weitet die typisierten Relationen (bisher nur Argumentkarte) auf die Wirkungs-/
+Systemkarte aus und macht die Typ-Darstellung generisch.
+
+- **Gemeinsames Stilmodul `relation_types.ts`:** eine einzige Quelle für Farbe
+  und Strich je Relationstyp. Relations-Menü, Listenansicht und Canvas lesen von
+  hier; ein neuer typisierter Relationstyp braucht nur einen Eintrag plus einen
+  Lang-String `editor:reltype_<key>` – kein Sonderfall je Komponente mehr. Die
+  bisher hartcodierten support/attack-Farben wurden hierher gezogen (Verhalten
+  unverändert).
+- **Causal-/Systemkarte: Link-Polarität.** `vimipadform_causal` deklariert jetzt
+  die Relationstypen **positiv (+)** und **negativ (−)** – der Klassiker im
+  Causal-Loop-Diagramm. Positiv wird grün/durchgezogen, negativ rot/gestrichelt
+  dargestellt; die vorhandene generische Typ-UI (Dock + Liste) bietet die Auswahl
+  automatisch an, die Persistenz (relation_update) läuft unverändert.
+- **Export-sicher:** die Polaritätsfarben nutzen CSS-Variablen mit Literal-
+  Fallback wie die übrigen, erscheinen also korrekt im PNG/SVG-Export.
+- Neue Strings `editor:reltype_positive` / `editor:reltype_negative` (en/de).
+- **Tests:** `relation_types.test.ts` (Stilkarte: support/attack/positiv/negativ,
+  Export-sichere Farben) und PHPUnit-Deklaration (causal relationtypes).
+
+## 0.8.28 (2026072798) — Letzte geplante Formen: Causal/System und Venn/Mengen
+
+Schließt den 0.8.x-Formenkatalog ab. Beide Formen kommen ohne neuen Engine-Term
+aus — sie kombinieren vorhandene Bausteine.
+
+- **`vimipadform_causal` (Wirkungs-/Systemdiagramm):** gerichtetes Netz mit
+  erlaubten Rückkopplungen. Es wird bewusst KEINE globale Flussrichtung erzwungen
+  (das würde gegen die Zyklen arbeiten), das Layout ist also frei wie ein
+  semantisches Netz; Relationen sind standardmäßig gerichtet und geschwungene
+  Verbinder lesen Feedback-Schleifen klar.
+- **`vimipadform_venn` (Venn/Mengen):** Mengen sind (Ellipsen-)Container, Elemente
+  sind Knoten. Die vorhandene Cluster-Kohäsion (0.8.26) zieht die Mitglieder jeder
+  Menge zu ihrem Schwerpunkt, während die Container-Außenkuppel Nicht-Mitglieder
+  fernhält; ein Element, das zu zwei überlappenden Mengen gehört, wird in beide
+  gezogen und setzt sich in deren Schnittmenge. Mitgliedschaftsbasiert, nicht
+  geometrische Mengenalgebra (Letztere ist bewusst außerhalb des Rahmens).
+- Beide werden von der Registry automatisch erkannt und erscheinen in der
+  Profilauswahl; `refineOptionsForProfile` kennt zusätzlich den venn-Fallback
+  (clustered) für Aufrufe ohne transportierte Config.
+- **Tests:** Resolver-Fallback (venn geclustert, causal frei) und PHPUnit-
+  Deklaration (causal frei/geschwungen, venn geclustert/Ellipse).
+
+## 0.8.27 (2026072797) — Sechste neue Darstellungsform: Fishbone (per-Kante-Richtung)
+
+Das Fischgrätendiagramm als `vimipadform_fishbone`-Subplugin; der neue Baustein
+ist eine **per-Kante-Richtung** im Refiner (statt einer einzigen globalen).
+
+- **Neue Engine-Fähigkeit: per-Kante-Richtung.** `RefineEdge.dir` überschreibt je
+  Kante die Vorzugsrichtung; intern trägt jede Kante `dirx/diry` (Default = globale
+  Spine-Richtung). Der Richtungsterm nutzt jetzt die kantenweite Richtung. Rein
+  additiv — ohne `dir` verhält sich alles wie zuvor (bestehende Richtungs-
+  Gradiententests bleiben grün; neuer Gradient-Test für per-Kante-Richtung).
+- **Fishbone-Zuweisung (`fishboneEdgeDirs`).** Kopf = Knoten mit höchstem
+  Eingangsgrad (der Effekt); dessen direkte Quellen sind die Haupt-Gräten, die
+  oben/unten alternieren; Unter-Ursachen erben die Seite per BFS. Jede Kante mit
+  bekannter Seite erhält eine diagonale Richtung `(1, ∓slope)` → das typische
+  alternierende Gräten-Muster. Spine-/unentschiedene Kanten behalten die globale
+  Richtung.
+- **Contract erweitert:** `base::get_layout_fishbone()` (Default false), in
+  `to_array` als `fishbone` und in der `get_workspace`-Struktur transportiert;
+  clientseitig über `resolveProfileRefine` in `ProfileRefine.fishbone` aufgelöst,
+  das den Adapter die per-Kante-Richtungen bauen lässt.
+- **Neues Subplugin `vimipadform_fishbone`** (Fischgrätendiagramm): gerichtete
+  Spine +x, per-Zweig-Gräten. Von der Registry automatisch erkannt.
+- **Tests:** Gradient-Test (per-Kante-Richtung), Adapter-Test (Haupt-Gräten
+  alternieren, Unter-Ursachen erben die Seite), Resolver- und PHPUnit-Layout-
+  Deklaration.
+
+## 0.8.26 (2026072796) — Fünfte neue Darstellungsform: Affinity board (Cluster-Anziehung)
+
+Das Affinitätsdiagramm als `vimipadform_affinity`-Subplugin, mit dem neuen
+deklarativen Term Cluster-Kohäsion — zugleich ein Vorgriff auf den All-Paar-
+Stress-Kern von 1.1 (hier block-diagonal je Container).
+
+- **Neuer Engine-Term: Cluster-Kohäsion.** `refine_layout` bekommt
+  `clusterStrength`. Ist sie positiv, werden die Mitglieder jedes Containers zu
+  ihrem gemeinsamen Schwerpunkt gezogen (`E = ½k·Σ|x_i − Cluster-Schwerpunkt|²`);
+  die Mean-Kopplung im Gradienten hebt sich innerhalb des Clusters exakt auf, die
+  Kraft je Mitglied ist damit `k·(x_i − Schwerpunkt)`. Nicht-Mitglieder werden
+  weiter von der bestehenden Container-Außenkuppel abgestoßen (intra anziehend,
+  inter abstoßend). Gradient gegen Finite-Differenzen geprüft.
+- **Contract erweitert:** `base::get_layout_clustered()` (Default false), in
+  `to_array` als `clustered` und in der `get_workspace`-Struktur transportiert;
+  clientseitig über `resolveProfileRefine` in `clusterStrength` aufgelöst.
+- **Neues Subplugin `vimipadform_affinity`** (Affinitätsdiagramm): ungerichtet,
+  ohne erzwungene Ordnung; Container = Cluster, deren Mitglieder beim Anordnen
+  zusammenrücken. Von der Registry automatisch erkannt.
+- **Tests:** Gradient-Test (Cluster-Term), Verhaltenstest (Cluster rückt enger
+  zusammen; Term nur bei positiver Stärke gebaut), Resolver-Tests
+  (affinity/clustered) und PHPUnit-Layout-Deklaration.
+
+## 0.8.25 (2026072795) — Vierte neue Darstellungsform: Flow/Process (Rang-Layering)
+
+Das Flussdiagramm als `vimipadform_flow`-Subplugin, mit einem neuen deklarativen
+Potentialterm: Rang-Layering.
+
+- **Neuer Engine-Term: Rang-Layering.** `refine_layout` bekommt `rankStrength` +
+  `rankGap`. Bei positiver Stärke (mit Vorzugsrichtung als Flussachse) muss jede
+  gerichtete Kante entlang der Flussachse mindestens `rankGap·L` vorrücken; eine
+  softplus²-Strafe auf den Fehlbetrag ist ~0, sobald der Abstand erreicht ist,
+  und wächst darunter glatt — so setzen sich die Knoten in diskrete Ebenen statt
+  in einen kontinuierlichen Richtungsgradienten. Gradient gegen Finite-
+  Differenzen geprüft.
+- **Contract erweitert:** `base::get_layout_rank_layered()` (Default false), in
+  `to_array` als `ranklayered` und in der `get_workspace`-Struktur transportiert;
+  clientseitig über `resolveProfileRefine` in `rankStrength` aufgelöst.
+- **Neues Subplugin `vimipadform_flow`** (Flussdiagramm): gerichtet top-down (+y),
+  Geschwister links→rechts geordnet, rang-geschichtet, orthogonale Verbinder,
+  Rechteck-Boxen. Von der Registry automatisch erkannt.
+- **Tests:** Gradient-Test (Rang-Term), Verhaltenstest (gerichtete Kette bildet
+  Ebenen; Term nur mit Flussachse + Stärke gebaut), Resolver-Tests
+  (flow/rankLayered) und PHPUnit-Layout-Deklaration.
+
+## 0.8.24 (2026072794) — Relationstyp: Listenansicht-Umschalter & Export-Parität
+
+Rundet die typisierten Relationen (0.8.22/0.8.23) ab.
+
+- **Listenansicht (barrierearme Zweitoberfläche):** Jede Relationszeile hat jetzt
+  einen Typ-Auswahl-`<select>` (Stütze/Angriff), sichtbar wenn die Form typisierte
+  Relationen anbietet. Damit ist der Relationstyp auch tastatur-/screenreader-
+  freundlich über die Tabelle bearbeitbar, gleichwertig zum Canvas-Dock.
+- **PNG/SVG-Export:** Die Typfarben und der Angriffs-Strich erscheinen im Export
+  bereits korrekt — der Export klont das gerenderte SVG, und die Relationen tragen
+  die Farbe als inline `stroke`/`strokeDasharray` mit CSS-Variablen-Fallback
+  (`var(--vimipad-relation-attack, #c0392b)` bzw. `…-support, #2e7d32`), demselben
+  etablierten Muster wie die Selektionsfarbe. Keine Codeänderung nötig; hier nur
+  verifiziert und dokumentiert.
+- Neuer String `editor:relationtype` (en/de).
+
+## 0.8.23 (2026072793) — Relationstyp-Auswahl und -Darstellung (Argument Map nutzbar)
+
+Vervollständigt die typisierten Relationen aus 0.8.22 um die fehlende Bedienung
+und Darstellung — die Argumentkarte ist damit voll nutzbar.
+
+- **Auswahl im Relations-Menü:** Bietet die aktive Darstellungsform typisierte
+  Relationen an (deklariert über `relationtypes`), zeigt das Relations-Dock je
+  Typ (außer `link`) einen farbigen Umschalter — für die Argumentkarte Stütze
+  (grün) und Angriff (rot). Tastaturbedienbar (Buttons mit aria-pressed/label).
+- **Darstellung auf dem Canvas:** Relationen werden nach Typ eingefärbt; Angriffe
+  zusätzlich gestrichelt. Farben über CSS-Variablen `--vimipad-relation-support`
+  / `--vimipad-relation-attack` überschreibbar.
+- **Persistenz:** Der Typwechsel läuft über eine `relation_update`-Operation
+  (mit Undo/Redo) — die gesamte Kette (Backend-Validierung, apply, reconstruct,
+  Remote-Anwendung, Reducer) unterstützte `type` bereits; hier kommen Bedienung
+  und Rendering hinzu.
+- **Wirkung:** Ein als „Angriff" gesetzter Verbinder aktiviert die Zweig-
+  Repulsion aus 0.8.22 (längere Ruhelänge) beim Anordnen.
+- Neue Strings `editor:reltype_support`/`editor:reltype_attack` (en/de).
+
+## 0.8.22 (2026072792) — Zweite neue Darstellungsform: Argument Map (typisierte Kanten)
+
+Die Argumentkarte als `vimipadform_argument`-Subplugin — und die Einführung
+*typisierter Relationen* (Stütze/Angriff) über die Contract, mit einem
+zugehörigen Layout-Effekt.
+
+- **Neuer Contract-Baustein: Relationstypen.** `base::get_relation_types()`
+  (Default `['link']`) wird in `to_array` als `relationtypes` und in der
+  `get_workspace`-formconfig-Struktur transportiert. Die Argumentkarte deklariert
+  `['support','attack']`.
+- **Typisierte Kanten im Refiner.** `RefineEdge` bekommt ein `attack`-Flag;
+  Angriffskanten erhalten eine längere Ruhelänge (`attackRestScale`, Default 1;
+  Argument 1.8) — eine minimale Zweig-Repulsion, sodass angreifende Äste weiter
+  abstehen. `refine_arrange` markiert Angriffe aus `relation.type === 'attack'`,
+  und `resolveProfileRefine` leitet `attackRepel` daraus ab, ob die Form einen
+  `attack`-Relationstyp deklariert.
+- **Neues Subplugin `vimipadform_argument`** (Argumentkarte): gerichtet aufwärts
+  (Gründe zeigen zur Behauptung, Richtung -y), Geschwister links→rechts geordnet,
+  Relationstypen Stütze/Angriff. Von der Registry automatisch erkannt.
+- **Tests:** Verhaltenstest (Angriffskante ruht länger als Stützkante; bei
+  Skala 1 gleich), Resolver-Tests (argument/attackRepel aus relationtypes) und
+  PHPUnit-Layout-/Relationstyp-Deklaration.
+- **Handbuch:** Darstellungsformen um Timeline und Argument (umgesetzt) ergänzt,
+  inkl. Hinweis auf den noch folgenden Relationstyp-Auswahl-Dialog.
+
+## 0.8.21 (2026072791) — Erste neue Darstellungsform: Timeline (mit 1D-Linien-Confinement)
+
+Die erste der geplanten weiteren Darstellungsformen als eigenes
+`vimipadform_timeline`-Subplugin — und zugleich die Referenz für einen neuen,
+profil­abhängigen Potentialterm über die 0.8.16-Contract.
+
+- **Neuer Engine-Term: 1D-Linien-Confinement.** `refine_layout` bekommt die
+  Optionen `lineConfineStrength` + `lineConfineAxis`. Ist eine Achse gesetzt,
+  werden alle Knoten auf eine gemeinsame Linie parallel zur Achse durch ihren
+  Schwerpunkt gezogen (bestraft wird die Abweichung senkrecht zur Achse). Der
+  Mean-Kopplungsterm im Gradienten hebt sich exakt auf (Summe der senkrechten
+  Abweichungen = 0), sodass die Kraft je Knoten schlicht `k·d·perp` ist — ein
+  sauberes Flach-auf-eine-Linie ohne absolute y-Vorgabe. Gradient gegen Finite-
+  Differenzen geprüft.
+- **Contract erweitert:** `base::get_layout_line_axis()` (Default null), in
+  `to_array` als `layout.lineaxis` und in der `get_workspace`-Struktur
+  transportiert; clientseitig über `resolveProfileRefine` in
+  `lineConfineStrength`/`lineConfineAxis` aufgelöst. Nicht-lineare Formen sind
+  unberührt.
+- **Neues Subplugin `vimipadform_timeline`** (Zeitstrahl): gerichtet links→rechts
+  (Richtung +x), Ereignisse auf eine horizontale Linie confined; Standardform
+  roundrect, gerade Verbinder. Wird von der Registry automatisch erkannt und
+  erscheint in der Profilauswahl.
+- **Tests:** Gradient-Test (Linien-Confinement), Verhaltenstest (Ereignisse
+  kollabieren auf eine Linie; Term nur bei gesetzter Achse gebaut),
+  Resolver-Tests (timeline/lineAxis) und PHPUnit-Layout-Deklaration.
+
+## 0.8.20 (2026072790) — Optionaler Echtzeit-Push über Mercure (SSE)
+
+Setzt die zuvor nur als Einstellung angelegte Push-Funktion tatsächlich um — als
+Server→Client-Push über einen **Mercure**-Hub (SSE, kein WebSocket), rein additiv
+zum bestehenden Polling.
+
+- **Server:** neues `push_service` publiziert nach jeder committeten Operation
+  (`operation_service::apply_locked`) ein `{"revision":N}`-Ereignis an das
+  pro-Workspace-Thema `vimipad/workspace/{id}`. Publish ist best-effort mit engen
+  Timeouts (1 s Connect / 2 s), Fehler werden geschluckt — ein langsamer oder
+  toter Hub beeinflusst die Bearbeitung nie. JWTs (Publisher `publish:["*"]`,
+  Subscriber `subscribe:[topic]`) werden mit HS256 aus dem geteilten `pushjwtkey`
+  signiert (kein Fremd-Lib).
+- **Transport:** `collab_config` liefert pro Workspace `pushtopic` + einen
+  gescopeten `pushtoken`; die `get_workspace`-Struktur ist entsprechend erweitert.
+- **Client:** neuer `push_client` (EventSource) setzt den `mercureAuthorization`-
+  Cookie, abonniert das Thema und **weckt bei jeder neuen Revision ein sofortiges
+  Poll**; die eigentlichen Operationen kommen weiterhin über `get_operations`
+  (dem Hub wird nicht vertraut). Fällt der Hub aus, bleibt der Poll-Loop die
+  Transport- und Rückfallebene.
+- **Einstellungen:** neu `pushpublishurl` (optionale interne Publish-URL) und
+  `pushjwtkey` (geteiltes HMAC-Secret); `pushenabled`/`pushendpoint` wie gehabt.
+- **Keine Server-Software-Abhängigkeit:** Mercure ist ein eigenständiges Go-Binary
+  mit eigenem TLS; nginx/apache sind dem Plugin egal.
+- **Tests:** `push_service_test` (JWT-Struktur/Signatur, Topic-Scope,
+  publish_request, Gating) und `push_client.test.ts` (Wake-Logik, Verfügbarkeit,
+  Cookie, robuste Fehlerbehandlung).
+- **Handbuch:** Abschnitt 1.3 um die Mercure-Einrichtung (Installation als
+  systemd-Dienst, JWT-Keys, CORS, Cookie-/Subdomain-Hinweis, Plugin-Settings)
+  ergänzt.
+
+## 0.8.19 (2026072789) — 0.7.30-Audit-Reste geschlossen
+
+Schließt die drei nicht-blockierenden Restpunkte aus dem 0.7.30-Sicherheitsaudit.
+
+**Heartbeat `renew()` vollständig CAS-sicher.** `lock_service::renew()` nutzte
+nach dem Read ein unbedingtes `set_field()` nach ID; ein Lease-Takeover, der
+zwischen Read und Write schlüpfte, wurde überschrieben, und der alte Halter
+erhielt fälschlich `acquired=true`. `renew()` verwendet jetzt — wie `acquire()` —
+ein bedingtes `UPDATE … WHERE id AND userid AND timeexpires` plus Re-Read und
+meldet den echten aktuellen Halter. Betraf nur den advisory Presence-Lock, nicht
+die Datenintegrität (Workspace-Lock + Revision sichern diese zusätzlich).
+
+**`get_operations`-Zugriffsabdeckung erweitert** um Gruppen-Workspace (Mitglied
+liest, Nicht-Mitglied braucht `:grade`), Course-Workspace (jede eingeschriebene
+Person mit `:view` liest den geteilten Stand), Cross-Activity-Isolation (fremder
+Workspace über die falsche cm wird abgewiesen) sowie Guest-, unenrolled- und
+suspended-Nutzer (alle abgewiesen).
+
+**Gastzugriff auf Course-Workspaces — bewusste Entscheidung, dokumentiert und
+erzwungen.** Das Lesen jedes Workspaces (auch des geteilten Course-Workspaces)
+erfordert `mod/vimipad:view`; Gäste, nicht eingeschriebene und suspendierte
+Nutzer werden abgewiesen (Kurs-Map ist Kursinhalt, kein öffentliches Datum).
+Dokumentiert im Code (`helper::validate_workspace_for_read`) und in
+`security_review.md`.
+
+Außerdem: Handbuch-Korrektur zum Push-/WebSocket-Status (die Einstellungen
+`pushenabled`/`pushendpoint` existieren als Gerüst und werden zum Client
+durchgereicht, aber der clientseitige Push-Verbinder ist noch nicht
+implementiert — der Editor pollt weiterhin immer).
+
+## 0.8.18 (2026072788) — Container shrink-on-arrange is now optional
+
+The Arrange action shrinks an oversized container toward its members (damped, so
+it converges over presses) so boxes hug their contents. That is the right
+default, but where a teacher sizes a template container deliberately it should be
+possible to keep the drawn size and only ever grow the box to contain overflow.
+Until now the choice was all-or-nothing — resizing was either on (grow and
+shrink) or the box was fully fixed (neither), with no "grow to contain but never
+shrink" middle ground.
+
+A new site setting, "Shrink containers on arrange" (on by default), provides
+exactly that middle ground. When off, containers never shrink below their drawn
+size but still grow to enclose an overflowing member; the damping is unchanged.
+The setting flows through the same path as the existing arrange-iterations
+setting — a `data-arrangeshrink` attribute on the editor mount, read in the AMD
+init, passed to the refiner as a `shrinkContainers` option that forces the
+container shrink rate to zero when off. No database or schema change is
+involved (it is an admin config value, not a per-activity field). New tests
+assert that with shrinking disabled an oversized box keeps its exact drawn size
+yet an undersized box still grows to contain its member.
+
+## 0.8.17 (2026072787) — Radial forms keep their cyclic order on arrange
+
+Builds on the layout-potential contract from 0.8.16 to give radial display types
+(mind map, bubble map) a proper order rule. The linear order axis used by tree
+and concept map keeps a left-to-right sibling row, but it cannot express "around
+a hub", so until now arranging a mind map could let its branches drift past one
+another and scramble the fan. The refiner now preserves the cyclic (angular)
+order of a hub's neighbours: for every node with three or more neighbours, the
+neighbours are sorted by their initial angle about that node, the single largest
+angular gap (the natural opening of the fan, or the wrap-around) is left free,
+and the remaining consecutive pairs are chained so each keeps its
+counter-clockwise adjacency. A pair is protected by the sign of the cross
+product (a-h)x(b-h): an L^2-normalised softplus^2 penalty is ~0 while the order
+holds and grows smoothly as the pair rotates toward an inversion, so the term is
+dormant unless a fan starts to scramble and never fights an already-clean layout.
+
+The behaviour is wired through the same PHP contract as the other layout
+parameters: a new `get_layout_cyclic_order()` on the form base (default off,
+transported in `to_array` and the `get_workspace` external structure), which mind
+map and bubble map override to on, resolved on the client by `resolveProfileRefine`
+into the refiner's new `cyclicStrength` option. Non-radial forms are unaffected.
+
+The analytic gradient of the new term (on the hub and both neighbours) is checked
+against finite differences; further tests cover the constraint construction (the
+k-1 chain and the three-neighbour gate), that the term is engaged and firms up a
+hub's ordering, that a radial hub keeps every neighbour in its initial cyclic
+order after a full refinement, and that each bundled form declares the expected
+cyclic-order flag.
+
+## 0.8.16 (2026072786) — Layout potential moves into the form subplugin contract
+
+Architectural step toward a stable public API for derived plugins: the arrange
+refiner's per-profile behaviour is no longer hard-coded in the frontend. Each
+`vimipadform_*` subplugin now declares its own layout-potential parameters in
+PHP — whether relations are directed, the preferred flow direction, and the
+cross-axis along which sibling order is preserved — through three new methods on
+the `\mod_vimipad\local\form\base` contract (`is_layout_directed`,
+`get_layout_direction`, `get_layout_order_axis`), with free-form defaults so a
+new display type only overrides what it needs. Tree declares a directed,
+downward, left-to-right-ordered layout; concept map keeps sibling order without
+forcing a direction; the radial and free forms declare neither. These flow to
+the editor through the existing form-config transport (`to_array` and the
+`get_workspace` external structure gain a `layout` block), and the refiner reads
+them via a new `resolveProfileRefine`, falling back to the built-in per-profile
+switch only when no config is present (legacy transports, or a profile without
+an installed subplugin). Behaviour is unchanged — the PHP declarations mirror the
+former hard-coded values exactly — but the seam is now in place: a subplugin
+controls how its display type is arranged, and the upcoming cyclic-order and
+container-shrink refinements attach to the same contract rather than to a central
+switch. New PHPUnit coverage asserts each bundled form's layout declaration and
+the fallback; new Jest coverage asserts the resolver prefers the PHP config and
+falls back correctly.
+
+## 0.8.15 (2026072785) — Container format menu really stops jumping; Behat backup made reliable
+
+Follow-up to Ralf's next round of testing on the same two-container map. Ships
+together with the 0.8.14 arrange rework described below (0.8.14 was never
+released on its own), plus two fixes.
+
+**The container format menu still "spun around" — real cause found.** The
+earlier fix anchored the floating menu to the live drag preview, but the menu
+kept jumping and container shapes would not stick. The actual cause was a
+revision race, not a positioning one: selecting a container starts a
+zero-distance move drag through its title bar, and that was committed as a
+`container_update` on every select-click — bumping the workspace revision each
+time. The very next edit (picking a shape in the menu) then ran against the
+now-stale revision captured in its closure, was rejected server-side, and forced
+a full state reload that dropped the selection, so the menu appeared to jump and
+the shape never applied. Two changes fix it: a select-click that does not move
+the box now commits nothing (only a real move or resize emits an operation), and
+every operation reads the current revision from a ref instead of a render-time
+closure, so two edits fired in quick succession can no longer race. A new
+regression test asserts that a container title-bar press-and-release with no
+movement emits no operation, while a press-move-release emits exactly one.
+
+**Behat: the interactive backup/restore scenario was removed.** The full
+backup/restore *data* roundtrip — grade and snapshot reference remapped into the
+restored course — is covered reliably by the PHPUnit `backup_restore_test`. The
+UI-level scenario depended on the interactive backup wizard, whose completion
+step races the asynchronous backup under moodle-plugin-ci and failed in every
+driver and Moodle version (it was never green). It is dropped in favour of the
+PHPUnit coverage; the activity-duplication scenario stays.
+
+## 0.8.14 (2026072784, released within 0.8.15) — Arrange actually restructures; container menu drag-preview
+
+Fixes from Ralf's testing on a small two-container map.
+
+**Arrange was too weak and too short-ranged.** After the earlier drift fix, the
+refiner had swung all the way to pure preservation: edges exerted no pull, so an
+explicit "arrange" mostly let nodes drift apart under repulsion without ever
+pulling connected nodes together, containers never resized, and a far node on a
+long edge barely moved ("kaum Änderungen", "läuft auseinander", "Container ändern
+die Größe nicht"). "Anordnen" is an explicit rearrange request, so it now pulls
+the layout toward a clean force-directed state: a new gentle, non-saturating
+spring pulls every edge toward the median length even in the far field (so long
+edges finally contract — fixing "zu kurzreichweitig"), nodes are freer to move
+(lower stability anchor), and containers hug their members (they resize instead
+of only growing). Every term still converges, so repeated presses settle and a
+clean layout is left essentially untouched. New tests assert a long edge is
+contracted and that an oversized container shrinks to fit while converging and
+never shrinking past its members; the gradient check now also covers the spring.
+
+**The container shape menu "jumped around".** While a container body and its
+resize handles followed the live drag preview, the floating format menu stayed
+pinned to the container's committed geometry — so any stray nudge (common when
+reaching for the menu on two overlapping containers) detached the menu and made
+it snap back on release. The menu now tracks the same drag preview as the body.
+A new component test also guards that picking a shape from the container dock
+actually commits that shape.
+
+**The container shape and lock sub-menus were unusable.** The container's
+floating menu lived in a `foreignObject` that was only one row tall. A
+`foreignObject` clips — and stops hit-testing — anything drawn outside its
+geometric bounds, regardless of CSS `overflow`, so when the shape picker or the
+per-group lock sub-menu expanded *below* the toolbar row, that sub-menu fell
+outside the box: it rendered erratically and could not be clicked ("die
+Form lässt sich nicht einstellen", "Lock-Menüs nicht nutzbar — ein z-Layer-
+Problem"). The container menu's box is now tall enough to contain its expanding
+sub-panels, exactly as the node menu already was; only the toolbar itself stays
+interactive, so the taller (invisible) box remains fully click-through over the
+elements beneath it.
+
+**Behat.** The interactive backup/restore UI scenario is unreliable under
+moodle-plugin-ci (the backup wizard's completion races the asynchronous backup,
+failing under both drivers), while the backup/restore data roundtrip — grade and
+reference-snapshot remap included — is covered reliably by the PHPUnit
+`backup_restore_test`. The fragile UI scenario has been removed with a note; the
+activity-duplication scenario stays.
+
+## 0.8.13 (2026072783) — Elliptical containers use a true elliptical metric
+
+The layout refiner previously treated every container as its axis-aligned
+bounding box, so a node in the corner of an elliptical container's box counted
+as "inside" even though it sat outside the visible ellipse. Elliptical
+containers now use a radial elliptical metric throughout.
+
+- **Membership.** A node is a member of an ellipse container only when its centre
+  is inside the ellipse ((dx/a)^2 + (dy/b)^2 <= 1), not merely inside the box, so
+  corner nodes are no longer spurious members.
+- **Interior potential.** Members of an ellipse are confined by a flat-bottomed
+  radial well (zero inside the inner ellipse, quadratic once the elliptical
+  radius exceeds one) — they are kept inside the ellipse, not the box, without
+  being pulled to the centre.
+- **Exterior potential.** Non-members feel a radially-domed elliptical field that
+  pushes them out of the ellipse and is force-free beyond the margin.
+- **Fit.** An ellipse grows uniformly (centre fixed) until every member's box
+  corner lies inside it; grow-only by default, so the human's size is preserved.
+- Rectangular and rounded-rectangle containers keep the separable box metric.
+  Gradient checks now cover the elliptical interior and exterior; behavioural
+  tests cover ellipse confinement, non-member ejection, elliptical growth and the
+  corner-node membership distinction.
+
+## 0.8.12 (2026072782) — Behat CI green: three real failures fixed
+
+The behat features added in 0.8.6 were only dry-run validated (the sandbox has
+no browser); their first real CI run surfaced three genuine failures, identical
+across Moodle 4.5 / 5.0 / 5.2. All three are fixed.
+
+- **groups.feature — group selector.** The scenario set only Moodle's group mode,
+  not the plugin's working mode, so the map stayed individual and no selector was
+  shown. It now creates the activity with collaborationmode = group, which is
+  what makes view.php render the group menu.
+- **groups.feature — deprecated step.** "I add a ... to section ... and I fill
+  the form with:" is deprecated in current Moodle; updated to the supported "I
+  add a ... activity to course ... section ... and I fill the form with:".
+- **backup.feature — backup/restore under the wrong driver.** The whole feature
+  was @javascript, so the multi-page backup wizard ran under WebDriver and the
+  final "Continue" button was clicked before the asynchronous backup finished.
+  The grading form is a server-side moodleform and "View and grade" is a plain
+  link, so the backup/restore scenario now runs under BrowserKit (synchronous,
+  reliable); only the activity-duplication scenario, whose action menu needs JS,
+  keeps @javascript. A full-course MODE_GENERAL backup with a gradebook grade was
+  verified to succeed, confirming the backup logic itself was never at fault.
+
+No production code changed; gherkinlint is clean and the dry-run resolves every
+step.
+
+## 0.8.11 (2026072781) — Journal viewer: no more empty canvas on legacy maps
+
+Fixes the single-revision journal state view showing no nodes at all on some
+(older) maps, even though the player showed them correctly.
+
+- **Root cause (data, surfaced by the display).** For maps whose elements were
+  created before the op-log existed (or were imported by a legacy path), the
+  create-operations are not in the log, so the server-side replay reconstructs
+  an empty map. The player already masks this by falling back to the live map
+  when it detects the log cannot reproduce it; the single-revision viewer had no
+  such fallback, so it rendered an empty canvas.
+- **Fix.** The viewer now detects an incomplete op-log exactly as the player does
+  (fingerprinting the full replay against the live map). When the history is
+  incomplete it shows the current map with a clear notice instead of an empty
+  canvas; when the history is complete it still shows a faithful reconstruction
+  of the requested revision — even an empty one — so genuine early revisions are
+  not misrepresented.
+- New tests cover both paths (incomplete -> live map + notice; complete ->
+  faithful reconstruction, no notice) and confirm the read-only viewport fit is
+  unaffected.
+
+## 0.8.10 (2026072780) — Arrange resizes containers (grow-to-contain, preserving)
+
+The arrange now adjusts container boxes to keep their members enclosed, having
+previously left every box untouched.
+
+- **Grow-to-contain, no shrink by default.** A box grows just enough to hold its
+  members with padding; it never shrinks below the human's chosen size, so a
+  deliberately spacious container stays spacious. Repeated presses converge (the
+  box settles at the padded member bounds) rather than drifting. A per-call
+  override (containerShrinkRate > 0) can tighten oversized boxes if wanted.
+- **Locks respected.** A move-locked container is never resized or moved — its
+  geometry belongs to the locked "move" group, so a change would be rejected
+  server-side; the arrange excludes it up front.
+- **Revisioned + undoable.** Each grown box is persisted as a container_update
+  operation (so collaborators receive it) and is part of the re-arrange undo/redo
+  entry alongside the node layout.
+- New adapter tests cover grow-only preservation of an oversized box, the
+  locked-container guarantee, and convergence under repeated application.
+
+Note: containers are still treated as axis-aligned boxes; for elliptical
+containers the bounding box is used (a corner member counts as inside). A true
+elliptical metric remains a possible follow-up.
+
+## 0.8.9 (2026072779) — Arrange calibration: stop the drift, respect grouping and locks
+
+Fixes three misbehaviours of the new arrange reported on real maps: a node
+outside an inner container was slowly dragged into it, an unconnected outside
+node ("was anderes") drifted steadily further out on every press, and the
+spacing to a locked node was not respected.
+
+- **Per-edge rest length (preservation).** The edge well now anchors to each
+  edge's *current* length instead of a single global L, so an already-placed
+  edge exerts no length force and the arrange is idempotent — repeated presses
+  settle instead of pushing connected nodes apart. A new edgeTargetBlend option
+  (default 0 = fully preserve) can gently normalise lengths toward L when wanted.
+- **Flat-bottom container interior.** The interior potential is now exactly zero
+  inside the wall (a quadratic hinge that only rises once a member crosses it),
+  so a large outer container no longer pulls its members toward its centre — the
+  mechanism that was dragging an outside node inward and reducing the spacing to
+  the locked node. Members are still confined; non-members are still pushed out
+  by the (now gentler, shorter-range) exterior dome.
+- **Concept maps are no longer direction-forced.** Only the tree profile imposes
+  a downward flow; concept maps keep their sibling order axis but are not rotated
+  toward a global direction.
+
+New regression coverage reproduces the reported layout (outer box with a locked
+member, inner box, an outside node and an unconnected top node) and asserts the
+outside node is not swallowed, the locked node never moves, its spacing is kept,
+and repeated application converges instead of drifting. Gradient checks now
+exercise the flat-bottom wall.
+
+## 0.8.8 (2026072778) — Preservation-first "Arrange" (potential-driven refiner)
+
+Replaces the old force-directed / re-seeding arrange with a layout **refiner**
+that gently improves the existing human layout in place instead of rebuilding
+it. This is the reliability fix: the tool no longer discards the arrangement a
+person made.
+
+- **No initialisation, warm start.** The refiner starts from the current node
+  positions and only descends an energy; a clean layout is preserved, and the
+  result can never be dramatically worse. Locked and pinned nodes are frozen.
+- **One energy, profile-configurable potentials.** A C2-smooth bounded edge
+  well (repulsive core, binding minimum at the ideal length L = the median edge
+  length, force-free far field), anisotropic (elliptical) node repulsion from
+  the box extents, a multiplicative directional term that aligns directed edges
+  for hierarchical profiles, a warm-start stability anchor, cosh container
+  interiors and domed exteriors that keep members in and non-members out (so
+  overlapping-container membership is preserved), and a soft order-preservation
+  term that protects the mental map. All parameters derive from L, so the
+  behaviour is scale-invariant and deterministic.
+- **Solver.** Monotone gradient descent with Armijo backtracking, a per-node
+  step cap and a global movement budget, plus a conservative last-resort swap
+  pass that only removes a crossing when it does not raise the energy beyond a
+  small budget and never swaps connected nodes. An optional active set can
+  restrict movement to a diagnosed neighbourhood.
+- **Per-profile behaviour** is chosen by a resolver (hierarchical profiles flow
+  down and keep sibling order; radial and free-form profiles impose no axis) —
+  the pragmatic form of the layout-potential contract, ready to be sourced from
+  the form subplugins later.
+- Container boxes are **not** resized by the arrange in this release (membership
+  is kept by the potentials against the fixed boxes); container minimal-fit is
+  implemented in the engine and can be enabled next. Cyclic order preservation
+  for radial profiles is likewise a follow-up.
+- Extensively tested: every analytic gradient is verified against finite
+  differences (edges, direction, repulsion, container cosh/dome, order term),
+  plus behavioural tests for monotone descent, determinism, preservation,
+  overlap separation, edge-length binding, directed alignment, container
+  confinement, overlapping-container intersection preservation, restrictive
+  swaps and the arrange adapter.
+
+## 0.8.7 (2026072777) — Journal/revision replay shows the real map
+
+Fixes the read-only state replay used by the journal and the revision viewer/
+player, where nodes appeared to be missing entirely and containers looked
+misplaced.
+
+- **Root cause:** the reconstruction returned the nodes and containers correctly,
+  but the canvas opened every read-only view with a fixed, canvas-centred
+  viewport. Because a past revision's node positions come from the saved layout
+  and can sit anywhere on the large (2400x1600) canvas, anything outside that
+  fixed window was clipped — nodes vanished and containers, framed against the
+  wrong window, looked out of place.
+- **Fix:** in read-only views (revision viewer, journal replay, player) the
+  canvas now fits its viewport to the actual content — every node at its recorded
+  position plus every container box — so the whole reconstructed map is framed.
+  Panning or zooming hands control back to the user; the auto-fit then steps
+  aside. The live editor is unchanged.
+- New Jest regression coverage: the RevisionViewer frames nodes placed far from
+  the canvas centre, and the RevisionPlayer frames the reconstructed content
+  (nodes at their recorded positions and the moved container) at the shown
+  revision.
+
+## 0.8.6 (2026072776) — Beta-testing infrastructure
+
+Non-behavioural release that makes the plugin easier to beta-test and to keep
+healthy in production. No schema change.
+
+- **Expanded test-data generator (AP1).** The plugin generator gained granular
+  creators — `create_node`, `create_relation`, `create_container`,
+  `create_membership`, `create_operations`, `create_snapshot`, `create_grade`,
+  `create_peer_review` — plus load profiles `create_map_profile` (small 20/30/5,
+  medium 200/400/40, large 1000/2000/200) and `create_collaboration_history`.
+  The Behat generator can now seed a sized map in one Given step
+  (`mod_vimipad > maps` with a `size` column).
+- **Operational status checks (AP4).** Three checks appear under Reports:
+  ViMi Pad data integrity (orphaned child rows, including layout history),
+  ViMi Pad subplugins (declared assess/form subplugins are installed and
+  registered) and ViMi Pad history size (operation log and layout history within
+  soft budgets), wired via a `mod_vimipad_status_checks()` callback.
+- **Beta operations package.** A German beta-testing guide
+  (`docs/beta/beta-testing.md`) covering how testers report, a P0–P3 triage
+  table, the "every reclamation becomes an automated test" rule and how to seed
+  demo data; plus GitHub issue templates (bug report, feature/change request).
+- New tests: PHPUnit for the generator creators and small load profile, and for
+  each status check.
+- **Behat acceptance suite (AP3).** Four new feature files exercising the
+  role/capability matrix (grading hidden from students; prohibiting
+  mod/vimipad:grade or :view takes effect), Moodle group modes (group selector
+  under separate/visible groups; the group-map/group-mode validation), a course
+  backup-and-restore roundtrip that keeps the submitted map and its grade, and
+  automated accessibility (axe) checks on the editor, grading and snapshot pages.
+  All 20 mod_vimipad scenarios resolve with zero undefined steps and pass
+  gherkinlint; the @javascript and live runs execute in CI.
+- **Playwright collaboration harness (AP5).** A browser test suite under
+  `tests/playwright/` for the multi-client behaviour Behat cannot reach: two
+  users on one course-mode map, with propagation, presence and convergence
+  checks. Includes a Playwright config, page helpers, a Moodle CLI seed
+  (`seed.php`) and a manual/scheduled GitHub Actions workflow. Runs against a
+  live site, kept out of the static pipeline and the plugin's own tsc/jest.
+- **Load test and release process (AP6).** A JMeter plan
+  (`tests/load/vimipad-read-endpoints.jmx`) driving the read-heavy web-service
+  functions against a seeded large map to catch latency/N+1 regressions, with a
+  README and a manual workflow; plus a release checklist
+  (`docs/beta/release-checklist.md`) covering the CI matrix, Plugin Checker, RC
+  pilot and the deliberate ALPHA→BETA maturity flip.
+
+## 0.8.5 (2026072775) — Topology in replay/journal (R10)
+
+Past revisions now replay with the node topology they actually had, instead of a
+recomputed auto-layout, so moves and re-placements are visible in the revision
+viewer and player.
+
+- **Append-only layout history.** Node positions live in the (non-revisioned)
+  layout channel, so historical topology was previously lost. A new
+  `vimipad_layouthist` table records each saved layout tagged with the workspace
+  semantic revision at that moment; a replay of revision N uses the newest entry
+  with revision <= N. Consecutive identical layouts are de-duplicated and the
+  history is capped per workspace/profile (oldest pruned) to bound growth.
+- **Server.** `layout_service` appends history on every write and exposes
+  `layout_at_revision` and `layout_history`. `get_revision_state` now returns the
+  historical layout for its revision, and a new `get_layout_history` external
+  feeds the player.
+- **Client.** The revision viewer renders nodes at their recorded positions
+  (falling back to the auto-layout when nothing was recorded that early); the
+  revision player loads the history once and picks the right layout for each
+  frame as the slider moves. History loading is best-effort — if it is
+  unavailable the replay still works with the auto-layout fallback.
+- **Backup/restore, privacy, cleanup.** The history table is backed up and
+  restored with user info (workspace and user ids remapped), covered by the
+  privacy provider (discovery, user list, and `modifiedby` anonymisation on
+  delete), and removed with the workspace on bulk deletion. Schema upgrade step
+  and a `null`-safe `layout_at_revision` included.
+- New tests: PHPUnit for history append/dedup/query and the backup roundtrip of
+  the history; Jest for the viewer rendering recorded positions and its
+  auto-layout fallback.
+
+## 0.8.4 (2026072774) — Profile-specific arrange + container membership (R7, R8)
+
+The "re-arrange" action is now a real, profile-aware layout engine and preserves
+container membership.
+
+Layout quality (R7):
+- **Re-arrange is now profile-specific and centrality-aware.** A new deterministic
+  `arrangeLayout` replaces the old "tree or circle" split. Tree and concept maps
+  get a tidy top-down hierarchy; mind maps and bubble maps get a radial hub with
+  the most-connected node at the centre and even, equal-length spokes; semantic
+  networks get a deterministic force-directed layout where high-degree nodes
+  settle centrally, nodes spread out evenly, and edges come out roughly equal in
+  length. Seeds and iteration counts are fixed, so a given map always arranges
+  identically.
+- The live render path (`computeLayout`) is unchanged and still cheap; the new
+  engine runs only on the explicit re-arrange action.
+
+Container membership (R8):
+- **Re-arrange now preserves each node's container membership exactly.** When
+  containers are present, every node is re-placed only within the region its
+  membership demands — the intersection of the containers it belongs to, and
+  outside the ones it does not — with the containers left where the author put
+  them. So intersections and subsets survive: a node shared by two overlapping
+  containers stays in both, a node in one stays only in that one, and a free node
+  stays outside all of them. This replaces the previous bounding-box refit, which
+  could grow a container over a non-member.
+- New Jest coverage: determinism, radial centrality/even spokes, force-layout
+  centrality and near-equal edge lengths, top-down tree, and the R8 example
+  (A in C1∩C2, B in C1, C in C2, D outside) preserved across re-arrange.
+
+## 0.8.3 (2026072773) — Lock badge placement + container label fixes (R6, R9)
+
+- **The template-lock badge now sits outside the top-right corner, above every
+  element.** It was a coloured padlock glyph inside a node's top-left corner and
+  only on nodes. It is now a grey padlock with a white outline, drawn just
+  outside the top-right corner of every locked node, relation and container, on
+  a dedicated overlay layer that paints above all elements and their text but
+  below the menu overlay.
+- **An unlabelled container no longer shows a grey title bar.** The grey bar is
+  drawn only when the container carries a label or is selected/being renamed, so
+  an empty container shows just its dashed outline. The bar stays interactive
+  (transparent) even when hidden, so the container can still be selected, moved
+  and renamed.
+- **Clearing a container's label keeps it empty.** The display no longer falls
+  back to "Containers" when the label is blank; an empty label renders as empty
+  and persists as an empty string.
+- **A new container ships labelled "New container" / "Neuer Container"** instead
+  of empty, so it reads as intentional and is easy to grab.
+- New Jest coverage: the badge overlay layer renders one badge per locked
+  element and paints after the node layer; an empty container has a transparent
+  title bar and no fallback text; a labelled one shows the grey bar and label.
+
+## 0.8.2 (2026072772) — Lock menu restructured (reclamations R1, R2)
+
+The lock UI now matches what was ordered. The top-right lock-mode button no
+longer switches the whole element menu to a lock menu; it only arms enforcement
+(as of 0.8.1). Locking an element is a menu action instead:
+
+- **Every element menu carries a lock button.** Nodes, relations and containers
+  now show a lock button in their normal control dock. It opens a lock submenu
+  of per-group toggles (move, colour, text — relations omit colour, having no
+  fill), rather than the top-right button replacing the menu.
+- **Lock toggles read as "no-parking" signs.** Each toggle shows the same icon
+  as the function it locks, struck through with a diagonal slash, and lights up
+  in the active state when that group is locked. The lock button itself shows a
+  closed padlock when any group is locked, an open one otherwise.
+- **Shared, consistent implementation.** The submenu is a single `LockSubmenu`
+  component reused by the node/container dock (`NodeFormatToolbar`) and the new
+  extracted `RelationMenu`, so the three element kinds behave identically. The
+  previously inline relation dock in `CanvasView` is now that component.
+- The top-right button's label now reads "Enforce locks (preview as learner)"
+  to reflect its actual role. New Jest coverage: the lock button shows only when
+  the user may lock, the submenu opens on click with struck-through toggles,
+  toggling a group calls back with that group, and the relation submenu offers
+  only move/text.
+
+## 0.8.1 (2026072771) — Beta prep: lock enforcement made real + form-subplugin privacy
+
+Starts the 0.8.x line. Closes the two most urgent beta reclamations around the
+element-lock feature and a privacy-compliance gap found under a real Moodle run.
+
+Lock enforcement (reclamations R3, R4, R5):
+- **Locks are now enforced on the layout channel.** Node positions and sizes are
+  saved through `save_layout`, which previously performed no lock checks — so a
+  move-locked node could be freely repositioned or resized by anyone. The layout
+  service now pins move-locked nodes to their stored geometry (in both merge and
+  replace mode); a freshly created locked node can still be placed once. Server
+  tests cover merge, replace, first placement and the bypass case.
+- **The lock-mode toggle is a real enforcement switch.** `apply_operation` and
+  `save_layout` take an `enforcelocks` flag mirroring the top-right lock-mode
+  button. Server bypass is now `manageprofiles && !enforcelocks`, so a teacher
+  can preview and run the activity bound by the same locks a learner sees. The
+  flag only ever *tightens* enforcement — a non-manager can never loosen a lock.
+- **Client gating matches the server.** Node drag/resize and container
+  move/resize refuse to start on a move-locked element while enforcement is
+  active for the current user (`!canManage || lockMode`). Re-arrange pins
+  move-locked nodes and nodes inside move-locked containers under the same rule.
+- **List view (R5).** Locked controls are shown *disabled* rather than hidden,
+  with a lock badge and tooltip, so an editor can see the row is locked: a
+  text-locked relation cannot be renamed, a move-locked one cannot be retargeted
+  or reversed, and a fully locked one cannot be deleted — unless the user is a
+  manager authoring with lock-mode off.
+
+Privacy (blocker found under a real run):
+- **The five `vimipadform_*` display-type subplugins now ship a privacy
+  provider.** They store no data of their own, so each declares a
+  `null_provider` with a `privacy:metadata` reason (EN/DE). Previously the core
+  `provider_compliance` test failed for all five; it now passes.
 
 ## 0.7.31 (2026072770) — 0.7.x hardening close-out (final audit follow-ups)
 

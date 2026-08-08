@@ -175,8 +175,31 @@ class lock_service {
         }
 
         $expires = $now + max(1, $ttl);
-        $DB->set_field('vimipad_lock', 'timeexpires', $expires, ['id' => $existing->id]);
-        return $this->result(true, $userid, $expires);
+        // Compare-and-swap, mirroring acquire(): only extend if the row still
+        // matches exactly what we read. Without this, a takeover slipping between
+        // our read and write would be clobbered by an unconditional update, and
+        // the caller (the old holder) would be told renewal succeeded.
+        $DB->execute(
+            'UPDATE {vimipad_lock}
+                SET timeexpires = :exp
+              WHERE id = :id AND userid = :olduser AND timeexpires = :oldexp',
+            [
+                'exp' => $expires, 'id' => $existing->id,
+                'olduser' => $userid, 'oldexp' => (int) $existing->timeexpires,
+            ]
+        );
+        $current = $DB->get_record('vimipad_lock', ['id' => $existing->id]);
+        if ($current && (int) $current->userid === $userid) {
+            // Still ours after the swap (whether our update landed or a
+            // concurrent same-user renew set a different expiry): report it held.
+            return $this->result(true, $userid, (int) $current->timeexpires);
+        }
+        if ($current) {
+            // Taken over in the gap: report the real holder.
+            return $this->result(false, (int) $current->userid, (int) $current->timeexpires);
+        }
+        // Row released/purged in the gap: renewal fails.
+        return $this->result(false, 0, 0);
     }
 
     /**

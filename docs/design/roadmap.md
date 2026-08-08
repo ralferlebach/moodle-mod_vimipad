@@ -1,12 +1,18 @@
 # ViMi Pad — Roadmap
 
-Stand: **0.7.31** — 0.6.x (Autoren-Werkzeuge, Container, Templates, Constraints)
-ist abgeschlossen; die **0.7.x-Hardening-Linie** (Sicherheit, Dateninvarianten,
-Privacy, Backup, Grading-Lifecycle, Limits/Compliance) ist **code-seitig
-abgeschlossen** — das finale externe Audit gibt GO für kontrollierten Beta-/
-Pilotbetrieb (MATURITY_BETA vertretbar bei grüner Voll-CI). Nächste Stufe: 0.8.x
-(Feldtests, weitere Darstellungsformen, empirischer Reifenachweis Richtung
-MATURITY_STABLE). Status-Marker unten:
+Stand: **0.9.0 (MATURITY_BETA, 2026080800)** — die 0.7.x-Hardening-Linie und die
+0.8.x-Linie (acht weitere Darstellungsformen, typisierte Relationen, Test- und
+Lastwerkzeuge, Performance) sind abgeschlossen. Ein externes Audit des Standes
+0.8.32 hat GO für den Beta-Zweig gegeben; die dort benannten P1-Befunde sind in
+0.8.33-0.8.35 abgearbeitet (empty_state-Bugfix, POST-Härtung aller mutierenden
+PHP-Handler, Paginierung der produktionskritischen Ansichten, Nulltoleranz für
+fachliche Fehler im Lasttest, Versions- und Paketierungshygiene). Mit diesem
+Schnitt stehen Kern **und** alle 19 gebündelten Subplugins auf
+`MATURITY_BETA` / Release `0.9.0`.
+
+Nächste Stufe: Feldvalidierung im echten Kursbetrieb sowie die noch offenen
+0.9.x-Themen (Barrierefreiheits-Audit, Stabilisierung der öffentlichen API für
+abgeleitete Plugins). Status-Marker unten:
 ✅ umgesetzt · ◐ teilweise · ○ geplant · → verschoben.
 
 Diese Roadmap ordnet die geplanten Ausbaustufen bis zur
@@ -126,13 +132,28 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
 
 ## 0.8.x — Feldtests & weitere Darstellungsformen
 
-- Feldtestungen in echten Kursen
-- Ausweitung auf die weiteren bereits erfassten Formen (argument, process/flow,
+> **Status: ✅ code-seitig abgeschlossen** — acht weitere Darstellungsformen als
+> `vimipadform`-Subplugins ausgeliefert (Timeline, Argument, Flow/Prozess,
+> Affinity, Fishbone, Causal/System, Venn/Mengen, Ontologie) samt typisiertem
+> Relationssystem und deklarativem Layout-Kontrakt. Ergaenzt um Playwright-
+> Kollaborationstests, jMeter-/k6-Lastwerkzeuge und Performance-Arbeit an
+> `get_workspace` (Spalten-Pruning, paginiertes Laden). Die eigentlichen
+> **Feldtestungen in echten Kursen** stehen noch aus — sie sind der Zweck des
+> 0.9-Beta-Zweigs.
+
+- ✅ Ausweitung auf die weiteren bereits erfassten Formen (argument, process/flow,
   fishbone, timeline, vennsets, systems, affinity) — jeweils als `vimipadform`-Subplugin
+- ○ Feldtestungen in echten Kursen (laufen im Beta-Zweig)
 
-## 0.9.x — Kerncode für abgeleitete Zusatz-Plugins & Barrierefreiheits-Audit
+## 0.9.x — Beta: Feldvalidierung, Kerncode für abgeleitete Plugins & Barrierefreiheits-Audit
 
-- Bereitstellung und Stabilisierung des Kerncodes (öffentliche APIs, Events,
+> **Status: ◐ laufend** — der Beta-Schnitt `0.9.0` ist erfolgt (Kern und alle 19
+> gebündelten Subplugins auf `MATURITY_BETA`). Inhalt dieser Stufe ist die
+> reale Validierung: Browser-, Last-, Kollaborations- und Feldpruefung.
+
+- ○ Feldvalidierung im echten Kursbetrieb (Beta-Rückmeldungen, siehe
+  `docs/beta/beta-testing.md`)
+- ○ Bereitstellung und Stabilisierung des Kerncodes (öffentliche APIs, Events,
   Contracts) für abgeleitete Zusatz-Plugins: Questiontype, Database, Peer-Review
 - **Barrierefreiheits-Audit** (Stand/Umsetzung siehe `barrierearmut.md`):
   systematische Prüfung gegen WCAG 2.1 und 2.2, Stufe AA (wo sinnvoll AAA),
@@ -154,6 +175,21 @@ Die strategische/geschäftliche Ausbauplanung liegt in
   Feedbackvorlagen (Tonalität/Fachkontext), strukturelle Auto-Checks, Teacher
   Reference Model (light), Kommentar-Threads, Peer-Review-Vollausbau
   (`vimipadreview_peerplus`).
+- **1.1 — Anordnen-Mechanik: experimenteller rein-potenzialbasierter Umbau.**
+  Die heutige Anordnen-Engine (kräftefreier Kantentopf + kurzreichweitige
+  Abstoßung + separater Container-Fit + schwache Schwerpunkt-Gravitation) wird
+  durch ein **rein potenzialbasiertes Modell** ersetzt und experimentell
+  erprobt: durchgängige Fernanziehung (Stress-/MDS-Kern: All-Paar-Terme
+  `w_ij·(‖x_i−x_j‖ − δ_ij)²` mit Graphdistanz-Ruhelängen), Hooke-Verbinder statt
+  Topf, ein absolut verankertes Canvas-Grundpotential (flach-innen/steil-außen)
+  gegen Drift, und Container als vollwertige Potentialkörper *im Gradienten*
+  statt als Nachzieh-Fit. Der Solver soll auf einen garantiert absteigenden
+  Schritt umgestellt werden (Majorisierung/SMACOF bzw. optimale Schrittweite
+  `α* = ‖g‖²/(gᵀHg)`), um das mehrfache „Wandern bis zur Endposition" zu
+  beseitigen. Die profil­abhängigen Terme (Richtung, lineare/zyklische Ordnung)
+  bleiben als Aufsatz über die `LayoutPotentialProvider`-Contract. Herleitung,
+  Gradient/Hessematrix, Schrittweite und die Diagnose des heutigen Driftens
+  siehe [`potential-arrange-1.1.md`](potential-arrange-1.1.md).
 - **1.2 — weitere Diagrammprofile:** siehe 0.8.x (argument, process/flow,
   fishbone, systems, vennsets, timeline, affinity) plus profilabhängige
   Lehrerchecks.

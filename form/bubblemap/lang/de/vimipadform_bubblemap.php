@@ -23,3 +23,4 @@
  */
 
 $string['pluginname'] = 'Bubble-Map';
+$string['privacy:metadata'] = 'Das Darstellungstyp-Subplugin bubblemap speichert keine personenbezogenen Daten.';

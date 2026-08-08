@@ -85,10 +85,12 @@ class statistics_service {
      * Per-workspace roll-up for a whole activity instance.
      *
      * @param int $vimipadid The vimipad instance id.
+     * @param int $limitfrom Zero-based row offset (0 = from the start).
+     * @param int $limitnum Maximum rows (0 = no limit).
      * @return array<int, array{workspaceid: int, userid: ?int, groupid: ?int,
      *     total: int, contributors: int, lastactivity: int}>
      */
-    public function instance_overview(int $vimipadid): array {
+    public function instance_overview(int $vimipadid, int $limitfrom = 0, int $limitnum = 0): array {
         global $DB;
 
         $sql = "SELECT ws.id AS workspaceid,
@@ -104,7 +106,7 @@ class statistics_service {
               ORDER BY lastactivity DESC, ws.id ASC";
 
         $rows = [];
-        foreach ($DB->get_records_sql($sql, ['vid' => $vimipadid]) as $row) {
+        foreach ($DB->get_records_sql($sql, ['vid' => $vimipadid], $limitfrom, $limitnum) as $row) {
             $rows[] = [
                 'workspaceid' => (int) $row->workspaceid,
                 'userid' => $row->userid !== null ? (int) $row->userid : null,
@@ -116,5 +118,16 @@ class statistics_service {
         }
 
         return $rows;
+    }
+
+    /**
+     * How many workspaces the instance overview covers.
+     *
+     * @param int $vimipadid The vimipad instance id.
+     * @return int The workspace count.
+     */
+    public function count_instance_workspaces(int $vimipadid): int {
+        global $DB;
+        return (int) $DB->count_records('vimipad_workspace', ['vimipadid' => $vimipadid]);
     }
 }

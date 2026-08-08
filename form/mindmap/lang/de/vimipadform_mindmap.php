@@ -23,3 +23,4 @@
  */
 
 $string['pluginname'] = 'Mindmap';
+$string['privacy:metadata'] = 'Das Darstellungstyp-Subplugin mindmap speichert keine personenbezogenen Daten.';

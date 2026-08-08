@@ -29,10 +29,9 @@
 import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
-import {nodeHeight, nodeWidth} from '../canvas/node_geometry';
+import {refineArrangement} from '../graph/refine/refine_arrange';
 import {
-    boundingBox, centerInBox, ContainerBox, nestingOrder, nestingParents,
-    parseGeometry, serializeGeometry, isNodePinnedForRearrange,
+    ContainerBox, parseGeometry, serializeGeometry, isNodePinnedForRearrange,
 } from '../canvas/container_geometry';
 import {computeContentBounds, downloadCanvasPdf, downloadCanvasPng, downloadCanvasSvg, extractMapData} from '../canvas/svg_export';
 import {EditorState, reduce} from '../store/reducer';
@@ -94,6 +93,10 @@ interface Props {
     initialView?: ViewMode;
     /** Owner user to view read-only (0 = self). */
     targetUserid?: number;
+    /** Site-configured solver iteration ceiling for the Arrange action. */
+    arrangeIterations?: number;
+    /** Site setting: may the Arrange action shrink oversized containers. Default true. */
+    arrangeShrink?: boolean;
 }
 
 type ViewMode = 'canvas' | 'list' | 'tools';
@@ -111,7 +114,8 @@ const EMPTY: EditorState = {
  * @returns The rendered editor.
  */
 export function EditorApp(props: Props): React.ReactElement {
-    const {api, t, groupid = 0, initialView = 'canvas', targetUserid = 0} = props;
+    const {api, t, groupid = 0, initialView = 'canvas', targetUserid = 0, arrangeIterations,
+        arrangeShrink = true} = props;
     const [state, dispatch] = useReducer(reduce, EMPTY);
     const view = initialView;
     const [stored, setStored] = useState<LayoutMap>({});
@@ -125,6 +129,13 @@ export function EditorApp(props: Props): React.ReactElement {
     const [relLabel, setRelLabel] = useState('');
     const [drawingContainer, setDrawingContainer] = useState(false);
     const [lockMode, setLockMode] = useState(false);
+
+    // Keep the API client's lock-enforcement flag in sync with the lock-mode
+    // toggle, so every mutating call (operation and layout) tells the server
+    // whether to enforce template locks against this caller's own edits.
+    useEffect(() => {
+        api.setEnforceLocks(lockMode);
+    }, [api, lockMode]);
 
     // Undo/redo. In a server-authoritative editor an undo is the inverse
     // operation sent to the server, not a local rollback (see store/history).
@@ -141,6 +152,12 @@ export function EditorApp(props: Props): React.ReactElement {
     // Polite screen-reader announcements for actions with little visual feedback.
     const [status, setStatus] = useState('');
     const statusTick = useRef(false);
+    // Guards Arrange against re-entry: the action persists a layout save and a
+    // sequence of container_update operations against the current revision, so a
+    // second press while the first is still awaiting would interleave op-batches
+    // on a stale revision and corrupt container membership. One press at a time.
+    const arrangingRef = useRef(false);
+    const [arranging, setArranging] = useState(false);
     const announce = useCallback((text: string) => {
         // Toggle a trailing non-breaking space so repeating the same action still
         // changes the node text and is re-announced by assistive technology.
@@ -252,7 +269,8 @@ export function EditorApp(props: Props): React.ReactElement {
             dispatch({kind: 'setLocked', locked: s.locked});
             dispatch({kind: 'setProfile', profile: s.profile});
         },
-        (e) => setError(e.message)
+        (e) => setError(e.message),
+        state.revision
     );
 
     const layout = useMemo(
@@ -271,6 +289,13 @@ export function EditorApp(props: Props): React.ReactElement {
         !readonly && state.locked !== 1
     );
 
+    // Latest state/revision, so callbacks can read the current values without
+    // widening their dependency lists (and without capturing a stale revision).
+    const stateRef = useRef(state);
+    stateRef.current = state;
+    const revisionRef = useRef(state.revision);
+    revisionRef.current = state.revision;
+
     const runOperation = useCallback(async (
         type: string,
         payload: Record<string, unknown>,
@@ -278,9 +303,17 @@ export function EditorApp(props: Props): React.ReactElement {
     ): Promise<{revision: number; stableid: string} | null> => {
         setBusy(true);
         try {
-            const res = await api.applyOperation(state.workspaceid, state.revision, type, payload);
+            // Read the revision from the ref, not the render-time closure: two
+            // edits fired in quick succession (e.g. a container select-drag
+            // immediately followed by a shape pick) would otherwise send the
+            // pre-first-edit revision on the second call, get rejected on a
+            // revision mismatch, and trigger a full reload that drops the
+            // selection. The ref always holds the latest acknowledged revision.
+            const res = await api.applyOperation(
+                stateRef.current.workspaceid, revisionRef.current, type, payload);
             optimistic();
             dispatch({kind: 'setRevision', revision: res.revision});
+            revisionRef.current = res.revision;
             setError(null);
             return res;
         } catch (e) {
@@ -290,13 +323,7 @@ export function EditorApp(props: Props): React.ReactElement {
         } finally {
             setBusy(false);
         }
-    }, [api, state.workspaceid, state.revision, load]);
-
-    // Latest state/revision for the replay executor, without widening deps.
-    const stateRef = useRef(state);
-    stateRef.current = state;
-    const revisionRef = useRef(state.revision);
-    revisionRef.current = state.revision;
+    }, [api, load]);
 
     // Apply a sequence of operations to the server and locally (used by undo and
     // redo). Not recorded in history; the stack is managed by undo()/redo().
@@ -530,17 +557,19 @@ export function EditorApp(props: Props): React.ReactElement {
     }, [runOperation, pushHistory]);
 
     const createContainer = useCallback(async (geometryjson: string) => {
-        const res = await runOperation('container_create', {type: 'group', geometryjson}, () => undefined);
+        const label = t('editor:newcontainer');
+        const res = await runOperation('container_create', {type: 'group', label, geometryjson}, () => undefined);
         if (res) {
             dispatch({kind: 'addContainer', container: {
-                stableid: res.stableid, type: 'group', label: '', geometryjson,
+                stableid: res.stableid, type: 'group', label, geometryjson,
             }});
             pushHistory({
                 undo: [{type: 'container_delete', payload: {stableid: res.stableid}}],
-                redo: [{type: 'container_create', payload: {stableid: res.stableid, type: 'group', geometryjson}}],
+                redo: [{type: 'container_create',
+                    payload: {stableid: res.stableid, type: 'group', label, geometryjson}}],
             });
         }
-    }, [runOperation, pushHistory]);
+    }, [runOperation, pushHistory, t]);
 
     const deleteContainer = useCallback(async (stableid: string) => {
         const existing = (stateRef.current.containers ?? []).find(c => c.stableid === stableid);
@@ -671,6 +700,21 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [runOperation, pushHistory]);
 
+    const changeType = useCallback(async (stableid: string, type: string) => {
+        const prev = stateRef.current.relations.find(r => r.stableid === stableid)?.type ?? 'link';
+        if (prev === type) {
+            return;
+        }
+        const res = await runOperation('relation_update', {stableid, type},
+            () => dispatch({kind: 'updateRelation', stableid, type}));
+        if (res) {
+            pushHistory({
+                undo: [{type: 'relation_update', payload: {stableid, type: prev}}],
+                redo: [{type: 'relation_update', payload: {stableid, type}}],
+            });
+        }
+    }, [runOperation, pushHistory]);
+
     const changeDirection = useCallback(async (stableid: string, direction: number) => {
         const prev = stateRef.current.relations.find(r => r.stableid === stableid)?.direction ?? 1;
         const res = await runOperation('relation_update', {stableid, direction},
@@ -730,110 +774,83 @@ export function EditorApp(props: Props): React.ReactElement {
     // automatic layout (tidy tree for the tree profile, circle otherwise),
     // persisting the result so collaborators receive it too.
     const reArrangeLayout = useCallback(async () => {
+        if (arrangingRef.current) {
+            return;
+        }
+        arrangingRef.current = true;
+        setArranging(true);
         const prevPos = stored;
-        const autoRaw = computeLayout(state.nodes, {}, state.relations, state.profile);
         const containers = state.containers ?? [];
 
         // Lock handling for re-arrange:
         //  - a move-locked node keeps its current position (never repositioned);
         //  - a node inside a move-locked container is pinned to its current
         //    position too, so it cannot be pushed out of the locked container.
-        // Both are achieved by overriding the computed position with the stored
-        // one before anything else uses the layout.
+        //
+        // Enforcement follows the same rule as drag/resize: a non-manager is
+        // always bound, a manager only while the lock-mode preview is on. So a
+        // teacher authoring a template (lock-mode off) can still reflow locked
+        // elements with re-arrange; a learner (or a previewing teacher) cannot.
+        const enforcementActive = state.canmanage !== true || lockMode;
         const moveLockedContainerBoxes: ContainerBox[] = [];
-        for (const c of containers) {
-            if (isGroupLocked(c.metadatajson, 'move')) {
-                const b = parseGeometry(c.geometryjson);
-                if (b) {
-                    moveLockedContainerBoxes.push(b);
+        const lockedContainers = new Set<string>();
+        if (enforcementActive) {
+            for (const c of containers) {
+                if (isGroupLocked(c.metadatajson, 'move')) {
+                    lockedContainers.add(c.stableid);
+                    const b = parseGeometry(c.geometryjson);
+                    if (b) {
+                        moveLockedContainerBoxes.push(b);
+                    }
                 }
             }
         }
         const isPinned = (n: {stableid: string; metadatajson?: string}): boolean =>
-            isNodePinnedForRearrange(
+            enforcementActive && isNodePinnedForRearrange(
                 n.metadatajson,
                 stored[n.stableid],
                 moveLockedContainerBoxes,
                 (m) => isGroupLocked(m, 'move')
             );
-        const auto: LayoutMap = {...autoRaw};
+        const pinned = new Set(state.nodes.filter(isPinned).map(n => n.stableid));
+
+        // Preservation-first refinement: gently improve the existing (human)
+        // layout in place instead of re-seeding it. Container membership is read
+        // from the current geometry and kept by the interior/exterior potentials.
+        // Boxes may grow to keep their members enclosed (never shrink, so the
+        // human's chosen size is preserved); move-locked boxes are left untouched.
+        const arranged = refineArrangement({
+            nodes: state.nodes, relations: state.relations, containers,
+            profile: state.profile, positions: stored, sizes, pinned, lockedContainers,
+            maxIterations: arrangeIterations, formconfig: state.formconfig,
+            shrinkContainers: arrangeShrink,
+        });
+        const auto: LayoutMap = {...arranged.positions};
         for (const n of state.nodes) {
-            if (isPinned(n) && stored[n.stableid]) {
+            if (pinned.has(n.stableid) && stored[n.stableid]) {
                 auto[n.stableid] = stored[n.stableid];
             }
         }
 
-        // T5: keep container membership across re-arrange. Snapshot which nodes
-        // sit inside each container now, then, after the new layout, refit each
-        // container around its members' new positions so a node that was inside
-        // stays inside (and the container follows its members).
-        const CONTAINER_REFIT_PAD = 24;
-        const boxOf = (id: string, at: LayoutMap): ContainerBox => {
-            const pos = at[id] ?? {x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2};
-            const node = state.nodes.find(n => n.stableid === id);
-            const w0 = node ? nodeWidth(node.label) : 70;
-            const size = sizes[id] ?? {w: w0, h: node ? nodeHeight(node.label, w0) : 40};
-            return {x: pos.x - size.w / 2, y: pos.y - size.h / 2, w: size.w, h: size.h};
-        };
-        // Build an acyclic nesting forest from the current boxes, then refit
-        // inner containers before outer ones. A container refits around its
-        // member nodes plus the (already refitted) boxes of its *direct* nested
-        // children only. This removes the previous runaway growth and hierarchy
-        // flipping, which came from treating overlapping same-size containers as
-        // mutual children.
-        const nestingItems: Array<{stableid: string; box: ContainerBox}> = [];
-        for (const c of containers) {
-            const b = parseGeometry(c.geometryjson);
-            if (b) {
-                nestingItems.push({stableid: c.stableid, box: b});
-            }
-        }
-        const parents = nestingParents(nestingItems);
-        const order = nestingOrder(nestingItems, parents);
-
-        // Working boxes, updated as we go so a parent sees refitted child boxes.
-        const workingBox = new Map<string, ContainerBox>();
-        for (const it of nestingItems) {
-            workingBox.set(it.stableid, it.box);
-        }
-
+        // Emit a revisioned container_update for every box whose geometry the
+        // refiner grew. Move-locked boxes are excluded (their geometry change
+        // would be rejected server-side anyway).
         const refits: Array<{stableid: string; oldgeom: string; newgeom: string}> = [];
-        for (const cid of order) {
-            const container = containers.find(c => c.stableid === cid);
-            const box = workingBox.get(cid);
-            if (!container || !box) {
+        for (const c of containers) {
+            if (lockedContainers.has(c.stableid)) {
                 continue;
             }
-            // A move-locked container keeps its geometry: it is neither moved nor
-            // resized by re-arrange.
-            if (isGroupLocked(container.metadatajson, 'move')) {
+            const g = arranged.containers[c.stableid];
+            if (!g) {
                 continue;
             }
-            const memberBoxes = state.nodes
-                .filter(n => stored[n.stableid] && centerInBox(stored[n.stableid], box))
-                .map(n => boxOf(n.stableid, auto));
-            // Only direct children count, and only their current working boxes.
-            const childBoxes: ContainerBox[] = [];
-            for (const it of nestingItems) {
-                if (parents.get(it.stableid) === cid) {
-                    const cb = workingBox.get(it.stableid);
-                    if (cb) {
-                        childBoxes.push(cb);
-                    }
-                }
-            }
-            if (memberBoxes.length === 0 && childBoxes.length === 0) {
-                continue; // Empty container: leave it where it is.
-            }
-            const fit = boundingBox([...memberBoxes, ...childBoxes], CONTAINER_REFIT_PAD);
-            if (!fit) {
-                continue;
-            }
-            workingBox.set(cid, fit);
-            const newgeom = serializeGeometry(fit);
-            const oldgeom = container.geometryjson ?? serializeGeometry(box);
-            if (newgeom !== oldgeom) {
-                refits.push({stableid: cid, oldgeom, newgeom});
+            const old = parseGeometry(c.geometryjson);
+            if (!old || old.x !== g.x || old.y !== g.y || old.w !== g.w || old.h !== g.h) {
+                refits.push({
+                    stableid: c.stableid,
+                    oldgeom: c.geometryjson ?? '',
+                    newgeom: serializeGeometry(g),
+                });
             }
         }
 
@@ -871,9 +888,13 @@ export function EditorApp(props: Props): React.ReactElement {
         } catch (e) {
             setError((e as Error).message);
             await load();
+        } finally {
+            arrangingRef.current = false;
+            setArranging(false);
         }
     }, [api, state.workspaceid, state.nodes, state.relations, state.profile, state.containers,
-        stored, sizes, pushHistory, announce, t, load]);
+        state.canmanage, lockMode, stored, sizes, pushHistory, announce, t, load, arrangeIterations,
+        arrangeShrink]);
 
     const onNodeResized = useCallback(async (stableid: string, size: Size) => {
         const prevSizes = sizes;
@@ -1012,6 +1033,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         onDuplicateNode={duplicateNode}
                         onCreateRelation={createRelation}
                         onChangeDirection={changeDirection}
+                        onChangeRelationType={changeType}
                         onDeleteNode={deleteNode}
                         onDeleteRelation={deleteRelation}
                         onRenameNode={renameNode}
@@ -1021,6 +1043,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         canUndo={canUndo}
                         canRedo={canRedo}
                         onReArrange={reArrangeLayout}
+                        arrangeBusy={arranging}
                         onExportSvg={exportSvg}
                         onExportPng={exportPng}
                         onExportPdf={exportPdf}
@@ -1063,9 +1086,12 @@ export function EditorApp(props: Props): React.ReactElement {
                     <RelationListView
                         state={state}
                         disabled={disabled}
+                        enforced={state.canmanage !== true || lockMode}
                         onDeleteRelation={deleteRelation}
                         onRetarget={retarget}
                         onRenameRelation={renameRelation}
+                        relationTypes={state.formconfig?.relationtypes}
+                        onChangeType={changeType}
                         t={t}
                     />
                     <JournalPanel

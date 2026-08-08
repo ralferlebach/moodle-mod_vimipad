@@ -63,6 +63,10 @@ export interface CollabConfig {
     leasetimeout: number;
     pushenabled: number;
     pushendpoint: string;
+    /** Per-workspace Mercure topic; empty when push is off. */
+    pushtopic?: string;
+    /** Scoped subscriber token for the hub; empty when push is off. */
+    pushtoken?: string;
 }
 
 export interface WorkspaceState {
@@ -106,6 +110,33 @@ export interface FormConfig {
     line: string;
     /** Bifurcation behaviour: 'individual' | 'shared' | 'radial'. */
     bifurcation: string;
+    /** Relation types this display type offers (e.g. ['support','attack']). */
+    relationtypes?: string[];
+    /** Per-relation-type layout hints (directed / rest scale) for typed forms. */
+    relationlayout?: {type: string; directed?: boolean; restscale?: number}[];
+    /**
+     * Layout-potential parameters for the arrange refiner, supplied by the
+     * form's PHP subplugin. Absent for legacy transports; the refiner then
+     * falls back to its built-in per-profile defaults.
+     */
+    layout?: {
+        /** Whether relations are treated as directed for alignment. */
+        directed: boolean;
+        /** Preferred flow direction for directed edges (absent = none). */
+        direction?: {x: number; y: number};
+        /** Cross-axis along which sibling order is preserved (absent = none). */
+        orderaxis?: {x: number; y: number};
+        /** Preserve the cyclic order of a hub's neighbours (radial forms). */
+        cyclicorder?: boolean;
+        /** Confine nodes onto a line parallel to this axis (linear forms). */
+        lineaxis?: {x: number; y: number};
+        /** Enforce discrete rank layers for directed edges (flow/process). */
+        ranklayered?: boolean;
+        /** Cluster container members toward their centroid (affinity boards). */
+        clustered?: boolean;
+        /** Alternating per-branch diagonal bone directions (fishbone). */
+        fishbone?: boolean;
+    };
 }
 
 /** A 2D position for a node on the canvas. */
@@ -192,6 +223,10 @@ export interface MountConfig {
     readonly?: boolean;
     /** Owner user to view read-only (0 = self), for teacher inspection. */
     targetUserid?: number;
+    /** Site-configured solver iteration ceiling for the Arrange action. */
+    arrangeIterations?: number;
+    /** Site setting: may the Arrange action shrink oversized containers. Default true. */
+    arrangeShrink?: boolean;
     /** Optional injected transport; if absent, the built-in fetch client is used. */
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */

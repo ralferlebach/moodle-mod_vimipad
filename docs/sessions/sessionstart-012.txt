@@ -1,0 +1,168 @@
+## SESSION-START: ViMi Pad — mod_vimipad · Session 012
+
+> Konkreter Startprompt fuer Session 012. Kopf = Kurzfassung des Stands aus
+> Session 011 (docs/sessions/session-011.md ist der vollstaendige, versionierte
+> Report und wird als Kontext-Dokument angehaengt). Der generische Ablauf (A–F)
+> folgt darunter aus docs/prompt-templates/sessionstart.txt.
+
+---
+
+### Kontext der Vorsitzung (Session 011) — Kurzfassung
+
+**Aktueller Entwicklungsstand:**
+0.9.0 — MATURITY_BETA, Versionsnummer 2026080800. Der Beta-Schnitt ist erfolgt:
+Kern UND alle 19 gebuendelten Subplugins (13 vimipadform_*, 6 vimipadassess_*)
+tragen denselben Reifegrad, dasselbe Release und dieselbe Versionsnummer; ihre
+Abhaengigkeit auf den Kern zeigt auf 2026080800. package.json/-lock folgen dem
+Release. Real auf Moodle 4.5 + PostgreSQL 16 + PHP 8.3.6 verifiziert:
+PHPUnit 575/2157 gruen, Jest 70 Suiten/434 Tests, tsc 0, eslint 0,
+phpcs 0, moodlecheck 0, validate/savepoints/mustache 0, phpcpd ohne Klone,
+Lang-Paritaet OK, editor_lazy und init byte-reproduzierbar, Upgrade und
+Frisch-Installation aus dem Release-ZIP erfolgreich.
+
+**Zuletzt abgeschlossen (Session 011 — 0.8.32 bis 0.9.0):**
+- Laufzeit-Bugfix Container-Drift: PollClient startete bei revision=0 und
+  setRevision() wurde nach dem Laden nie aufgerufen -> der erste Poll spielte
+  das gesamte Op-Log erneut ab. use_collaboration erhielt baseRevision.
+- Lastnachweis erbracht: jMeter 2000 Samples 0 Fehler; k6 http_req_failed 0,00 %
+  (0/10144), 182 req/s. get_workspace war der Flaschenhals.
+- Performance an get_workspace, nach Profiling statt nach Bauchgefuehl:
+  Spalten-Pruning in get_state (0.8.33, Query -40 %, Peak-Speicher -13 %) und
+  paginiertes Laden (0.8.34). PARAM_RAW wurde bewusst NICHT verwendet; jede
+  Zeile geht weiterhin durch clean_returnvalue. Neue Lesefunktion
+  mod_vimipad_get_workspace_elements; get_workspace erhielt den additiven
+  Parameter includeelements (Default true = altes Verhalten). Der API-Client
+  pagt und setzt die WorkspaceState zusammen — Editor unveraendert.
+- Externes Audit (Stand 0.8.32), P1-Befunde geschlossen (0.8.35):
+  * empty_state() griff auf ein nicht existierendes $workspace zu -> behoben,
+    Regressionstest gegen den Bug validiert.
+  * POST-Haertung aller mutierenden PHP-Handler ueber einen zentralen
+    local\policy\request_policy::is_mutating_request(). Autorisierung steht
+    bewusst VOR der Methodenpruefung.
+  * Paginierung der produktionskritischen Ansichten (Submissionuebersicht,
+    Journalhistorie, Statistik-Uebersicht), je 50/Seite.
+  * k6-Nulltoleranz fuer fachliche Fehler (vimipad_exceptions,
+    vimipad_http_errors mit rate==0); Negativtest bestaetigt Exit 99.
+  * Versionsdrift package.json behoben; .gitattributes fuer die Paketierung.
+- CI-Befund PHPDoc (roter Lauf auf 0.8.34) behoben; moodlecheck laeuft
+  plugin-weit befundfrei.
+
+**Offene Punkte (Beta-Validierung, KEINE Code-Blocker):**
+- Feldvalidierung in echten Kursen — der eigentliche Zweck der Beta.
+- Barrierefreiheits-Audit mit echten Hilfsmitteln (NVDA/JAWS/VoiceOver,
+  Tastatur-only); axe-Smokes allein beantworten die Frage nicht.
+- Playwright: nur Chromium/Moodle 4.5. Nightly um Firefox, WebKit und
+  Moodle 5.2 erweitern.
+- Playwright: echte Collaboration-Races (stale-revision-Update, Delete vs.
+  Update, Relation-Retarget vs. Node-Delete, Lease-Uebernahme nach Netzausfall,
+  Offline-/Resync-Verhalten). Der bestehende dritte Test ist bewusst sequenziell.
+- k6: poll_changes fehlt voellig; getrennte Profile fuer Classroom-Start,
+  Idle-Polling, aktive Kollaboration, Spike und Soak sowie eine
+  Map-Groessen-Matrix (small/medium/large).
+- jMeter: echte Plateauphase (Scheduler + Dauer statt fester Loop-Zahl).
+- Arrange-Engine unter Last messen (Playwright, 100/250/500/1000 Knoten):
+  Zeit bis zur Bedienbarkeit, keine NaN/Infinity, fixierte Knoten unveraendert.
+- Stored-XSS-Matrix ueber alle Textfelder (PHPUnit fuer den Speicher-/
+  Formatvertrag, Playwright/Behat fuer „wird nirgends ausfuehrbar gerendert").
+- Moodle 5.1 im Release-/Nightly-Gate (supported = [405, 502] schliesst 5.1 ein,
+  die CI testet nur 4.5/5.0/5.2).
+- Lasttest-Token in load.yml als Secret behandeln (::add-mask::, kurzlebiger
+  Token, Testsite nach dem Lauf verwerfen).
+- Behat deckt den Moodle-Workflow noch schmal ab (Consensus, Reopen, Import/
+  Export, Journal, Revision Player, KI-Workflow, Completion, Subplugin-Wechsel).
+
+**Als naechstes geplant — 0.9.x (Beta-Validierung):**
+Reihenfolge nach docs/design/backlog.md. Sinnvoller Einstieg ist das, was den
+groessten Blind Spot schliesst: Arrange-Performance im Browser messen und die
+Playwright-Matrix (Firefox/WebKit, Moodle 5.2) sowie echte Collaboration-Races.
+Danach k6-Profile mit poll_changes und die Stored-XSS-Matrix.
+
+**Wichtige Arbeitsregeln aus Session 011:**
+- Audit-/Reviewbefunde IMMER im Code gegenpruefen, bevor sie umgesetzt werden.
+  In Session 011 waren „Reviewerlisten unpaginiert" ein Fehlbefund (durch die
+  Allokationen begrenzt) und P1.5 (Subplugin-Maturity) zum Pruefzeitpunkt
+  gegenstandslos.
+- Fixes gegen den Fehler validieren: Bug zurueckbauen, Test muss rot werden.
+- Live-Playwright/k6 in der Sandbox nur ueber einen setsid-abgekoppelten Runner,
+  der in eine Datei schreibt und per Marker gepollt wird; der PHP-Built-in-Server
+  ueberlebt keine Tool-Aufruf-Grenze. Node-Skripte brauchen
+  NODE_PATH=.../tests/playwright/node_modules.
+- $CFG->behat_wwwroot muss sich von $CFG->wwwroot unterscheiden, sonst 500er.
+
+---
+
+### A) Lastenheft, Pflichtenheft und Blueprint
+
+**Zentrales, versioniertes Planungsdokument (zuerst lesen, fuehrend bei
+Reihenfolge und Versionsvergabe):**
+  docs/design/roadmap.md
+
+Weitere Planungs-/Entwurfsdokumente:
+  docs/design/backlog.md
+  docs/design/connector-styles.md
+  docs/design/barrierearmut.md
+  docs/design/public-api.md
+  docs/beta/beta-testing.md
+  docs/beta/release-checklist.md
+
+Fach-, Technik- und Strategiedokumente liegen im Plugin-Repo:
+  docs/materials/pflicht_lastenheft_knowledgemap.md
+  docs/materials/technisches_blueprint_knowledgemap.md
+  docs/materials/roadmap_zusatzplugins_knowledgemap.md
+  docs/materials/erweiterungsideen_bewertung.md
+  docs/materials/knowledgemap_konzeption_businessmodel.pdf
+
+Bei Konflikten zur Versionsreihenfolge ist docs/design/roadmap.md fuehrend;
+die materials/-Dokumente liefern Strategie, Machbarkeit und Fachanforderungen.
+
+---
+
+### B) Kontext-Dokument der letzten Sitzung
+
+Das aktuelle Kontext-Dokument (docs/sessions/session-011.md) ist im Anhang zu
+finden. Aeltere Kontext-Dokumente zwecks Referenz: docs/sessions/
+
+---
+
+### C) Testumgebung
+
+Aufbau und Fallstricke der realen Verifikationsumgebung:
+  docs/dev/moodle-test-environment-setup.md
+Abschnitt 15 beschreibt insbesondere, wie Playwright live in der Sandbox
+ausgefuehrt wird (setsid-Runner, Marker-Polling, Diagnose ueber
+test-results/**/error-context.md).
+
+---
+
+### D) Arbeitsweise
+
+- Grosse, verifizierte Schritte statt vieler kleiner Rueckfragen.
+- Bei CI-Befunden direkt handeln, keine unnoetige Diskussion.
+- Vor jeder Auslieferung die volle Verifikationskette (siehe E).
+- Deutsch als Arbeitssprache; Code, Kommentare und Doku im Repo auf Englisch,
+  ausser bei bereits deutschsprachigen Dokumenten (docs/design, docs/sessions).
+
+---
+
+### E) Verifikationskette vor jeder Auslieferung
+
+  service postgresql start; sleep 2
+  phpcs (moodle-Standard, ohne node_modules/js)
+  local_moodlecheck (PHPDoc — das ist der CI-Gate-Check)
+  moodle-plugin-ci: validate, savepoints, mustache, phpcpd
+  PHPUnit (nach Version-Bump oder neuen Testdateien vorher init.php erneut)
+  tsc --noEmit, jest, grunt eslint
+  node build.mjs + npx grunt amd --root=mod/vimipad, Byte-Reproduzierbarkeit
+  Lang-Paritaet EN/DE
+  CHANGELOG-Eintrag, Version-Bump in version.php UND package.json/-lock
+  ZIP bauen, Frisch-Installation testen, Dateien praesentieren
+
+---
+
+### F) Auslieferung
+
+Zwei Pakete:
+- vimipad-X.Y.Z-release.zip — Distributionspaket nach .gitattributes
+  (Root vimipad/, ohne docs/tools/.github/tests-load/tests-playwright/js-tests,
+  mit amd/src, js/src, PHPUnit-/Behat-Tests und Source-Maps).
+- vimipad-X.Y.Z.zip — Arbeitspaket inklusive Tooling.

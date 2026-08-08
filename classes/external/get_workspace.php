@@ -48,6 +48,14 @@ class get_workspace extends external_api {
                 VALUE_DEFAULT,
                 0
             ),
+            'includeelements' => new external_value(
+                PARAM_BOOL,
+                'Include the full node/relation/container arrays (default). Pass false to get only '
+                    . 'workspace metadata plus element counts, then page the elements via '
+                    . 'get_workspace_elements.',
+                VALUE_DEFAULT,
+                true
+            ),
         ]);
     }
 
@@ -57,14 +65,18 @@ class get_workspace extends external_api {
      * @param int $cmid Course module id.
      * @param int $groupid Requested group id (group mode).
      * @param int $targetuserid Owner user to view read-only (0 = self).
+     * @param bool $includeelements Whether to include the full node/relation/
+     *                              container arrays; false returns metadata plus
+     *                              element counts for paginated loading.
      * @return array
      */
-    public static function execute(int $cmid, int $groupid = 0, int $targetuserid = 0): array {
+    public static function execute(int $cmid, int $groupid = 0, int $targetuserid = 0, bool $includeelements = true): array {
         global $USER, $DB;
 
         $params = self::validate_parameters(
             self::execute_parameters(),
-            ['cmid' => $cmid, 'groupid' => $groupid, 'targetuserid' => $targetuserid]
+            ['cmid' => $cmid, 'groupid' => $groupid, 'targetuserid' => $targetuserid,
+                'includeelements' => $includeelements]
         );
 
         [, $cm] = get_course_and_cm_from_cmid($params['cmid'], 'vimipad');
@@ -94,26 +106,45 @@ class get_workspace extends external_api {
             );
         }
 
-        $state = $service->get_state((int) $workspace->id);
-
         $layoutservice = new layout_service();
         $layoutjson = $layoutservice->get_layout_json((int) $workspace->id, $instance->defaultprofile);
 
-        return [
+        // When the client opts out of the inline arrays it pages the elements via
+        // get_workspace_elements instead; we then return only the (cheap) counts
+        // so it knows how many pages to fetch. This bounds the size, memory and
+        // return-validation cost of any single request on a large map.
+        if ($params['includeelements']) {
+            $state = $service->get_state((int) $workspace->id);
+            $nodes = array_map([self::class, 'map_node'], $state['nodes']);
+            $relations = array_map([self::class, 'map_relation'], $state['relations']);
+            $containers = array_map([self::class, 'map_container'], $state['containers']);
+            $counts = null;
+        } else {
+            $nodes = [];
+            $relations = [];
+            $containers = [];
+            $counts = $service->count_elements((int) $workspace->id);
+        }
+
+        $result = [
             'workspaceid' => (int) $workspace->id,
             'revision' => (int) $workspace->currentrevision,
             'locked' => (int) $workspace->locked,
             'profile' => $instance->defaultprofile,
             'formconfig' => registry::for_profile($instance->defaultprofile)->to_array(),
             'layoutjson' => $layoutjson,
-            'nodes' => array_map([self::class, 'map_node'], $state['nodes']),
-            'relations' => array_map([self::class, 'map_relation'], $state['relations']),
-            'containers' => array_map([self::class, 'map_container'], $state['containers']),
+            'nodes' => $nodes,
+            'relations' => $relations,
+            'containers' => $containers,
             'canmanage' => $canmanage,
             'lockmodeforlearners' => $lockmodeforlearners,
             'journalallowprivate' => !empty($instance->journalallowprivate),
-            'collab' => helper::collab_config(),
+            'collab' => helper::collab_config((int) $workspace->id),
         ];
+        if ($counts !== null) {
+            $result['counts'] = $counts;
+        }
+        return $result;
     }
 
     /**
@@ -142,7 +173,9 @@ class get_workspace extends external_api {
             'canmanage' => $canmanage,
             'lockmodeforlearners' => $lockmodeforlearners,
             'journalallowprivate' => !empty($instance->journalallowprivate),
-            'collab' => helper::collab_config(),
+            // No workspace exists yet, so there is no push topic/token to scope:
+            // passing null keeps the collab block free of a channel for id 0.
+            'collab' => helper::collab_config(null),
         ];
     }
 
@@ -198,6 +231,57 @@ class get_workspace extends external_api {
     }
 
     /**
+     * External structure for a single node. Shared by get_workspace and
+     * get_workspace_elements so both validate node pages identically.
+     *
+     * @return external_single_structure
+     */
+    public static function node_structure(): external_single_structure {
+        return new external_single_structure([
+            'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable node id'),
+            'type' => new external_value(PARAM_ALPHANUMEXT, 'Node type'),
+            'label' => new external_value(PARAM_TEXT, 'Node label'),
+            'content' => new external_value(PARAM_RAW, 'Rich node content (HTML), empty if none'),
+            'contentformat' => new external_value(PARAM_INT, 'Content format (1 = HTML)'),
+            'metadatajson' => new external_value(PARAM_RAW, 'Style/profile metadata JSON, empty if none'),
+        ]);
+    }
+
+    /**
+     * External structure for a single relation. Shared by get_workspace and
+     * get_workspace_elements.
+     *
+     * @return external_single_structure
+     */
+    public static function relation_structure(): external_single_structure {
+        return new external_single_structure([
+            'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable relation id'),
+            'sourceid' => new external_value(PARAM_ALPHANUMEXT, 'Source node stable id'),
+            'targetid' => new external_value(PARAM_ALPHANUMEXT, 'Target node stable id'),
+            'type' => new external_value(PARAM_ALPHANUMEXT, 'Relation type'),
+            'label' => new external_value(PARAM_TEXT, 'Relation label'),
+            'direction' => new external_value(PARAM_INT, 'Direction 0/1/2'),
+            'metadatajson' => new external_value(PARAM_RAW, 'Style/profile metadata JSON, empty if none'),
+        ]);
+    }
+
+    /**
+     * External structure for a single container. Shared by get_workspace and
+     * get_workspace_elements.
+     *
+     * @return external_single_structure
+     */
+    public static function container_structure(): external_single_structure {
+        return new external_single_structure([
+            'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable container id'),
+            'type' => new external_value(PARAM_ALPHANUMEXT, 'Container type'),
+            'label' => new external_value(PARAM_TEXT, 'Container label'),
+            'geometryjson' => new external_value(PARAM_RAW, 'Geometry JSON (x,y,w,h), empty if none'),
+            'metadatajson' => new external_value(PARAM_RAW, 'Style/lock metadata JSON, empty if none'),
+        ]);
+    }
+
+    /**
      * Return value definition.
      *
      * @return external_single_structure
@@ -217,32 +301,52 @@ class get_workspace extends external_api {
                 'defaultshape' => new external_value(PARAM_ALPHA, 'Default node shape key'),
                 'line' => new external_value(PARAM_ALPHA, 'Connector line style'),
                 'bifurcation' => new external_value(PARAM_ALPHA, 'Bifurcation behaviour'),
+                'relationtypes' => new external_multiple_structure(
+                    new external_value(PARAM_ALPHA, 'Relation type key'),
+                    'Relation types this display type offers',
+                    VALUE_OPTIONAL
+                ),
+                'relationlayout' => new external_multiple_structure(
+                    new external_single_structure([
+                        'type' => new external_value(PARAM_ALPHA, 'Relation type key'),
+                        'directed' => new external_value(PARAM_BOOL, 'Force edges of this type directed', VALUE_OPTIONAL),
+                        'restscale' => new external_value(PARAM_FLOAT, 'Rest-length multiplier for this type', VALUE_OPTIONAL),
+                    ]),
+                    'Per-type layout hints',
+                    VALUE_OPTIONAL
+                ),
+                'layout' => new external_single_structure([
+                    'directed' => new external_value(PARAM_BOOL, 'Treat relations as directed for layout'),
+                    'cyclicorder' => new external_value(PARAM_BOOL, 'Preserve cyclic order of a hub\'s neighbours'),
+                    'ranklayered' => new external_value(PARAM_BOOL, 'Enforce discrete rank layers (flow/process)'),
+                    'clustered' => new external_value(PARAM_BOOL, 'Cluster container members (affinity boards)'),
+                    'direction' => new external_single_structure([
+                        'x' => new external_value(PARAM_FLOAT, 'Preferred direction x component'),
+                        'y' => new external_value(PARAM_FLOAT, 'Preferred direction y component'),
+                    ], 'Preferred flow direction for directed edges', VALUE_OPTIONAL),
+                    'orderaxis' => new external_single_structure([
+                        'x' => new external_value(PARAM_FLOAT, 'Order axis x component'),
+                        'y' => new external_value(PARAM_FLOAT, 'Order axis y component'),
+                    ], 'Cross-axis along which sibling order is preserved', VALUE_OPTIONAL),
+                    'lineaxis' => new external_single_structure([
+                        'x' => new external_value(PARAM_FLOAT, 'Line axis x component'),
+                        'y' => new external_value(PARAM_FLOAT, 'Line axis y component'),
+                    ], 'Axis onto whose parallel line nodes are confined', VALUE_OPTIONAL),
+                ], 'Layout-potential parameters for the arrange refiner'),
             ]),
             'layoutjson' => new external_value(PARAM_RAW, 'Stored layout JSON, empty if none'),
-            'nodes' => new external_multiple_structure(new external_single_structure([
-                'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable node id'),
-                'type' => new external_value(PARAM_ALPHANUMEXT, 'Node type'),
-                'label' => new external_value(PARAM_TEXT, 'Node label'),
-                'content' => new external_value(PARAM_RAW, 'Rich node content (HTML), empty if none'),
-                'contentformat' => new external_value(PARAM_INT, 'Content format (1 = HTML)'),
-                'metadatajson' => new external_value(PARAM_RAW, 'Style/profile metadata JSON, empty if none'),
-            ])),
-            'relations' => new external_multiple_structure(new external_single_structure([
-                'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable relation id'),
-                'sourceid' => new external_value(PARAM_ALPHANUMEXT, 'Source node stable id'),
-                'targetid' => new external_value(PARAM_ALPHANUMEXT, 'Target node stable id'),
-                'type' => new external_value(PARAM_ALPHANUMEXT, 'Relation type'),
-                'label' => new external_value(PARAM_TEXT, 'Relation label'),
-                'direction' => new external_value(PARAM_INT, 'Direction 0/1/2'),
-                'metadatajson' => new external_value(PARAM_RAW, 'Style/profile metadata JSON, empty if none'),
-            ])),
-            'containers' => new external_multiple_structure(new external_single_structure([
-                'stableid' => new external_value(PARAM_ALPHANUMEXT, 'Stable container id'),
-                'type' => new external_value(PARAM_ALPHANUMEXT, 'Container type'),
-                'label' => new external_value(PARAM_TEXT, 'Container label'),
-                'geometryjson' => new external_value(PARAM_RAW, 'Geometry JSON (x,y,w,h), empty if none'),
-                'metadatajson' => new external_value(PARAM_RAW, 'Style/lock metadata JSON, empty if none'),
-            ]), 'Containers drawn on the canvas', VALUE_OPTIONAL),
+            'nodes' => new external_multiple_structure(self::node_structure()),
+            'relations' => new external_multiple_structure(self::relation_structure()),
+            'containers' => new external_multiple_structure(
+                self::container_structure(),
+                'Containers drawn on the canvas',
+                VALUE_OPTIONAL
+            ),
+            'counts' => new external_single_structure([
+                'nodes' => new external_value(PARAM_INT, 'Total live nodes'),
+                'relations' => new external_value(PARAM_INT, 'Total live relations'),
+                'containers' => new external_value(PARAM_INT, 'Total live containers'),
+            ], 'Element totals, so a paginated client knows how many pages to fetch', VALUE_OPTIONAL),
             'canmanage' => new external_value(
                 PARAM_BOOL,
                 'Whether the viewer may author/manage templates (set element locks)',
@@ -266,6 +370,8 @@ class get_workspace extends external_api {
                 'leasetimeout' => new external_value(PARAM_INT, 'Lease timeout (s)'),
                 'pushenabled' => new external_value(PARAM_INT, '1 if push is enabled'),
                 'pushendpoint' => new external_value(PARAM_RAW, 'Push endpoint URL'),
+                'pushtopic' => new external_value(PARAM_RAW, 'Per-workspace push topic (empty if push off)', VALUE_OPTIONAL),
+                'pushtoken' => new external_value(PARAM_RAW, 'Scoped subscriber token (empty if push off)', VALUE_OPTIONAL),
             ]),
         ]);
     }

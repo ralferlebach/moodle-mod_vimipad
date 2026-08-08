@@ -1,0 +1,104 @@
+name: Playwright collaboration
+
+# Browser/collaboration tests (AP5). These need a live Moodle site, so they run
+# separately from the moodle-plugin-ci static pipeline. Manual and scheduled by
+# default to keep PR runs fast; enable on push if you want it on every change.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: moodle
+          POSTGRES_PASSWORD: moodle
+          POSTGRES_DB: moodle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready" --health-interval=10s
+          --health-timeout=5s --health-retries=5
+
+    env:
+      MOODLE_BRANCH: MOODLE_405_STABLE
+      DB: pgsql
+
+    steps:
+      - name: Check out plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pgsql, gd, intl, zip, soap, mbstring
+          ini-values: max_input_vars=5000
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check out Moodle
+        run: git clone --depth 1 --branch "$MOODLE_BRANCH" https://github.com/moodle/moodle.git moodle
+
+      - name: Install plugin into Moodle
+        run: cp -a plugin moodle/mod/vimipad
+
+      - name: Write config and install site
+        run: |
+          cd moodle
+          cp config-dist.php config.php
+          sed -i "s#'pgsql'#'pgsql'#" config.php
+          php admin/cli/install_database.php --help >/dev/null 2>&1 || true
+          # Configure via install_database against the service DB.
+          php admin/cli/install.php \
+            --non-interactive --agree-license \
+            --dbtype=pgsql --dbhost=127.0.0.1 --dbname=moodle \
+            --dbuser=moodle --dbpass=moodle \
+            --wwwroot=http://localhost:8000 --dataroot=/tmp/moodledata \
+            --fullname="CI" --shortname="CI" --adminpass="Admin!23" --adminemail=ci@example.invalid
+
+      - name: Start Moodle web server
+        run: |
+          cd moodle
+          php -S localhost:8000 -t . >/tmp/moodle-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000 >/dev/null && break || sleep 2
+          done
+
+      - name: Seed collaboration fixture
+        id: seed
+        run: |
+          cd moodle
+          php mod/vimipad/tests/playwright/seed.php > /tmp/vimipad-seed.env
+          cat /tmp/vimipad-seed.env >> "$GITHUB_ENV"
+
+      - name: Install Playwright and browsers
+        run: |
+          cd moodle/mod/vimipad/tests/playwright
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        env:
+          VIMIPAD_BASE_URL: http://localhost:8000
+        run: |
+          cd moodle/mod/vimipad/tests/playwright
+          npm test
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: moodle/mod/vimipad/tests/playwright/playwright-report
+          retention-days: 7

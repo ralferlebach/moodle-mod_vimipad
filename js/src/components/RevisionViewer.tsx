@@ -18,7 +18,9 @@ import {ApiClient} from '../api/service';
 import {CanvasView} from './CanvasView';
 import {RelationListView} from './RelationListView';
 import {computeLayout} from '../graph/autolayout';
+import {decodeLayout} from '../canvas/layout_codec';
 import {EditorState} from '../store/reducer';
+import {isHistoryIncomplete} from './RevisionPlayer';
 
 interface Props {
     api: ApiClient;
@@ -40,14 +42,17 @@ const noop = (): void => {
 /**
  * Render a reconstructed, read-only snapshot of a map at a past revision.
  *
- * The state comes from the get_revision_state web service (op-log replay) and
- * carries no stored positions, so the graph is laid out automatically.
+ * The state comes from the get_revision_state web service (op-log replay). When
+ * the op-log is complete this viewer shows exactly the requested historical
+ * revision — even an empty one — so it faithfully represents the moment a
+ * journal entry was written.
  *
- * Unlike RevisionPlayer, this viewer shows one specific historical revision on
- * purpose, so it does NOT fall back to the live current state when the op-log
- * is incomplete: substituting today's map would misrepresent the moment the
- * journal entry was written. It faithfully shows whatever that revision
- * reconstructs to.
+ * When the op-log is incomplete, however (elements created before the op-log
+ * existed, or imported by a legacy path, have no create-operations to replay),
+ * a faithful past state is impossible and the reconstruction would be missing
+ * those elements entirely. In that case — detected exactly as RevisionPlayer
+ * does, by fingerprinting the full replay against the live map — the viewer
+ * shows the current map with a clear notice instead of an empty canvas.
  *
  * @param props Component props.
  * @returns The rendered viewer.
@@ -59,36 +64,64 @@ export function RevisionViewer(props: Props): React.ReactElement {
     const [state, setState] = useState<EditorState>(EMPTY);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [incomplete, setIncomplete] = useState(false);
     const [view, setView] = useState<ViewMode>('canvas');
 
     useEffect(() => {
         let cancelled = false;
         setLoading(true);
-        api.getRevisionState(workspaceid, revision)
-            .then((ws) => {
-                if (!cancelled) {
-                    setState(ws as EditorState);
-                    setError(null);
+        (async () => {
+            try {
+                // Detect an incomplete op-log the same way the player does: does
+                // replaying the whole log reproduce the live map? Compare the live
+                // state to the reconstruction at the latest revision.
+                const live = await api.getWorkspace() as EditorState;
+                const latest = live.revision ?? revision;
+                const reconLatest = await api.getRevisionState(workspaceid, latest) as EditorState;
+                if (cancelled) {
+                    return;
                 }
-            })
-            .catch((e) => {
+                if (isHistoryIncomplete(live, reconLatest)) {
+                    setIncomplete(true);
+                    setState(live);
+                    setError(null);
+                    return;
+                }
+                // History is complete: show the requested revision faithfully.
+                const reconR = latest === revision
+                    ? reconLatest
+                    : await api.getRevisionState(workspaceid, revision) as EditorState;
+                if (cancelled) {
+                    return;
+                }
+                setIncomplete(false);
+                setState(reconR);
+                setError(null);
+            } catch (e) {
                 if (!cancelled) {
                     setError((e as Error).message);
                 }
-            })
-            .finally(() => {
+            } finally {
                 if (!cancelled) {
                     setLoading(false);
                 }
-            });
+            }
+        })();
         return () => {
             cancelled = true;
         };
     }, [api, workspaceid, revision]);
 
     const layout = useMemo(
-        () => computeLayout(state.nodes, {}, state.relations, state.profile),
-        [state.nodes, state.relations, state.profile]
+        () => {
+            // Use the historical node layout recorded for this revision, so the
+            // past map renders with the topology it actually had. Nodes without a
+            // recorded position (e.g. from before layout history existed) fall
+            // back to the deterministic auto-layout.
+            const stored = decodeLayout(state.layoutjson ?? '').positions;
+            return computeLayout(state.nodes, stored, state.relations, state.profile);
+        },
+        [state.nodes, state.relations, state.profile, state.layoutjson]
     );
 
     if (loading) {
@@ -103,6 +136,11 @@ export function RevisionViewer(props: Props): React.ReactElement {
             <div className="alert alert-info" role="status">
                 {t('journal:revisiontitle')} {revision}
             </div>
+            {incomplete && (
+                <div className="alert alert-info vimipad-revision-incomplete" role="status">
+                    {t('revision:historyincomplete')}
+                </div>
+            )}
             <ul className="nav nav-tabs mb-2" role="tablist">
                 <li className="nav-item" role="presentation">
                     <button
@@ -138,6 +176,7 @@ export function RevisionViewer(props: Props): React.ReactElement {
                 <RelationListView
                     state={state}
                     disabled={true}
+                    enforced={true}
                     onDeleteRelation={noop}
                     onRetarget={noop}
                     onRenameRelation={noop}

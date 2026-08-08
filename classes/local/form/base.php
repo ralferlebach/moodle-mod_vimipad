@@ -75,6 +75,127 @@ abstract class base {
     abstract public function get_bifurcation(): string;
 
     /**
+     * The relation types this display type offers, in menu order. The default
+     * is a single untyped link; argument maps override this with support and
+     * attack. The frontend uses it to offer relation types and to decide layout
+     * behaviour (e.g. attack relations repel).
+     *
+     * @return string[]
+     */
+    public function get_relation_types(): array {
+        return ['link'];
+    }
+
+    /**
+     * Per-relation-type layout hints for typed forms, keyed by type. Each entry
+     * may set 'directed' (bool) and/or 'restscale' (float). Example for an
+     * ontology: ['isa' => ['directed' => true], 'partof' => ['restscale' => 0.6]].
+     * The arrange refiner applies these per edge. Default: none.
+     *
+     * @return array
+     */
+    public function get_relation_layout(): array {
+        return [];
+    }
+
+    /**
+     * The preferred flow direction for directed edges, as ['x' => float,
+     * 'y' => float], or null for none.
+     *
+     * This is one of the layout-potential parameters the arrange refiner reads
+     * instead of hard-coding per-profile behaviour. The default is free-form (no
+     * preferred direction); hierarchical forms (e.g. tree) override it. A unit
+     * vector is conventional but not required.
+     *
+     * @return array|null
+     */
+    public function get_layout_direction(): ?array {
+        return null;
+    }
+
+    /**
+     * Whether relations are treated as directed for layout alignment.
+     *
+     * The default is undirected; directed forms (e.g. tree) override it.
+     *
+     * @return bool
+     */
+    public function is_layout_directed(): bool {
+        return false;
+    }
+
+    /**
+     * The cross-axis along which sibling order is preserved, as ['x' => float,
+     * 'y' => float], or null for none.
+     *
+     * The default preserves no order; forms with a meaningful sibling order
+     * (e.g. tree, conceptmap) override it. Radial forms leave this null; their
+     * cyclic order is a separate, later refinement.
+     *
+     * @return array|null
+     */
+    public function get_layout_order_axis(): ?array {
+        return null;
+    }
+
+    /**
+     * Whether the cyclic (angular) order of a hub's neighbours is preserved on
+     * arrange, for radial display types (mindmap, bubble map). The default is
+     * off; radial forms override it. Non-radial forms rely on the linear order
+     * axis instead.
+     *
+     * @return bool
+     */
+    public function get_layout_cyclic_order(): bool {
+        return false;
+    }
+
+    /**
+     * The axis onto whose parallel line nodes are confined on arrange, as
+     * ['x' => float, 'y' => float], or null for none. Linear display types (e.g.
+     * timeline) override it so their events settle on a single line; all other
+     * forms leave it null.
+     *
+     * @return array|null
+     */
+    public function get_layout_line_axis(): ?array {
+        return null;
+    }
+
+    /**
+     * Whether directed edges should be pushed into discrete rank layers on
+     * arrange. Flow/process charts override this to true; all other forms use a
+     * continuous directional gradient (false).
+     *
+     * @return bool
+     */
+    public function get_layout_rank_layered(): bool {
+        return false;
+    }
+
+    /**
+     * Whether container members should cohere toward their cluster centroid on
+     * arrange. Affinity boards override this to true; all other forms leave it
+     * false.
+     *
+     * @return bool
+     */
+    public function get_layout_clustered(): bool {
+        return false;
+    }
+
+    /**
+     * Whether edges should get alternating per-branch diagonal directions on
+     * arrange (fishbone/Ishikawa bones). Only the fishbone form overrides this;
+     * all others use a single global direction (false).
+     *
+     * @return bool
+     */
+    public function get_layout_fishbone(): bool {
+        return false;
+    }
+
+    /**
      * The component name of the subplugin providing this definition.
      *
      * Derived from the concrete class namespace (e.g. vimipadform_tree\form
@@ -129,6 +250,36 @@ abstract class base {
      * @return array
      */
     public function to_array(): array {
+        $layout = [
+            'directed' => $this->is_layout_directed(),
+            'cyclicorder' => $this->get_layout_cyclic_order(),
+            'ranklayered' => $this->get_layout_rank_layered(),
+            'clustered' => $this->get_layout_clustered(),
+            'fishbone' => $this->get_layout_fishbone(),
+        ];
+        $direction = $this->get_layout_direction();
+        if ($direction !== null) {
+            $layout['direction'] = ['x' => (float) $direction['x'], 'y' => (float) $direction['y']];
+        }
+        $orderaxis = $this->get_layout_order_axis();
+        if ($orderaxis !== null) {
+            $layout['orderaxis'] = ['x' => (float) $orderaxis['x'], 'y' => (float) $orderaxis['y']];
+        }
+        $lineaxis = $this->get_layout_line_axis();
+        if ($lineaxis !== null) {
+            $layout['lineaxis'] = ['x' => (float) $lineaxis['x'], 'y' => (float) $lineaxis['y']];
+        }
+        $relationlayout = [];
+        foreach ($this->get_relation_layout() as $type => $hints) {
+            $entry = ['type' => (string) $type];
+            if (array_key_exists('directed', $hints)) {
+                $entry['directed'] = (bool) $hints['directed'];
+            }
+            if (array_key_exists('restscale', $hints)) {
+                $entry['restscale'] = (float) $hints['restscale'];
+            }
+            $relationlayout[] = $entry;
+        }
         return [
             'profile' => $this->get_profile(),
             'name' => $this->get_name(),
@@ -136,6 +287,9 @@ abstract class base {
             'defaultshape' => $this->get_default_shape(),
             'line' => $this->get_line_style(),
             'bifurcation' => $this->get_bifurcation(),
+            'relationtypes' => array_values($this->get_relation_types()),
+            'relationlayout' => $relationlayout,
+            'layout' => $layout,
         ];
     }
 }

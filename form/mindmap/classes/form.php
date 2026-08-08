@@ -71,4 +71,13 @@ class form extends \mod_vimipad\local\form\base {
     public function get_bifurcation(): string {
         return 'radial';
     }
+
+    /**
+     * Radial forms keep the cyclic order of a hub's branches on arrange.
+     *
+     * @return bool
+     */
+    public function get_layout_cyclic_order(): bool {
+        return true;
+    }
 }

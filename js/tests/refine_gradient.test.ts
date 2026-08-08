@@ -1,0 +1,272 @@
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * Gradient checks for the layout refiner: every analytic derivative is verified
+ * against a central finite difference. If the assembled energy gradient matches
+ * finite differences, the whole descent is trustworthy.
+ *
+ * @module     mod_vimipad/tests/refine_gradient
+ * @copyright  2026 Ralf Erlebach
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+import {
+    edgePotential, edgePotentialDeriv, dirFactor, dirFactorDeriv, repShape, repShapeDeriv,
+    softplus, sigmoid,
+} from '../src/graph/refine/potentials';
+import {buildProblem, energyAndGradient, defaultRefineOptions, RefineNode, RefineEdge, RefineOptions, RefineContainer} from '../src/graph/refine/refine_layout';
+
+/** Full options with a fixed scale and directed preference, over the defaults. */
+function buildProblemOptions(): RefineOptions {
+    return {
+        ...defaultRefineOptions(), preferredDir: {x: 0, y: 1}, directionFloor: 0.1,
+        stabilityScale: 1.5, scale: 150, orderAxis: {x: 1, y: 0}, orderStrength: 2,
+        edgeTargetBlend: 0.5, // move edge rest off the current length so the edge gradient is non-trivial
+        edgeSpring: 0.6, // exercise the non-saturating spring gradient too
+    };
+}
+
+/** Central finite difference of a scalar function. */
+function fd(f: (x: number) => number, x: number, eps = 1e-6): number {
+    return (f(x + eps) - f(x - eps)) / (2 * eps);
+}
+
+describe('refiner potential derivatives (finite-difference check)', () => {
+    const L = 140;
+    const p0 = 5;
+
+    test('edgePotential derivative matches, both branches and across the seam', () => {
+        for (const r of [10, 60, 139, 140, 141, 200, 400]) {
+            expect(edgePotentialDeriv(r, L, p0)).toBeCloseTo(fd(x => edgePotential(x, L, p0), r), 4);
+        }
+    });
+
+    test('edge potential is a well: min at L, bounded ends', () => {
+        expect(edgePotential(L, L, p0)).toBeCloseTo(-1, 6);
+        expect(edgePotential(0, L, p0)).toBeCloseTo(p0 - 1, 6);
+        expect(edgePotential(1e6, L, p0)).toBeCloseTo(0, 6);
+        // Zero slope at the well bottom (C1 across the seam).
+        expect(edgePotentialDeriv(L, L, p0)).toBeCloseTo(0, 6);
+    });
+
+    test('directional factor derivative matches', () => {
+        for (const eps0 of [0, 0.25]) {
+            for (const c of [-0.9, -0.3, 0, 0.5, 0.95]) {
+                expect(dirFactorDeriv(eps0)).toBeCloseTo(fd(x => dirFactor(x, eps0), c), 5);
+            }
+        }
+    });
+
+    test('repulsion shape derivative matches and has non-zero central slope', () => {
+        for (const rho of [0.05, 0.3, 0.6, 0.95]) {
+            expect(repShapeDeriv(rho)).toBeCloseTo(fd(x => repShape(x), rho), 5);
+        }
+        expect(repShapeDeriv(0)).toBeLessThan(0); // pushes outward at the centre
+        expect(repShape(1)).toBe(0);
+        expect(repShapeDeriv(1.5)).toBe(0);
+    });
+
+    test('softplus derivative is the sigmoid (finite-difference check)', () => {
+        for (const z of [-40, -5, -1, 0, 1, 5, 40]) {
+            expect(sigmoid(z)).toBeCloseTo(fd(x => softplus(x), z), 4);
+        }
+        expect(softplus(-50)).toBeCloseTo(0, 6);
+        expect(softplus(50)).toBeCloseTo(50, 6);
+    });
+});
+
+describe('assembled energy gradient (finite-difference check)', () => {
+    const opts: RefineOptions = buildProblemOptions();
+
+    // A small mixed graph: directed and plain edges, overlapping and distant pairs.
+    const nodes: RefineNode[] = [
+        {stableid: 'a', x: 100, y: 100, w: 90, h: 40},
+        {stableid: 'b', x: 130, y: 120, w: 120, h: 40}, // close to a -> repulsion active
+        {stableid: 'c', x: 400, y: 300, w: 80, h: 40},
+        {stableid: 'd', x: 250, y: 500, w: 80, h: 40},
+    ];
+    const edges: RefineEdge[] = [
+        {source: 'a', target: 'c', directed: true},
+        {source: 'b', target: 'd', directed: false},
+        {source: 'c', target: 'd', directed: true},
+    ];
+
+    test('analytic gradient equals the finite-difference gradient at every node', () => {
+        const prob = buildProblem(nodes, edges, opts);
+        checkGradient(prob);
+    });
+
+    test('gradient stays correct with a container (member past the wall + non-member)', () => {
+        // 'a' is a member pushed past the right inner wall (so the flat-bottom
+        // hinge is active), 'c' a non-member sitting inside (dome active).
+        const cnodes: RefineNode[] = [
+            {stableid: 'a', x: 470, y: 300, w: 90, h: 40},
+            {stableid: 'b', x: 130, y: 120, w: 120, h: 40},
+            {stableid: 'c', x: 360, y: 320, w: 80, h: 40},
+            {stableid: 'd', x: 250, y: 600, w: 80, h: 40},
+        ];
+        const containers: RefineContainer[] = [
+            {stableid: 'box', x: 250, y: 250, w: 220, h: 160, members: ['a']},
+        ];
+        const prob = buildProblem(cnodes, edges, opts, containers);
+        checkGradient(prob);
+    });
+
+    test('gradient stays correct with per-edge directions (fishbone bones)', () => {
+        // Each directed edge carries its own preferred direction; the analytic
+        // gradient of the per-edge directional term must match finite differences.
+        const copts: RefineOptions = {...opts, preferredDir: {x: 1, y: 0}, directionFloor: 0.15};
+        const fnodes: RefineNode[] = [
+            {stableid: 'h', x: 400, y: 250, w: 60, h: 40},
+            {stableid: 'a', x: 250, y: 150, w: 60, h: 40},
+            {stableid: 'b', x: 250, y: 350, w: 60, h: 40},
+        ];
+        const fedges: RefineEdge[] = [
+            {source: 'a', target: 'h', directed: true, dir: {x: 1, y: 1}},  // upper bone
+            {source: 'b', target: 'h', directed: true, dir: {x: 1, y: -1}}, // lower bone
+        ];
+        const prob = buildProblem(fnodes, fedges, copts);
+        // Bones point in different directions, so the two edges must not share
+        // one global axis — verify per-edge dirs were stored distinctly.
+        expect(prob.edges[0].diry).not.toBeCloseTo(prob.edges[1].diry);
+        checkGradient(prob);
+    });
+
+    test('gradient stays correct with cluster cohesion active', () => {
+        // Two containers, each with members off their centroid: the cohesion
+        // gradient must match finite differences.
+        const copts: RefineOptions = {...opts, clusterStrength: 0.4};
+        const cnodes: RefineNode[] = [
+            {stableid: 'a', x: 100, y: 100, w: 50, h: 30},
+            {stableid: 'b', x: 180, y: 140, w: 50, h: 30},
+            {stableid: 'c', x: 400, y: 300, w: 50, h: 30},
+            {stableid: 'd', x: 460, y: 360, w: 50, h: 30},
+        ];
+        const cedges: RefineEdge[] = [];
+        const containers: RefineContainer[] = [
+            {stableid: 'g1', x: 60, y: 60, w: 200, h: 160, members: ['a', 'b']},
+            {stableid: 'g2', x: 360, y: 260, w: 200, h: 160, members: ['c', 'd']},
+        ];
+        const prob = buildProblem(cnodes, cedges, copts, containers);
+        expect(prob.kCluster).toBeGreaterThan(0);
+        checkGradient(prob);
+    });
+
+    test('gradient stays correct with rank layering active', () => {
+        // A directed chain flowing downward with rank layering: the analytic
+        // gradient of the min-separation term must match finite differences.
+        const copts: RefineOptions = {
+            ...opts, preferredDir: {x: 0, y: 1}, directionFloor: 0.15,
+            rankStrength: 2, rankGap: 1.2,
+        };
+        const rnodes: RefineNode[] = [
+            {stableid: 'a', x: 200, y: 100, w: 60, h: 40},
+            {stableid: 'b', x: 230, y: 150, w: 60, h: 40}, // too close to a in flow
+            {stableid: 'c', x: 210, y: 320, w: 60, h: 40},
+        ];
+        const redges: RefineEdge[] = [
+            {source: 'a', target: 'b', directed: true},
+            {source: 'b', target: 'c', directed: true},
+        ];
+        const prob = buildProblem(rnodes, redges, copts);
+        expect(prob.kRank).toBeGreaterThan(0);
+        checkGradient(prob);
+    });
+
+    test('gradient stays correct with 1D line confinement active', () => {
+        // A horizontal timeline: nodes off the line feel a perpendicular pull;
+        // the analytic gradient must match finite differences.
+        const copts: RefineOptions = {
+            ...opts, orderAxis: null,
+            lineConfineStrength: 3, lineConfineAxis: {x: 1, y: 0},
+        };
+        const lnodes: RefineNode[] = [
+            {stableid: 'a', x: 100, y: 180, w: 60, h: 40},
+            {stableid: 'b', x: 260, y: 300, w: 60, h: 40},
+            {stableid: 'c', x: 420, y: 240, w: 60, h: 40},
+            {stableid: 'd', x: 580, y: 360, w: 60, h: 40},
+        ];
+        const ledges: RefineEdge[] = [
+            {source: 'a', target: 'b', directed: true},
+            {source: 'b', target: 'c', directed: true},
+            {source: 'c', target: 'd', directed: true},
+        ];
+        const prob = buildProblem(lnodes, ledges, copts);
+        expect(prob.lineK).toBeGreaterThan(0);
+        checkGradient(prob);
+    });
+
+    test('gradient stays correct with cyclic order active around a hub', () => {
+        // A hub with four neighbours spread around it: the cyclic-order term is
+        // active (three chained cross-product constraints), so its analytic
+        // gradient on the hub and each neighbour must match finite differences.
+        const copts: RefineOptions = {...opts, orderAxis: null, cyclicStrength: 2};
+        const hnodes: RefineNode[] = [
+            {stableid: 'h', x: 300, y: 300, w: 60, h: 40}, // hub
+            {stableid: 'a', x: 430, y: 315, w: 60, h: 40}, // ~right
+            {stableid: 'b', x: 330, y: 175, w: 60, h: 40}, // ~up
+            {stableid: 'c', x: 175, y: 290, w: 60, h: 40}, // ~left
+            {stableid: 'd', x: 350, y: 435, w: 60, h: 40}, // ~down
+        ];
+        const hedges: RefineEdge[] = [
+            {source: 'h', target: 'a', directed: false},
+            {source: 'h', target: 'b', directed: false},
+            {source: 'h', target: 'c', directed: false},
+            {source: 'h', target: 'd', directed: false},
+        ];
+        const prob = buildProblem(hnodes, hedges, copts);
+        // Guard: the constraints were actually built (else the test is vacuous).
+        expect(prob.cyclic.length).toBeGreaterThan(0);
+        checkGradient(prob);
+    });
+
+    test('gradient stays correct with an elliptical container', () => {
+        // 'a' is a member pushed past the ellipse wall (interior hinge active),
+        // 'c' a non-member off-centre inside (elliptical dome active).
+        const cnodes: RefineNode[] = [
+            {stableid: 'a', x: 470, y: 330, w: 90, h: 40},
+            {stableid: 'b', x: 120, y: 130, w: 120, h: 40},
+            {stableid: 'c', x: 330, y: 300, w: 80, h: 40},
+            {stableid: 'd', x: 250, y: 600, w: 80, h: 40},
+        ];
+        const containers: RefineContainer[] = [
+            {stableid: 'oval', x: 250, y: 250, w: 240, h: 170, members: ['a'], shape: 'ellipse'},
+        ];
+        const prob = buildProblem(cnodes, edges, opts, containers);
+        checkGradient(prob);
+    });
+});
+
+/** Compare the analytic gradient to a central finite difference at each node. */
+function checkGradient(prob: ReturnType<typeof buildProblem>): void {
+    const n = prob.n;
+    const gx = new Float64Array(n);
+    const gy = new Float64Array(n);
+    energyAndGradient(prob, [gx, gy]);
+    const eps = 1e-4;
+    for (let i = 0; i < n; i++) {
+        const ox = prob.px[i];
+        const oy = prob.py[i];
+        prob.px[i] = ox + eps; const exPlus = energyAndGradient(prob);
+        prob.px[i] = ox - eps; const exMinus = energyAndGradient(prob);
+        prob.px[i] = ox;
+        prob.py[i] = oy + eps; const eyPlus = energyAndGradient(prob);
+        prob.py[i] = oy - eps; const eyMinus = energyAndGradient(prob);
+        prob.py[i] = oy;
+        expect(gx[i]).toBeCloseTo((exPlus - exMinus) / (2 * eps), 3);
+        expect(gy[i]).toBeCloseTo((eyPlus - eyMinus) / (2 * eps), 3);
+    }
+}

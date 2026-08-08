@@ -35,6 +35,9 @@ trait workspace_fixture {
     /** @var int The workspace id created by {@see set_up_workspace()}. */
     private int $workspaceid;
 
+    /** @var int|null The owning user id, set by {@see set_up_owned_workspace()}. */
+    private ?int $userid = null;
+
     /**
      * Create a course, a vimipad module and an empty workspace.
      *
@@ -49,6 +52,27 @@ trait workspace_fixture {
         $now = time();
         $this->workspaceid = (int) $DB->insert_record('vimipad_workspace', (object) [
             'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
+            'currentrevision' => 0, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+    }
+
+    /**
+     * Create a course, a vimipad module, an enrolled student and a workspace
+     * owned by that student. Sets both $this->userid and $this->workspaceid.
+     *
+     * Call from a test's setUp() after parent::setUp() and resetAfterTest().
+     *
+     * @return void
+     */
+    protected function set_up_owned_workspace(): void {
+        global $DB;
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->userid = (int) $user->id;
+        $now = time();
+        $this->workspaceid = (int) $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => $this->userid, 'groupid' => null,
             'currentrevision' => 0, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
         ]);
     }

@@ -36,6 +36,7 @@ import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} fr
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas} from '../graph/autolayout';
 import {EditorState} from '../store/reducer';
 import {LayoutMap, Point, Size, SizeMap, FormConfig} from '../types';
+import {relationTypeStyle} from '../relation_types';
 import {formClampShape, formLine, formShared, LineStyle} from '../canvas/form_config';
 import {
     clampSize, clampView, edgePoint, nodeHeight, nodeWidth, profileLine, relLinePath, treeBusPath,
@@ -46,12 +47,14 @@ import {parseNodeStyle} from '../canvas/node_style';
 import {BoxCorner, boxFromDrag, ContainerBox, isDrawable, moveBox, parseGeometry, resizeBoxCorner, serializeGeometry} from '../canvas/container_geometry';
 import {isLocked, readGroupLocks, writeGroupLocks, LockGroup, isGroupLocked} from '../canvas/element_lock';
 import {screenToViewBox} from '../canvas/viewport';
+import {computeContentBounds} from '../canvas/svg_export';
 import {editableToText} from '../canvas/editable_text';
 import {freeConnectorPath, labelPoint, offsetAnchors, siblingOffsets} from '../canvas/connection_geometry';
 import {NodeFormatToolbar} from './NodeFormatToolbar';
+import {RelationMenu} from './RelationMenu';
 import {MenuOverlay} from './MenuOverlay';
 import {TextEditMenu} from './TextEditMenu';
-import {FA, Icon} from '../canvas/icons';
+import {FA, Icon, SvgLockBadge} from '../canvas/icons';
 import {
     deletableTarget,
     initialInteraction,
@@ -89,6 +92,8 @@ interface Props {
     onCreateRelation?: (sourceid: string, targetid: string) => void;
     /** Set a relation's arrow direction (0 none, 1 forward, -1 reverse, 2 both). */
     onChangeDirection?: (stableid: string, direction: number) => void;
+    /** Set a relation's type (e.g. 'support' | 'attack'); argument-style profiles. */
+    onChangeRelationType?: (stableid: string, type: string) => void;
     t: (key: string) => string;
     /** True if a node is held by another collaborator (renders as locked). */
     isLockedByOther?: (targettype: string, stableid: string) => boolean;
@@ -102,6 +107,8 @@ interface Props {
     canUndo?: boolean;
     canRedo?: boolean;
     onReArrange?: () => void;
+    /** True while an arrange is in flight; disables the button for feedback. */
+    arrangeBusy?: boolean;
     onExportSvg?: () => void;
     onExportPng?: () => void;
     onExportPdf?: () => void;
@@ -166,8 +173,8 @@ export function CanvasView(props: Props): React.ReactElement {
         state, layout, profile, formconfig, sizes, disabled, onNodeMoved, onNodeResized,
         onDeleteNode, onDeleteRelation, onRenameNode, onRenameRelation, t,
         isLockedByOther, beginEdit, endEdit, onSelectionChange, onChangeStyle, onDuplicateNode,
-        onCreateRelation, onChangeDirection,
-        onUndo, onRedo, canUndo, canRedo, onReArrange,
+        onCreateRelation, onChangeDirection, onChangeRelationType,
+        onUndo, onRedo, canUndo, canRedo, onReArrange, arrangeBusy,
         onExportSvg, onExportPng, onExportPdf,
     } = props;
 
@@ -199,6 +206,41 @@ export function CanvasView(props: Props): React.ReactElement {
     });
     const viewRef = useRef(view);
     useEffect(() => { viewRef.current = view; }, [view]);
+
+    // In read-only views (revision viewer, journal replay, player) the node
+    // positions come from the saved layout and can sit anywhere on the large
+    // canvas, so the fixed, canvas-centred starting viewport would clip content
+    // that lies outside it — nodes appear to be missing and containers look
+    // misplaced. Fit the viewport to the actual content instead, until the user
+    // pans or zooms (then their framing is respected).
+    const userPannedRef = useRef(false);
+    useEffect(() => {
+        if (!disabled || userPannedRef.current) {
+            return;
+        }
+        const hasContent = state.nodes.length > 0 || (state.containers?.length ?? 0) > 0;
+        if (!hasContent) {
+            return;
+        }
+        const bounds = computeContentBounds(
+            state.nodes, layout, sizes, 120, view, state.containers ?? []
+        );
+        // Grow the content box to the viewport aspect ratio, keep it centred, and
+        // clamp its size and position to the canvas.
+        let w = Math.max(bounds.w, bounds.h / VIEW_ASPECT);
+        w = Math.min(MAX_VIEW_W, Math.max(MIN_VIEW_W, w));
+        let h = w * VIEW_ASPECT;
+        if (h < bounds.h) {
+            h = bounds.h;
+            w = h / VIEW_ASPECT;
+        }
+        const cx = bounds.x + bounds.w / 2;
+        const cy = bounds.y + bounds.h / 2;
+        setView(clampView({x: cx - w / 2, y: cy - h / 2, w, h}));
+        // Intentionally not depending on `view`: this fits on content changes
+        // (e.g. scrubbing the player to a new revision), not on its own updates.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [disabled, state.nodes, state.containers, layout, sizes]);
 
     // Full-page canvas view. Native Fullscreen API is used when available (robust
     // against ancestors with transform/overflow that break position:fixed); a
@@ -310,6 +352,40 @@ export function CanvasView(props: Props): React.ReactElement {
 
     const lockedByOther = useCallback((stableid: string): boolean =>
         isLockedByOther ? isLockedByOther('node', stableid) : false, [isLockedByOther]);
+
+    // Whether template locks are enforced against the current user right now.
+    // A non-manager is always bound; a manager is bound only while the lock-mode
+    // preview toggle is on. This mirrors the server's bypass rule exactly, so
+    // the UI never lets a user start an edit the server would then reject.
+    const enforcementActive = props.canManage !== true || props.lockMode === true;
+
+    // Per-stableid metadata lookups for nodes and containers, so the drag/resize
+    // handlers can consult an element's lock groups in O(1).
+    const nodeMetaById = useMemo(() => {
+        const map = new Map<string, string | undefined>();
+        for (const node of state.nodes) {
+            map.set(node.stableid, node.metadatajson);
+        }
+        return map;
+    }, [state.nodes]);
+    const containerMetaById = useMemo(() => {
+        const map = new Map<string, string | undefined>();
+        for (const container of state.containers ?? []) {
+            map.set(container.stableid, container.metadatajson);
+        }
+        return map;
+    }, [state.containers]);
+
+    // Whether a node's move group is locked *for the current user* — i.e. the
+    // move lock is set and enforcement is active. Move-locked nodes must not be
+    // draggable or resizable (their position/size live on the layout channel,
+    // which the server also pins, so this is the matching client affordance).
+    const nodeMoveLockedForMe = useCallback((stableid: string): boolean =>
+        enforcementActive && isGroupLocked(nodeMetaById.get(stableid), 'move'),
+        [enforcementActive, nodeMetaById]);
+    const containerMoveLockedForMe = useCallback((stableid: string): boolean =>
+        enforcementActive && isGroupLocked(containerMetaById.get(stableid), 'move'),
+        [enforcementActive, containerMetaById]);
 
     const positionOf = useCallback((stableid: string): Point => {
         if (dragId === stableid && dragPos) {
@@ -425,7 +501,7 @@ export function CanvasView(props: Props): React.ReactElement {
         event: React.PointerEvent, mode: 'move' | 'resize', stableid: string, box: ContainerBox,
         corner?: BoxCorner
     ) => {
-        if (disabled) {
+        if (disabled || containerMoveLockedForMe(stableid)) {
             return;
         }
         event.stopPropagation();
@@ -434,7 +510,7 @@ export function CanvasView(props: Props): React.ReactElement {
             mode, stableid, start: toSvgPoint(event.clientX, event.clientY), startBox: box, corner,
         });
         setContainerPreview(box);
-    }, [disabled, toSvgPoint]);
+    }, [disabled, containerMoveLockedForMe, toSvgPoint]);
 
     const onContainerDragMove = useCallback((event: React.PointerEvent) => {
         if (!containerDrag) {
@@ -455,10 +531,23 @@ export function CanvasView(props: Props): React.ReactElement {
         }
         event.stopPropagation();
         const box = containerPreview;
+        const start = containerDrag.startBox;
         const dragged = containerDrag.stableid;
         setContainerDrag(null);
         setContainerPreview(null);
-        if (box && props.onUpdateContainer) {
+        // Only commit a (revisioned) container_update when the box was actually
+        // moved or resized. A pure select-click starts a zero-distance drag via
+        // the title bar, and committing that would bump the workspace revision on
+        // every click; the very next edit (e.g. picking a container shape in the
+        // menu) then runs against a now-stale revision, gets rejected, and
+        // forces a full state reload that drops the selection — the container
+        // format menu "spinning" and shapes not sticking. Skipping the no-op
+        // keeps select-clicks free of side effects.
+        const changed = !!box && (
+            Math.abs(box.x - start.x) > 0.5 || Math.abs(box.y - start.y) > 0.5
+            || Math.abs(box.w - start.w) > 0.5 || Math.abs(box.h - start.h) > 0.5
+        );
+        if (box && changed && props.onUpdateContainer) {
             props.onUpdateContainer(dragged, serializeGeometry(box));
         }
     }, [containerDrag, containerPreview, props.onUpdateContainer]);
@@ -500,7 +589,7 @@ export function CanvasView(props: Props): React.ReactElement {
         }
         // A click always selects the node (and reveals its affordances).
         dispatchInteraction({kind: 'select', target: {kind: 'node', id: stableid}});
-        if (disabled || lockedByOther(stableid)) {
+        if (disabled || lockedByOther(stableid) || nodeMoveLockedForMe(stableid)) {
             return;
         }
         // Start the drag synchronously: capture the pointer and arm the drag in
@@ -525,13 +614,13 @@ export function CanvasView(props: Props): React.ReactElement {
                 }
             });
         }
-    }, [disabled, lockedByOther, beginEdit, positionOf]);
+    }, [disabled, lockedByOther, nodeMoveLockedForMe, beginEdit, positionOf]);
 
     const onHandlePointerDown = useCallback(async (
         event: React.PointerEvent, stableid: string, label: string
     ) => {
         event.stopPropagation();
-        if (disabled || lockedByOther(stableid) || !onNodeResized) {
+        if (disabled || lockedByOther(stableid) || nodeMoveLockedForMe(stableid) || !onNodeResized) {
             return;
         }
         // Arm the resize synchronously (same reasoning as onNodePointerDown): the
@@ -548,7 +637,7 @@ export function CanvasView(props: Props): React.ReactElement {
                 }
             });
         }
-    }, [disabled, lockedByOther, onNodeResized, beginEdit, sizeOf]);
+    }, [disabled, lockedByOther, nodeMoveLockedForMe, onNodeResized, beginEdit, sizeOf]);
 
     const onPointerMove = useCallback((event: React.PointerEvent) => {
         // Background gesture: one-finger pan, two-finger pinch-zoom.
@@ -563,6 +652,7 @@ export function CanvasView(props: Props): React.ReactElement {
                 if (pinchDist.current && dist > 0) {
                     const ratio = pinchDist.current / dist;
                     const rect = svg.getBoundingClientRect();
+                    userPannedRef.current = true;
                     setView(v => {
                         const fx = (midX - rect.left) / rect.width;
                         const fy = (midY - rect.top) / rect.height;
@@ -582,6 +672,7 @@ export function CanvasView(props: Props): React.ReactElement {
                 const dx = (event.clientX - panStart.current.cx) / rect.width * v.w;
                 const dy = (event.clientY - panStart.current.cy) / rect.height * v.h;
                 const start = panStart.current;
+                userPannedRef.current = true;
                 setView(cur => clampView({...cur, x: start.vx - dx, y: start.vy - dy}));
                 return;
             }
@@ -711,6 +802,7 @@ export function CanvasView(props: Props): React.ReactElement {
             event.preventDefault();
             const rect = svg.getBoundingClientRect();
             const factor = event.deltaY > 0 ? 1.1 : 1 / 1.1;
+            userPannedRef.current = true;
             setView(v => {
                 const fx = (event.clientX - rect.left) / rect.width;
                 const fy = (event.clientY - rect.top) / rect.height;
@@ -885,7 +977,7 @@ export function CanvasView(props: Props): React.ReactElement {
                     type="button"
                     className="btn btn-light vimipad-canvas-action"
                     onClick={() => onReArrange?.()}
-                    disabled={disabled}
+                    disabled={disabled || arrangeBusy}
                     title={t('editor:rearrange')}
                     aria-label={t('editor:rearrange')}
                 >
@@ -1060,7 +1152,11 @@ export function CanvasView(props: Props): React.ReactElement {
                                 pointerEvents="none"
                             />
                         )}
-                        {/* Title bar: move handle, select and rename target. */}
+                        {/* Title bar: move handle, select and rename target. It
+                            stays interactive (transparent) even with no label, so
+                            an unlabelled container is still selectable/movable; the
+                            grey fill is only shown when it carries a label or is
+                            active, so an empty container shows no grey strip (R9). */}
                         <rect
                             className="vimipad-container-title"
                             x={box.x}
@@ -1068,7 +1164,8 @@ export function CanvasView(props: Props): React.ReactElement {
                             width={box.w}
                             height={titleH}
                             rx={8}
-                            fill="rgba(84, 110, 122, 0.14)"
+                            fill={((container.label ?? '').trim() !== '' || cselected || renaming)
+                                ? 'rgba(84, 110, 122, 0.14)' : 'transparent'}
                             style={{cursor: editable ? 'move' : 'default', touchAction: 'none'}}
                             onPointerDown={editable
                                 ? (e => {
@@ -1121,7 +1218,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                 }}
                                 pointerEvents="none"
                             >
-                                {container.label || t('editor:containers')}
+                                {container.label}
                             </text>
                         )}
                         {/* Delete lives in the container's format menu (the
@@ -1178,12 +1275,17 @@ export function CanvasView(props: Props): React.ReactElement {
                 const to = shifted.to;
                 const selected = isSelected(interaction, 'relation', rel.stableid);
                 const d = rel.direction ?? 0;
+                // Typed relations (argument/causal maps) get a colour and, for
+                // some types, a dash — from the shared relation-type style map.
+                const relStyle = relationTypeStyle(rel.type);
+                const typeColor = relStyle?.color ?? 'currentColor';
+                const relDash = relStyle?.dash;
                 const path = isTree
                     ? treeBusPath(fromC, fromSize, toC, toSize)
                     : (relLine === 'curved'
                         ? freeConnectorPath(from, to, ARROW_STUB)
                         : relLinePath(from, to, relLine));
-                const stroke = selected ? selColor : 'currentColor';
+                const stroke = selected ? selColor : typeColor;
                 const strokeWidth = selected ? 2.5 : 1.5;
                 const markerStart = d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
                 const markerEnd = d === 1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
@@ -1195,6 +1297,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                 fill="none"
                                 stroke={stroke}
                                 strokeWidth={strokeWidth}
+                                strokeDasharray={relDash}
                                 markerStart={markerStart}
                                 markerEnd={markerEnd}
                             />
@@ -1206,6 +1309,7 @@ export function CanvasView(props: Props): React.ReactElement {
                                 y2={to.y}
                                 stroke={stroke}
                                 strokeWidth={strokeWidth}
+                                strokeDasharray={relDash}
                                 markerStart={markerStart}
                                 markerEnd={markerEnd}
                             />
@@ -1341,16 +1445,9 @@ export function CanvasView(props: Props): React.ReactElement {
                             strokeWidth: 1.5,
                             strokeDasharray: '6 4',
                         })}
-                        {isLocked(node.metadatajson) && (
-                            <text
-                                x={-w / 2 + 8}
-                                y={-h / 2 + 15}
-                                className="vimipad-node-lock"
-                                style={{fontSize: 12, fill: 'rgba(84, 110, 122, 0.85)'}}
-                                pointerEvents="none"
-                                aria-hidden="true"
-                            >&#128274;</text>
-                        )}
+                        {/* The template-lock badge is drawn in a dedicated
+                            overlay layer above all elements (top-right, outside),
+                            not here inside the node. */}
                         {editing ? (
                             <foreignObject key={`edit-${node.stableid}`} x={-w / 2} y={-h / 2} width={w} height={h}>
                                 {/*
@@ -1485,6 +1582,53 @@ export function CanvasView(props: Props): React.ReactElement {
                 />
             )}
 
+            {/* Layer 3b (above all graph elements, below the menu overlay):
+                template-lock badges. A grey padlock with a white outline is drawn
+                just outside the top-right corner of every locked node, container
+                and relation, so it sits on top of the elements and their text but
+                under the menu overlay (Layer 4). */}
+            <g className="vimipad-lock-badges" pointerEvents="none" aria-hidden="true">
+                {(state.containers ?? []).map(container => {
+                    if (!isLocked(container.metadatajson)) {
+                        return null;
+                    }
+                    const box = (containerDrag?.stableid === container.stableid && containerPreview)
+                        ? containerPreview
+                        : parseGeometry(container.geometryjson);
+                    if (!box) {
+                        return null;
+                    }
+                    return (
+                        <SvgLockBadge key={`lockbadge-c-${container.stableid}`} x={box.x + box.w - 2} y={box.y + 2} />
+                    );
+                })}
+                {state.relations.map(rel => {
+                    if (!isLocked(rel.metadatajson)) {
+                        return null;
+                    }
+                    const from = positionOf(rel.sourceid);
+                    const to = positionOf(rel.targetid);
+                    return (
+                        <SvgLockBadge
+                            key={`lockbadge-r-${rel.stableid}`}
+                            x={(from.x + to.x) / 2 + 12}
+                            y={(from.y + to.y) / 2 - 14}
+                        />
+                    );
+                })}
+                {state.nodes.map(node => {
+                    if (!isLocked(node.metadatajson)) {
+                        return null;
+                    }
+                    const editing = isEditing(interaction, 'node', node.stableid);
+                    const p = positionOf(node.stableid);
+                    const {w, h} = sizeOf(node.stableid, editing ? editValue : node.label);
+                    return (
+                        <SvgLockBadge key={`lockbadge-n-${node.stableid}`} x={p.x + w / 2 + 3} y={p.y - h / 2 - 3} />
+                    );
+                })}
+            </g>
+
             {/* Layer 4 (top): exactly one menu, for the active (selected/edited) element. */}
             {(() => {
                 const active = interaction.editing ?? interaction.selected;
@@ -1496,7 +1640,14 @@ export function CanvasView(props: Props): React.ReactElement {
                     if (!container || !props.onUpdateContainerStyle) {
                         return null;
                     }
-                    const box = parseGeometry(container.geometryjson);
+                    // Track the live drag preview so the menu stays anchored to
+                    // the container while it is moved or resized, instead of
+                    // detaching to the committed geometry and snapping back on
+                    // release (the "menu jumps around" bug on overlapping
+                    // containers, where a stray nudge starts a move).
+                    const box = (containerDrag?.stableid === container.stableid && containerPreview)
+                        ? containerPreview
+                        : parseGeometry(container.geometryjson);
                     if (!box) {
                         return null;
                     }
@@ -1508,8 +1659,17 @@ export function CanvasView(props: Props): React.ReactElement {
                     // Rendered in the top overlay so nodes overlapping the
                     // container can never occlude the menu (fixes the z-order
                     // and the resulting pointer/cursor and click-through bugs).
+                    // The box must be tall enough to CONTAIN the expanding shape
+                    // and lock sub-panels: a foreignObject clips (and stops
+                    // hit-testing) anything drawn outside its geometric bounds,
+                    // regardless of CSS overflow, so a one-row-high box made the
+                    // sub-panels unclickable and visually erratic ("das Menue
+                    // spinnt herum"). The toolbar row sits at the top; the panels
+                    // expand downward within the box (pointer-events:none except
+                    // the dock, so the empty area stays click-through). Mirrors
+                    // the node menu, which is tall for the same reason.
                     return (
-                        <MenuOverlay x={box.x} y={box.y - 52} width={320} height={48}>
+                        <MenuOverlay x={box.x} y={box.y - 52} width={320} height={200}>
                                 <NodeFormatToolbar
                                     kind="node"
                                     target={{metadatajson: container.metadatajson}}
@@ -1519,7 +1679,8 @@ export function CanvasView(props: Props): React.ReactElement {
                                     onChangeStyle={m => props.onUpdateContainerStyle?.(container.stableid, m)}
                                     onDelete={() => props.onDeleteContainer?.(container.stableid)}
                                     onEditText={() => startRenameContainer(container.stableid, container.label)}
-                                    lockMode={props.lockMode}
+                                    lockGroups={props.onSetElementLock && props.canLock
+                                        ? ['move', 'color', 'text'] : undefined}
                                     onToggleLockGroup={props.onSetElementLock && props.canLock
                                         ? (group) => toggleLockGroup(
                                             'container', container.stableid, container.metadatajson, group)
@@ -1562,7 +1723,8 @@ export function CanvasView(props: Props): React.ReactElement {
                                         onDuplicate={() => onDuplicateNode && onDuplicateNode(node.stableid)}
                                         onDelete={() => onDeleteNode && onDeleteNode(node.stableid)}
                                         onEditText={() => startNodeEdit(node.stableid, node.label)}
-                                        lockMode={props.lockMode}
+                                        lockGroups={props.onSetElementLock && props.canLock
+                                            ? ['move', 'color', 'text'] : undefined}
                                         onToggleLockGroup={props.onSetElementLock && props.canLock
                                             ? (group) => toggleLockGroup('node', node.stableid, node.metadatajson, group)
                                             : undefined}
@@ -1586,89 +1748,27 @@ export function CanvasView(props: Props): React.ReactElement {
                     <MenuOverlay x={midX - 150} y={midY + 14} width={300} height={70}>
                             {editing ? (
                                 <TextEditMenu disabled={disabled} onConfirm={commitEdit} t={t} />
-                            ) : props.lockMode && props.onSetElementLock && props.canLock ? (
-                                <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:relation')}>
-                                    <div className="vimipad-node-dock-row">
-                                        {(['move', 'text'] as LockGroup[]).map(group => {
-                                            const gLocked = isGroupLocked(rel.metadatajson, group);
-                                            return (
-                                                <button
-                                                    key={group}
-                                                    type="button"
-                                                    className={`vimipad-dock-btn${gLocked ? ' active' : ''}`}
-                                                    aria-pressed={gLocked}
-                                                    title={t(group === 'move'
-                                                        ? 'editor:lockgroup_move' : 'editor:lockgroup_text')
-                                                        + ' — ' + t(gLocked ? 'editor:unlockelement' : 'editor:lockelement')}
-                                                    aria-label={t(group === 'move'
-                                                        ? 'editor:lockgroup_move' : 'editor:lockgroup_text')
-                                                        + ' — ' + t(gLocked ? 'editor:unlockelement' : 'editor:lockelement')}
-                                                    onClick={() => toggleLockGroup(
-                                                        'relation', rel.stableid, rel.metadatajson, group)}
-                                                ><Icon name={gLocked ? FA.lock
-                                                    : (group === 'move' ? FA.dirRight : FA.text)} /></button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ) : (onChangeDirection && (
-                                <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:relation')}>
-                                    <div className="vimipad-node-dock-row">
-                                        {!isGroupLocked(rel.metadatajson, 'text') && (
-                                        <button
-                                            type="button"
-                                            className="vimipad-dock-btn"
-                                            title={t('editor:fmt_text')}
-                                            aria-label={t('editor:fmt_text')}
-                                            onClick={() => startRelationEdit(rel.stableid, rel.label)}
-                                        ><Icon name={FA.text} /></button>
-                                        )}
-                                        {!isGroupLocked(rel.metadatajson, 'move') && (<>
-                                        <button
-                                            type="button"
-                                            className={`vimipad-dock-btn${d === 0 ? ' active' : ''}`}
-                                            aria-pressed={d === 0}
-                                            title={t('editor:dir_none')}
-                                            aria-label={t('editor:dir_none')}
-                                            onClick={() => onChangeDirection(rel.stableid, 0)}
-                                        ><Icon name={FA.dirNone} /></button>
-                                        <button
-                                            type="button"
-                                            className={`vimipad-dock-btn${d === -1 ? ' active' : ''}`}
-                                            aria-pressed={d === -1}
-                                            title={t('editor:dir_left')}
-                                            aria-label={t('editor:dir_left')}
-                                            onClick={() => onChangeDirection(rel.stableid, -1)}
-                                        ><Icon name={FA.dirLeft} /></button>
-                                        <button
-                                            type="button"
-                                            className={`vimipad-dock-btn${d === 1 ? ' active' : ''}`}
-                                            aria-pressed={d === 1}
-                                            title={t('editor:dir_right')}
-                                            aria-label={t('editor:dir_right')}
-                                            onClick={() => onChangeDirection(rel.stableid, 1)}
-                                        ><Icon name={FA.dirRight} /></button>
-                                        <button
-                                            type="button"
-                                            className={`vimipad-dock-btn${d === 2 ? ' active' : ''}`}
-                                            aria-pressed={d === 2}
-                                            title={t('editor:dir_both')}
-                                            aria-label={t('editor:dir_both')}
-                                            onClick={() => onChangeDirection(rel.stableid, 2)}
-                                        ><Icon name={FA.dirBoth} /></button>
-                                        </>)}
-                                        {onDeleteRelation && (
-                                            <button
-                                                type="button"
-                                                className="vimipad-dock-btn vimipad-dock-danger"
-                                                title={t('editor:fmt_delete')}
-                                                aria-label={t('editor:fmt_delete')}
-                                                onClick={() => onDeleteRelation(rel.stableid)}
-                                            ><Icon name={FA.delete} /></button>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
+                            ) : (
+                                <RelationMenu
+                                    stableid={rel.stableid}
+                                    direction={d}
+                                    metadatajson={rel.metadatajson}
+                                    disabled={disabled}
+                                    canLock={Boolean(props.onSetElementLock && props.canLock)}
+                                    onEditText={() => startRelationEdit(rel.stableid, rel.label)}
+                                    onChangeDirection={onChangeDirection}
+                                    type={rel.type}
+                                    relationTypes={props.formconfig?.relationtypes}
+                                    onChangeType={onChangeRelationType}
+                                    onDelete={onDeleteRelation
+                                        ? () => onDeleteRelation(rel.stableid) : undefined}
+                                    onToggleLockGroup={props.onSetElementLock && props.canLock
+                                        ? (group) => toggleLockGroup(
+                                            'relation', rel.stableid, rel.metadatajson, group)
+                                        : undefined}
+                                    t={t}
+                                />
+                            )}
                     </MenuOverlay>
                 );
             })()}

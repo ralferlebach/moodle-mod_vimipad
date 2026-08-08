@@ -36,7 +36,8 @@ import {FormConfig} from '../types';
 import {NodeStyle, parseNodeStyle, serialiseNodeStyle, withNodeStyle} from '../canvas/node_style';
 import {FA, Icon, ShapeGlyph} from '../canvas/icons';
 import {ColorField} from './ColorField';
-import {LockGroup, LOCK_GROUPS, readGroupLocks} from '../canvas/element_lock';
+import {LockGroup, readGroupLocks} from '../canvas/element_lock';
+import {LockSubmenu} from './LockSubmenu';
 
 interface Props {
     /** Element kind: nodes get the full toolset, relations a reduced one. */
@@ -56,16 +57,18 @@ interface Props {
     /** Start inline text editing of the element's label. */
     onEditText?: () => void;
     t: (key: string) => string;
-    /** Whether lock mode is armed; only then is the lock menu offered. */
-    lockMode?: boolean;
-    /** Whether this element currently carries any template lock. */
-    locked?: boolean;
+    /**
+     * The lock groups offered for this element. When provided together with
+     * onToggleLockGroup, the dock shows a lock button that opens the lock
+     * submenu. Nodes/containers pass move/color/text; relations omit colour.
+     */
+    lockGroups?: LockGroup[];
     /** Toggle a single lock group (move/color/text) on this element. */
     onToggleLockGroup?: (group: LockGroup) => void;
 }
 
 /** Which expandable panel is open, if any. */
-type Panel = 'none' | 'shape' | 'fill' | 'text';
+type Panel = 'none' | 'shape' | 'fill' | 'text' | 'lock';
 
 /** Default colours shown in the pickers before the user sets one. */
 const DEFAULT_FILL = '#eef2ff';
@@ -85,51 +88,23 @@ const SHAPE_LABEL: Record<NodeShape, string> = {
  */
 export function NodeFormatToolbar(props: Props): React.ReactElement {
     const {kind = 'node', target, profile, formconfig, disabled, defaultPanel, onChangeStyle, onDuplicate, onDelete,
-        onEditText, lockMode, onToggleLockGroup, t} = props;
+        onEditText, lockGroups, onToggleLockGroup, t} = props;
     const isNode = kind !== 'relation';
     const [panel, setPanel] = useState<Panel>(defaultPanel ?? 'none');
     const style = parseNodeStyle(target.metadatajson);
     const activeShape = formClampShape(formconfig, profile, style.shape);
     const groupLocks = readGroupLocks(target.metadatajson);
+    const canLock = Boolean(onToggleLockGroup && lockGroups && lockGroups.length > 0);
+    const anyLocked = groupLocks.move || groupLocks.color || groupLocks.text;
 
     const apply = (change: NodeStyle): void => onChangeStyle(withNodeStyle(target.metadatajson, change));
     const toggle = (p: Panel): void => setPanel(cur => (cur === p ? 'none' : p));
 
-    // Lock mode (teacher/author): the dock is the per-group lock menu — move,
-    // colour, text as independent toggles — instead of the styling controls.
-    if (lockMode && onToggleLockGroup) {
-        const groupIcon: Record<LockGroup, string> = {
-            move: FA.shape, color: FA.fill, text: FA.text,
-        };
-        const groupLabel: Record<LockGroup, string> = {
-            move: 'editor:lockgroup_move', color: 'editor:lockgroup_color', text: 'editor:lockgroup_text',
-        };
-        return (
-            <div className="vimipad-node-dock" role="toolbar" aria-label={t('editor:fmt_toolbar')}>
-                <div className="vimipad-node-dock-row">
-                    {LOCK_GROUPS.map(group => (
-                        <button
-                            key={group}
-                            type="button"
-                            className={`vimipad-dock-btn${groupLocks[group] ? ' active' : ''}`}
-                            aria-pressed={groupLocks[group]}
-                            title={t(groupLabel[group]) + ' — ' + t(groupLocks[group]
-                                ? 'editor:unlockelement' : 'editor:lockelement')}
-                            aria-label={t(groupLabel[group]) + ' — ' + t(groupLocks[group]
-                                ? 'editor:unlockelement' : 'editor:lockelement')}
-                            onClick={() => onToggleLockGroup(group)}
-                        >
-                            <Icon name={groupLocks[group] ? FA.lock : groupIcon[group]} />
-                        </button>
-                    ))}
-                </div>
-            </div>
-        );
-    }
-
     // Normal mode (learner/author editing): a control is only offered when its
     // group is not locked, so a locked action is never presented and then
-    // silently discarded on save.
+    // silently discarded on save. The lock button (when the user may lock) opens
+    // the lock submenu; it is always available, independent of the top-right
+    // lock-mode enforcement toggle.
     const moveLocked = groupLocks.move;
     const colorLocked = groupLocks.color;
     const textLocked = groupLocks.text;
@@ -188,7 +163,28 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                     aria-label={t('editor:fmt_delete')}
                     onClick={onDelete}
                 ><Icon name={FA.delete} /></button>
+                {canLock && (
+                    <button
+                        type="button"
+                        className={`vimipad-dock-btn${panel === 'lock' ? ' active' : ''}${anyLocked ? ' vimipad-dock-locked' : ''}`}
+                        aria-pressed={panel === 'lock'}
+                        disabled={disabled}
+                        title={t('editor:templatelocks')}
+                        aria-label={t('editor:templatelocks')}
+                        onClick={() => toggle('lock')}
+                    ><Icon name={anyLocked ? FA.lock : FA.unlock} /></button>
+                )}
             </div>
+
+            {canLock && panel === 'lock' && (
+                <LockSubmenu
+                    groups={lockGroups ?? []}
+                    metadatajson={target.metadatajson}
+                    onToggle={group => onToggleLockGroup?.(group)}
+                    disabled={disabled}
+                    t={t}
+                />
+            )}
 
             {isNode && panel === 'shape' && (
                 <div className="vimipad-node-dock-panel" role="group" aria-label={t('editor:fmt_shape')}>

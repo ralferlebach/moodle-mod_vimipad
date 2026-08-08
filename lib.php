@@ -382,3 +382,19 @@ function vimipad_update_grades(stdClass $instance, int $userid = 0, bool $nullif
         vimipad_grade_item_update($instance);
     }
 }
+
+/**
+ * Status checks contributed to the site's Reports > Checks page.
+ *
+ * Surfaces operational health of mod_vimipad: workspace-data integrity, subplugin
+ * registration and the size of the append-only histories.
+ *
+ * @return \core\check\check[] The check objects.
+ */
+function mod_vimipad_status_checks(): array {
+    return [
+        new \mod_vimipad\check\data_integrity(),
+        new \mod_vimipad\check\subplugins(),
+        new \mod_vimipad\check\history_size(),
+    ];
+}

@@ -52,4 +52,97 @@ final class generator_test extends \advanced_testcase {
         $this->assertSame(1, (int) $reloaded->locked);
         $this->assertEquals($ws->snapshotid, $reloaded->submittedsnapshotid);
     }
+
+    /**
+     * Each granular creator inserts a row and returns it with an id.
+     *
+     * @return void
+     */
+    public function test_granular_creators(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $userid = (int) $user->id;
+        /** @var \mod_vimipad_generator $gen */
+        $gen = $this->getDataGenerator()->get_plugin_generator('mod_vimipad');
+
+        $ws = $gen->create_workspace($instance, $userid);
+        $a = $gen->create_node($ws, ['label' => 'A']);
+        $b = $gen->create_node($ws, ['label' => 'B']);
+        $this->assertNotEquals($a->stableid, $b->stableid);
+        $this->assertSame(2, $DB->count_records('vimipad_node', ['workspaceid' => $ws->id]));
+
+        $rel = $gen->create_relation($ws, ['sourceid' => $a->stableid, 'targetid' => $b->stableid]);
+        $this->assertSame($a->stableid, $DB->get_field('vimipad_relation', 'sourceid', ['id' => $rel->id]));
+
+        $c = $gen->create_container($ws, ['label' => 'Group']);
+        $m = $gen->create_membership($c, ['itemstableid' => $a->stableid]);
+        $this->assertSame($c->id, (int) $DB->get_field('vimipad_membership', 'containerid', ['id' => $m->id]));
+
+        $rev = $gen->create_operations($ws, 5);
+        $this->assertSame(5, $DB->count_records('vimipad_operation', ['workspaceid' => $ws->id]));
+        $this->assertSame($rev, (int) $DB->get_field('vimipad_workspace', 'currentrevision', ['id' => $ws->id]));
+
+        $snap = $gen->create_snapshot($ws);
+        $this->assertSame($rev, (int) $DB->get_field('vimipad_snapshot', 'revision', ['id' => $snap->id]));
+
+        $grade = $gen->create_grade($instance, $userid, ['grade' => 88.5]);
+        $this->assertEquals(88.5, (float) $DB->get_field('vimipad_grade', 'grade', ['id' => $grade->id]));
+
+        $reviewer = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $pr = $gen->create_peer_review($snap, (int) $reviewer->id, ['score' => 0.75]);
+        $this->assertEquals(0.75, (float) $DB->get_field('vimipad_peerreview', 'score', ['id' => $pr->id]));
+    }
+
+    /**
+     * The small load profile seeds the documented node/relation/container counts
+     * and every relation references real nodes in the workspace.
+     *
+     * @return void
+     */
+    public function test_small_map_profile(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        /** @var \mod_vimipad_generator $gen */
+        $gen = $this->getDataGenerator()->get_plugin_generator('mod_vimipad');
+
+        $ws = $gen->create_map_profile($instance, (int) $user->id, 'small');
+        $this->assertSame(20, $DB->count_records('vimipad_node', ['workspaceid' => $ws->id]));
+        $this->assertSame(30, $DB->count_records('vimipad_relation', ['workspaceid' => $ws->id]));
+        $this->assertSame(5, $DB->count_records('vimipad_container', ['workspaceid' => $ws->id]));
+
+        $nodeids = $DB->get_fieldset_select('vimipad_node', 'stableid', 'workspaceid = ?', [$ws->id]);
+        foreach ($DB->get_records('vimipad_relation', ['workspaceid' => $ws->id]) as $rel) {
+            $this->assertContains($rel->sourceid, $nodeids);
+            $this->assertContains($rel->targetid, $nodeids);
+        }
+    }
+
+    /**
+     * A collaboration history advances the revision by the requested count.
+     *
+     * @return void
+     */
+    public function test_collaboration_history(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        /** @var \mod_vimipad_generator $gen */
+        $gen = $this->getDataGenerator()->get_plugin_generator('mod_vimipad');
+
+        $ws = $gen->create_workspace($instance, (int) $user->id);
+        $rev = $gen->create_collaboration_history($ws, 100);
+        $this->assertSame(100, $rev);
+        $this->assertSame(100, $DB->count_records('vimipad_operation', ['workspaceid' => $ws->id]));
+    }
 }

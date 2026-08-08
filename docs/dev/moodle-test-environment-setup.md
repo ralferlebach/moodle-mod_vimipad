@@ -30,6 +30,9 @@ Node 22 / npm 10.
   cache-aufbauenden Request. Deshalb lassen sich **@javascript-Behat-Szenarien
   hier nicht live ausführen** — die laufen in der Projekt-CI mit Browser.
   Non-JS-Behat lässt sich strukturell/step-validieren (dry-run).
+  **Nachtrag:** Für die **Playwright**-Kollaborationstests gilt das NICHT — mit
+  `PHP_CLI_SERVER_WORKERS` und dem detachten Runner laufen sie real; siehe
+  Abschnitt 15.
 - **Nach jedem Plugin-Sync + neuen Dateien** muss die PHPUnit-Env
   re-initialisiert werden (neue Testdateien invalidieren die Config):
   `php admin/tool/phpunit/cli/init.php`.
@@ -302,6 +305,8 @@ grep -iE "undefined|snippet" /tmp/dry.log || echo "keine undefinierten Steps"
 > **Live-Ausführung** von `@javascript`-Szenarien ist hier NICHT möglich
 > (kein stabiler Browser/HTTP-Server). Der Seed-Pfad des Behat-Generators wird
 > stattdessen per PHPUnit (`generator_test`) real abgesichert.
+> (Die separaten **Playwright**-Kollaborationstests laufen dagegen real — siehe
+> Abschnitt 15.)
 
 ---
 
@@ -410,3 +415,226 @@ version"), obwohl am Code nichts falsch ist. Umgehung:
 ```bash
 php admin/tool/phpunit/cli/init.php --no-composer-self-update
 ```
+
+## 15. Playwright-Live-Tests in der Sandbox (funktioniert — Technik)
+
+Entgegen dem Hinweis in Abschnitt 0/10 lassen sich die Playwright-Kollaborations-
+tests (`tests/playwright/`) **real** in der Sandbox ausführen — mit echtem
+Chromium gegen ein laufendes Moodle. Der Behat-`@javascript`-Weg bleibt separat;
+Playwright braucht Moodles Selenium-Stack NICHT.
+
+### 15.0 Die zwei Kernhürden (ZUERST verstehen)
+
+1. **Nichts überlebt zwischen Tool-Aufrufen — außer detachten Jobs und Dateien.**
+   Hintergrundprozesse via `&`/`nohup` sterben am Aufruf-Ende. Ein per
+   `setsid <script> </dev/null >/dev/null 2>&1 &` gestarteter Runner **überlebt**
+   dagegen. Muster: der Runner schreibt seine Ausgabe in eine Datei
+   (`/tmp/pwout.log`) und setzt am Ende einen Marker (`/tmp/pwdone`); über mehrere
+   **kurze** Aufrufe wird die Datei gepollt.
+2. **Der einzelne Tool-Aufruf hat ein Zeitlimit, und gepufferte stdout geht beim
+   Timeout verloren.** Deshalb IMMER in eine Datei schreiben, nie auf die
+   Live-stdout eines langen Laufs verlassen.
+
+### 15.1 Site-DB installieren (PG-Neustarts leeren sie)
+
+Prüfen und ggf. neu installieren (Kern + Plugin-Schema):
+
+```bash
+service postgresql start; sleep 2
+# 0 Tabellen? -> installieren:
+cd /home/claude/moodle
+php admin/cli/install_database.php --agree-license \
+  --adminpass='Admin!23456' --adminemail='admin@example.invalid' \
+  --fullname='ViMi Test' --shortname='vimitest'
+```
+
+### 15.2 config.php: wwwroot-Port und behat_wwwroot
+
+- `$CFG->wwwroot` MUSS exakt zum php -S-Port passen (Moodle leitet sonst um).
+  Hier: `http://localhost:8000`.
+- **`$CFG->behat_wwwroot` MUSS sich von `$CFG->wwwroot` unterscheiden**, sonst
+  wirft Moodle bei JEDEM Web-Request einen Fatal ("Behat config error:
+  behat_wwwroot ... must be different from wwwroot") und die Seite liefert 500.
+  Beispiel: wwwroot `:8000`, behat_wwwroot `:8001`.
+
+### 15.3 Webserver: php -S MIT Workern
+
+Der Built-in-Server ist einzeln-threadig; Playwright öffnet aber mehrere Browser-
+Kontexte (parallele Requests). Seit PHP 7.4 forkt `PHP_CLI_SERVER_WORKERS` mehrere
+Worker — das behebt die im Guide beschriebene Instabilität:
+
+```bash
+PHP_CLI_SERVER_WORKERS=8 php -S localhost:8000 -t /home/claude/moodle
+```
+
+Smoke-Test: statische Datei muss 200 liefern, `login/index.php` ebenfalls 200
+(nicht 500). Ein schnelles 500 ist meist die behat_wwwroot-Falle (15.2), KEIN
+langsamer Cache-Build.
+
+### 15.4 Playwright + Chromium installieren (einmalig, bleibt auf Platte)
+
+```bash
+cd /home/claude/moodle/mod/vimipad/tests/playwright
+npm install --no-audit --no-fund
+npx playwright install --with-deps chromium
+```
+
+### 15.5 Seed separat — braucht KEINEN Webserver
+
+`seed.php` bootstrappt CLI und schreibt direkt in die DB. Deshalb in einem eigenen
+(schnellen, hintergrundfreien) Aufruf seeden und die Exports in eine Datei legen:
+
+```bash
+cd /home/claude/moodle/mod/vimipad/tests/playwright
+php seed.php > /tmp/vimipad_env.sh 2>/tmp/seed_err.log
+cat /tmp/vimipad_env.sh    # enthält VIMIPAD_BASE_URL (aus wwwroot) + ACTIVITY_PATH + User
+```
+
+### 15.6 Der Runner (ein detachtes Skript, alles drin)
+
+```bash
+cat > /tmp/runpw.sh <<'RUNNER'
+#!/bin/bash
+exec >/tmp/pwout.log 2>&1
+rm -f /tmp/pwdone
+cd /home/claude/moodle
+service postgresql start; sleep 2
+pkill -f "php -S localhost:8000"; sleep 1
+PHP_CLI_SERVER_WORKERS=8 php -S localhost:8000 -t /home/claude/moodle >/tmp/phpsrv.log 2>&1 &
+SRV=$!
+for i in $(seq 1 25); do
+  c=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 http://localhost:8000/login/index.php 2>/dev/null)
+  [ "$c" = "200" ] && { echo "server ready ($i)"; break; }
+  sleep 1
+done
+cd /home/claude/moodle/mod/vimipad/tests/playwright
+. /tmp/vimipad_env.sh
+echo "=== RUN START $(date +%T) BASE=$VIMIPAD_BASE_URL ACT=$VIMIPAD_ACTIVITY_PATH ==="
+npx playwright test --reporter=line
+echo "=== EXIT=$? $(date +%T) ==="
+kill $SRV 2>/dev/null
+echo DONE > /tmp/pwdone
+RUNNER
+chmod +x /tmp/runpw.sh
+setsid /tmp/runpw.sh </dev/null >/dev/null 2>&1 &
+disown
+```
+
+### 15.7 Pollen bis fertig (kurze Aufrufe)
+
+```bash
+tail -30 /tmp/pwout.log; echo "---"; cat /tmp/pwdone 2>/dev/null || echo "läuft noch"
+```
+
+Ein `sleep 20; tail ...` zwischen den Polls ist ok, solange der Aufruf selbst
+keinen eigenen Hintergrundserver hält (der würde den Shell-Exit blockieren und den
+Aufruf ins `-1`-Timeout laufen lassen).
+
+### 15.8 Diagnose-Gold: Screenshots, ARIA-Snapshot, DB
+
+- Playwright legt bei Fehlern `test-results/<...>/test-failed-*.png` und
+  `error-context.md` an. Den PNG per `view` ansehen, die `error-context.md`
+  (enthält einen **ARIA-Snapshot** mit Rollen/Namen aller Elemente) per `cat`
+  lesen — damit klärt man Selektor-/Zustandsfragen ohne Rätselraten.
+- Persistenz/Sharing per SQL prüfen, z. B. „liegt der Knoten im geteilten
+  Workspace?":
+  ```bash
+  su postgres -c "psql -tAc \"SELECT workspaceid, count(*), string_agg(label,' | ') \
+    FROM mdl_vimipad_node GROUP BY workspaceid;\" moodle"
+  ```
+
+### 15.9 Fallstrick Test-Design: View-Tabs sind server-seitige Links
+
+Die Editor-Tabs (Canvas/List/Journal/Tools) sind `view.php?...&tab=<x>`-Links —
+ein Tab-Wechsel ist ein **voller Page-Reload**, der den laufenden Live-Poll-State
+verwirft. Live-Kollaboration (ein Client fügt hinzu, der andere empfängt per Poll)
+gehört daher auf dem **Canvas** geprüft (`page.locator('.vimipad-canvas')`), nicht
+über einen Tab-Wechsel. Knoten-Labels erscheinen zusätzlich als `<option>` in den
+Subject/Object-Selects — Assertions deshalb auf den Canvas-Container scopen, sonst
+Strict-Mode-Verletzung.
+
+Präsenz ist sperrbasiert (`PresenceMap` = Element→userid), es wird KEIN Name
+gerendert. Der Präsenz-Test hält daher per Client A einen Knoten (pointer-down =
+Lease) und prüft bei Client B die Klasse `vimipad-canvas-node-locked` — kein
+namensbasiertes Assert.
+
+### 15.10 Merke
+
+- Sprache/Login: Das Login nutzt stabile IDs (`#username`/`#password`/`#loginbtn`)
+  und KEINEN `?lang=en`-Param (der Sprach-Redirect kann sonst den Login-Token
+  entwerten); Erfolg wird an „URL hat `/login/` verlassen" gemessen (NICHT an
+  `#loginbtn`-Verschwinden — der kann auf eingeloggten Seiten weiter existieren,
+  und `/index/` matcht fälschlich `login/index.php`). Englisch für den Editor
+  kommt über die Aktivitäts-URL (`&lang=en`).
+- `seed.php` gibt `VIMIPAD_BASE_URL` aus `$CFG->wwwroot` selbst aus — kein
+  manuelles `:8000`.
+- Reihenfolge im Zweifel: (1) Site-DB da? (2) behat_wwwroot ≠ wwwroot? (3) Server
+  mit Workern + 200 auf /login? (4) Chromium installiert? (5) geseedet in Datei?
+  (6) Runner detached + pollen.
+
+---
+
+## 16. local_moodlecheck lokal ausführen (der PHPDoc-Gate-Check der CI)
+
+Die GitHub-CI lässt `moodle-plugin-ci phpdoc --max-warnings 0` laufen; darunter
+steckt `local_moodlecheck`. `phpcs` findet dessen Befunde **nicht** — ein
+fehlender `@param` nach einer Signaturänderung ist phpcs-sauber und bricht
+trotzdem die CI. Deshalb gehört der Check in die lokale Kette:
+
+```bash
+cd /home/claude/moodle
+git clone -q --depth 1 \
+  https://github.com/moodlehq/moodle-local_moodlecheck.git local/moodlecheck
+php local/moodlecheck/cli/moodlecheck.php \
+  --path=mod/vimipad --exclude=mod/vimipad/tools --format=text \
+  | grep -B1 '    Line' | grep -v '^--$'
+```
+
+Leere Ausgabe = keine Befunde. Häufigster Treffer nach einer Änderung:
+„Phpdocs for function … has incomplete parameters list" — ein neuer Parameter
+wurde der Signatur hinzugefügt, aber nicht dem Docblock.
+
+---
+
+## 17. k6 live in der Sandbox ausführen
+
+Wie bei Playwright (Abschnitt 15) überlebt weder der PHP-Built-in-Server noch
+ein laufender k6-Prozess die Grenze eines Tool-Aufrufs. Dasselbe Runner-Muster
+verwenden: ein `setsid`-abgekoppeltes Skript startet Server und Lauf, schreibt
+in eine Logdatei und setzt am Ende einen Marker, der dann gepollt wird.
+
+```bash
+curl -sSL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz \
+  -o /tmp/k6.tgz
+tar xzf /tmp/k6.tgz -C /tmp --strip-components=1 k6-v0.54.0-linux-amd64/k6
+```
+
+Seed und Umgebungsvariablen kommen aus `tests/load/seed_large.php`
+(`export BASE_URL/TOKEN/WORKSPACEID/CMID/REVISION`). Wichtig: `REVISION` muss
+`<= currentrevision` sein, sonst wirft `get_revision_state`
+„revision out of range".
+
+**Schwellenwerte prüfen, nicht nur Zahlen lesen.** Ein Lasttest, der bei echten
+Fehlern grün bleibt, ist wertlos. Die Nulltoleranz-Metriken
+(`vimipad_exceptions`, `vimipad_http_errors` mit `rate==0`) lassen sich negativ
+verifizieren, indem man mit einem ungültigen Token fährt: der Threshold muss
+brechen und k6 mit **Exit 99** enden.
+
+---
+
+## 18. Paketierung real prüfen statt annehmen
+
+`.gitattributes`-`export-ignore`-Regeln wirken nur bei `git archive`, nicht beim
+Arbeitsbaum. Prüfen, was tatsächlich ausgeliefert würde:
+
+```bash
+git archive --format=tar --prefix=vimipad/ HEAD | tar -tf - > /tmp/ga.txt
+grep -c '^vimipad/docs/'            /tmp/ga.txt   # muss 0 sein
+grep -c '^vimipad/tests/load/'      /tmp/ga.txt   # muss 0 sein
+grep -c '^vimipad/amd/src/'         /tmp/ga.txt   # muss > 0 sein
+grep    'amd/build/.*\.map'         /tmp/ga.txt   # CI verlangt die Source-Maps
+```
+
+Die Source-Maps dürfen **nicht** aus dem Paket ausgeschlossen werden: die CI
+prüft ihre Existenz mit `test -f` und ihre Reproduzierbarkeit mit
+`git diff --exit-code`.

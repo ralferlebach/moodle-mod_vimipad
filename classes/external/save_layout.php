@@ -42,6 +42,14 @@ class save_layout extends external_api {
             'layoutjson' => new external_value(PARAM_RAW, 'JSON-encoded layout state'),
             'viewportjson' => new external_value(PARAM_RAW, 'JSON-encoded viewport state', VALUE_DEFAULT, ''),
             'mode' => new external_value(PARAM_ALPHA, 'Write mode: replace or merge', VALUE_DEFAULT, 'replace'),
+            'enforcelocks' => new external_value(
+                PARAM_BOOL,
+                'Whether the caller wants template element locks enforced against itself '
+                    . '(the lock-mode preview toggle). Only ever tightens enforcement: a '
+                    . 'non-manager is bound by move locks regardless of this flag.',
+                VALUE_DEFAULT,
+                0
+            ),
         ]);
     }
 
@@ -53,6 +61,7 @@ class save_layout extends external_api {
      * @param string $layoutjson JSON layout.
      * @param string $viewportjson JSON viewport.
      * @param string $mode Write mode: replace or merge.
+     * @param bool $enforcelocks Whether the caller opts into lock enforcement against itself.
      * @return array{status: bool}
      */
     public static function execute(
@@ -60,7 +69,8 @@ class save_layout extends external_api {
         int $workspaceid,
         string $layoutjson,
         string $viewportjson = '',
-        string $mode = 'replace'
+        string $mode = 'replace',
+        bool $enforcelocks = false
     ): array {
         global $USER;
 
@@ -70,11 +80,12 @@ class save_layout extends external_api {
             'layoutjson' => $layoutjson,
             'viewportjson' => $viewportjson,
             'mode' => $mode,
+            'enforcelocks' => $enforcelocks,
         ]);
 
         $instance = null;
         $workspace = null;
-        helper::validate_workspace_for_edit(
+        $context = helper::validate_workspace_for_edit(
             (int) $params['cmid'],
             (int) $params['workspaceid'],
             $instance,
@@ -100,13 +111,23 @@ class save_layout extends external_api {
         // including the import path — is validated, not just this endpoint.
 
         $service = new layout_service();
+
+        // Template element locks pin move-locked nodes on the layout channel.
+        // A manager (who authors templates) bypasses their own locks unless the
+        // lock-mode preview toggle is on ($enforcelocks); a non-manager is always
+        // bound. The flag can therefore only ever tighten enforcement, never
+        // loosen it — a learner cannot unpin anything by sending enforcelocks=0.
+        $bypass = has_capability('mod/vimipad:manageprofiles', $context) && !$params['enforcelocks'];
+        $pinned = $bypass ? [] : $service->move_locked_node_stableids((int) $workspace->id);
+
         $service->save(
             (int) $workspace->id,
             $instance->defaultprofile,
             $params['layoutjson'],
             $viewport,
             (int) $USER->id,
-            $params['mode']
+            $params['mode'],
+            $pinned
         );
 
         return ['status' => true];

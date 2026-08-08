@@ -32,6 +32,7 @@ import {ApiClient} from '../api/service';
 import {AdaptiveConfig} from './adaptive';
 import {LockClient} from './lock_client';
 import {PollClient} from './poll_client';
+import {PushClient, pushAvailable} from './push_client';
 import {CollabConfig, Lease, PolledOperation} from '../types';
 
 /** A map from "type:stableid" to the user id holding it. */
@@ -88,11 +89,21 @@ export function useCollaboration(
     onOperations: (operations: PolledOperation[]) => void,
     onLayout?: (layoutjson: string) => void,
     onWorkspaceState?: (state: {locked: number; profile: string}) => void,
-    onError?: (error: Error) => void
+    onError?: (error: Error) => void,
+    baseRevision = 0
 ): Collaboration {
     const [presence, setPresence] = useState<PresenceMap>({});
     const pollRef = useRef<PollClient | null>(null);
     const lockRef = useRef<LockClient | null>(null);
+
+    // The revision the initial workspace load has already applied. The poll
+    // cursor is initialised from this, so the first fetch asks only for NEWER
+    // operations. Without it the poll starts at revision 0 and re-fetches the
+    // whole op-log on every (re)load, re-applying every historical container
+    // move/resize — which makes containers visibly wander through their edit
+    // history until the log is caught up.
+    const baseRevisionRef = useRef(baseRevision);
+    baseRevisionRef.current = baseRevision;
 
     // Keep the latest operations handler without restarting the loop.
     const opsHandler = useRef(onOperations);
@@ -119,6 +130,15 @@ export function useCollaboration(
     }, []);
 
     const adaptive = useMemo(() => toAdaptive(collab), [collab]);
+
+    // Push config, memoised on its primitive fields so a fresh collab object
+    // each render does not restart the effect.
+    const pushCfg = useMemo(() => ({
+        pushenabled: collab?.pushenabled,
+        pushendpoint: collab?.pushendpoint,
+        pushtopic: collab?.pushtopic,
+        pushtoken: collab?.pushtoken,
+    }), [collab?.pushenabled, collab?.pushendpoint, collab?.pushtopic, collab?.pushtoken]);
 
     useEffect(() => {
         if (!workspaceid) {
@@ -173,14 +193,27 @@ export function useCollaboration(
             onError: handleError,
         });
         pollRef.current = poll;
+        // Start the cursor at the already-applied revision so the first fetch
+        // returns only newer operations, not the entire op-log replayed.
+        poll.setRevision(baseRevisionRef.current);
         poll.start();
 
+        // Optional real-time accelerator: if an admin configured a hub, wake an
+        // immediate poll on each push event. Purely additive — the poll loop
+        // above stays the transport and the fallback.
+        let push: PushClient | null = null;
+        if (pushAvailable(pushCfg)) {
+            push = new PushClient(pushCfg, () => { void poll.pollOnce(); });
+            push.start();
+        }
+
         return () => {
+            push?.stop();
             poll.stop();
             pollRef.current = null;
             lockRef.current = null;
         };
-    }, [api, workspaceid, adaptive, handleError]);
+    }, [api, workspaceid, adaptive, handleError, pushCfg]);
 
     const isLockedByOther = useCallback((targettype: string, stableid: string): boolean => {
         const holder = presence[keyOf(targettype, stableid)];

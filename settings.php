@@ -39,6 +39,34 @@ if ($ADMIN->fulltree) {
         0
     ));
 
+    // Editor: canvas behaviour.
+    $settings->add(new admin_setting_heading(
+        'mod_vimipad/editorheading',
+        get_string('setting:editorheading', 'mod_vimipad'),
+        get_string('setting:editorheading_desc', 'mod_vimipad')
+    ));
+
+    // Iteration ceiling for the "Arrange" action's layout solver. Higher lets a
+    // single press converge further on large maps, at some CPU cost per press.
+    $settings->add(new admin_setting_configtext(
+        'mod_vimipad/arrangeiterations',
+        get_string('setting:arrangeiterations', 'mod_vimipad'),
+        get_string('setting:arrangeiterations_desc', 'mod_vimipad'),
+        500,
+        PARAM_INT
+    ));
+
+    // Whether the "Arrange" action may shrink an oversized container toward its
+    // members. On by default (boxes hug their contents); turn off to keep boxes
+    // at their drawn size and only ever grow them to contain overflow — useful
+    // where teachers size template containers deliberately.
+    $settings->add(new admin_setting_configcheckbox(
+        'mod_vimipad/arrangeshrink',
+        get_string('setting:arrangeshrink', 'mod_vimipad'),
+        get_string('setting:arrangeshrink_desc', 'mod_vimipad'),
+        1
+    ));
+
     // Collaboration: polling, adaptive intervals, element leases and optional push.
     $settings->add(new admin_setting_heading(
         'mod_vimipad/collabheading',
@@ -98,5 +126,24 @@ if ($ADMIN->fulltree) {
         get_string('setting:pushendpoint_desc', 'mod_vimipad'),
         '',
         PARAM_URL
+    ));
+
+    // Optional distinct URL the SERVER publishes to (e.g. an internal address of
+    // the same hub). Empty falls back to the subscribe endpoint above.
+    $settings->add(new admin_setting_configtext(
+        'mod_vimipad/pushpublishurl',
+        get_string('setting:pushpublishurl', 'mod_vimipad'),
+        get_string('setting:pushpublishurl_desc', 'mod_vimipad'),
+        '',
+        PARAM_URL
+    ));
+
+    // Shared HMAC secret used to sign the publisher and subscriber JWTs; must
+    // match the hub's publisher/subscriber JWT key.
+    $settings->add(new admin_setting_configpasswordunmask(
+        'mod_vimipad/pushjwtkey',
+        get_string('setting:pushjwtkey', 'mod_vimipad'),
+        get_string('setting:pushjwtkey_desc', 'mod_vimipad'),
+        ''
     ));
 }
