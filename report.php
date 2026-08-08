@@ -120,8 +120,16 @@ if ($workspaceid) {
     }
     echo html_writer::table($usertable);
 } else {
-    // Overview across every workspace of the instance.
-    $overview = $stats->instance_overview($instance->id);
+    // Overview across every workspace of the instance, paginated: one row per
+    // workspace means one row per participant, so a large cohort must not be
+    // rolled up into a single page.
+    $perpage = 50;
+    $page = optional_param('page', 0, PARAM_INT);
+    $overviewtotal = $stats->count_instance_workspaces((int) $instance->id);
+    if ($page < 0 || $page * $perpage >= max(1, $overviewtotal)) {
+        $page = 0;
+    }
+    $overview = $stats->instance_overview((int) $instance->id, $page * $perpage, $perpage);
 
     if (empty($overview)) {
         echo html_writer::tag('p', get_string('report:noactivity', 'mod_vimipad'), ['class' => 'text-muted']);
@@ -160,6 +168,10 @@ if ($workspaceid) {
             ];
         }
         echo html_writer::table($table);
+        if ($overviewtotal > $perpage) {
+            $pagingurl = new moodle_url('/mod/vimipad/report.php', ['cmid' => $cm->id]);
+            echo $OUTPUT->paging_bar($overviewtotal, $page, $perpage, $pagingurl);
+        }
     }
 }
 

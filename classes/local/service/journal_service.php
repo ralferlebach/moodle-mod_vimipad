@@ -93,29 +93,68 @@ class journal_service {
      *
      * @param int $workspaceid The workspace id.
      * @param int $userid The author.
+     * @param int $limitfrom Zero-based row offset (0 = from the start).
+     * @param int $limitnum Maximum rows (0 = no limit).
      * @return array List of entry records.
      */
-    public function get_entries_for_user(int $workspaceid, int $userid): array {
+    public function get_entries_for_user(int $workspaceid, int $userid, int $limitfrom = 0, int $limitnum = 0): array {
         global $DB;
         return array_values($DB->get_records(
             'vimipad_journalentry',
             ['workspaceid' => $workspaceid, 'userid' => $userid],
-            'timecreated DESC'
+            'timecreated DESC, id DESC',
+            '*',
+            $limitfrom,
+            $limitnum
         ));
+    }
+
+    /**
+     * How many entries a given author wrote in a workspace.
+     *
+     * @param int $workspaceid The workspace id.
+     * @param int $userid The author.
+     * @return int The entry count.
+     */
+    public function count_entries_for_user(int $workspaceid, int $userid): int {
+        global $DB;
+        return (int) $DB->count_records(
+            'vimipad_journalentry',
+            ['workspaceid' => $workspaceid, 'userid' => $userid]
+        );
     }
 
     /**
      * All teacher-visible entries in a workspace, newest first (for graders).
      *
      * @param int $workspaceid The workspace id.
+     * @param int $limitfrom Zero-based row offset (0 = from the start).
+     * @param int $limitnum Maximum rows (0 = no limit).
      * @return array List of entry records.
      */
-    public function get_teacher_visible(int $workspaceid): array {
+    public function get_teacher_visible(int $workspaceid, int $limitfrom = 0, int $limitnum = 0): array {
         global $DB;
         return array_values($DB->get_records(
             'vimipad_journalentry',
             ['workspaceid' => $workspaceid, 'visibility' => self::VISIBILITY_TEACHER],
-            'timecreated DESC'
+            'timecreated DESC, id DESC',
+            '*',
+            $limitfrom,
+            $limitnum
         ));
+    }
+
+    /**
+     * How many teacher-visible entries a workspace has.
+     *
+     * @param int $workspaceid The workspace id.
+     * @return int The entry count.
+     */
+    public function count_teacher_visible(int $workspaceid): int {
+        global $DB;
+        return (int) $DB->count_records(
+            'vimipad_journalentry',
+            ['workspaceid' => $workspaceid, 'visibility' => self::VISIBILITY_TEACHER]
+        );
     }
 }

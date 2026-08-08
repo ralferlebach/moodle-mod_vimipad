@@ -18,7 +18,7 @@
 
 import http from 'k6/http';
 import { check } from 'k6';
-import { Trend } from 'k6/metrics';
+import { Rate, Trend } from 'k6/metrics';
 
 const BASE = __ENV.BASE_URL || 'http://localhost:8000';
 const TOKEN = __ENV.TOKEN || '';
@@ -35,13 +35,24 @@ const t = {
   get_revision_state: new Trend('vimipad_get_revision_state', true),
 };
 
+// Functional-failure metrics, kept separate from latency so they can carry a
+// zero-tolerance threshold.
+const exceptions = new Rate('vimipad_exceptions');
+const httperrors = new Rate('vimipad_http_errors');
+
 export const options = {
   vus: Number(__ENV.VUS || '25'),
   duration: __ENV.DURATION || '60s',
   thresholds: {
-    // 95th percentile under the budget; <1% failed checks.
+    // Latency may be statistical: the 95th percentile must stay under budget.
     'http_req_duration': [`p(95)<${MAXMS}`],
-    'checks': ['rate>0.99'],
+    // Functional failures are NOT statistical. A web-service exception or a
+    // non-200 is a defect, so these carry zero tolerance and are tracked in
+    // their own metrics rather than being averaged into the global check rate
+    // (where a handful of real exceptions would disappear behind thousands of
+    // passing latency checks).
+    'vimipad_exceptions': ['rate==0'],
+    'vimipad_http_errors': ['rate==0'],
   },
 };
 
@@ -57,9 +68,23 @@ function call(fn, params) {
   );
   const res = http.post(url, body);
   t[fn].add(res.timings.duration);
+
+  const httpok = res.status === 200;
+  const hasexception = !res.body || res.body.indexOf('"exception"') !== -1;
+  httperrors.add(!httpok, { endpoint: fn });
+  exceptions.add(hasexception, { endpoint: fn });
+
+  // Print the server's message once per occurrence: a zero-tolerance threshold
+  // is only actionable if the run also says what actually failed.
+  if (hasexception && res.body) {
+    console.error(`${fn} returned an exception: ${String(res.body).slice(0, 300)}`);
+  } else if (!httpok) {
+    console.error(`${fn} returned HTTP ${res.status}`);
+  }
+
   check(res, {
-    [`${fn} status 200`]: (r) => r.status === 200,
-    [`${fn} no exception`]: (r) => r.body && r.body.indexOf('"exception"') === -1,
+    [`${fn} status 200`]: () => httpok,
+    [`${fn} no exception`]: () => !hasexception,
     [`${fn} under budget`]: (r) => r.timings.duration < MAXMS,
   });
   return res;

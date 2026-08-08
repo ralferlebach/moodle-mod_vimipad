@@ -150,4 +150,31 @@ final class get_workspace_elements_test extends externallib_advanced_testcase {
         $this->expectException(\invalid_parameter_exception::class);
         get_workspace_elements::execute($instance->cmid, (int) $meta['workspaceid'], 'widgets', 0, 10);
     }
+
+    /**
+     * A grader viewing an enrolled learner who has never opened the activity gets
+     * a well-formed empty state: no workspace, no elements, and a collab block
+     * without a push topic/token — and crucially no warning or exception.
+     *
+     * @return void
+     */
+    public function test_grader_viewing_learner_without_workspace(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
+        $learner = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+        $this->setUser($teacher);
+
+        $result = get_workspace::execute($instance->cmid, 0, (int) $learner->id);
+        $result = \core_external\external_api::clean_returnvalue(get_workspace::execute_returns(), $result);
+
+        $this->assertSame(0, $result['workspaceid']);
+        $this->assertSame(0, $result['revision']);
+        $this->assertSame([], $result['nodes']);
+        $this->assertSame([], $result['relations']);
+        $this->assertSame([], $result['containers']);
+        $this->assertSame('', $result['collab']['pushtopic']);
+        $this->assertSame('', $result['collab']['pushtoken']);
+    }
 }

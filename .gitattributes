@@ -1,42 +1,40 @@
-# Enforce LF line endings for all text files.
-* text=auto eol=lf
+# Distribution rules for `git archive` (the GitHub release tarball/zip).
+#
+# Principle: the released package is a reproducible *source* release of the
+# plugin — everything Moodle runs, plus the sources those runtime artefacts were
+# built from — but none of the development, CI or load-testing machinery.
 
-# Binary files — no conversion.
-*.png  binary
-*.jpg  binary
-*.gif  binary
-*.ico  binary
-*.woff binary
-*.woff2 binary
-*.ttf  binary
-*.eot  binary
-*.min.js binary
-*.min.css binary
+# --- Never distribute: repository and CI plumbing -------------------------
+/.github            export-ignore
+/.gitattributes     export-ignore
+/.gitignore         export-ignore
+/makefile           export-ignore
+/phpcs.xml          export-ignore
 
-# Exclude developer artefacts from release archives.
-.github/       export-ignore
-docs/          export-ignore
-tools/         export-ignore
-makefile       export-ignore
-.gitattributes export-ignore
-.gitignore     export-ignore
-.phpcsignore   export-ignore
+# --- Never distribute: internal documentation -----------------------------
+# Working notes, session logs, prompt templates and planning material are not
+# product documentation. README.md and CHANGELOG.md ship (they are top level).
+/docs               export-ignore
 
-# Development-only frontend tooling: exclude from release archive.
-# The prebuilt amd/build/ (init module + bundled React editor_lazy) IS shipped;
-# sources and toolchain are not required on a production server.
-/node_modules      export-ignore
-/package.json       export-ignore
-/package-lock.json  export-ignore
-/tsconfig.json      export-ignore
-/build.mjs          export-ignore
-/js/src             export-ignore
+# --- Never distribute: developer tooling ----------------------------------
+/tools              export-ignore
+/node_modules       export-ignore
+
+# --- Never distribute: load- and browser-test harnesses -------------------
+# tests/load seeds courses and users, enables web services and REST, changes
+# capability assignments and mints a token. Excellent as a developer/CI tool,
+# but it has no place on a production Moodle server. tests/playwright likewise
+# carries seed logic and test-user credentials.
+/tests/load         export-ignore
+/tests/playwright   export-ignore
+
+# --- Never distribute: frontend unit tests --------------------------------
+# The Moodle-native tests (tests/*.php, tests/behat/) DO ship: they are useful
+# to maintainers, plugin review and distribution QA. The Jest suites are not
+# runnable without the Node toolchain, so they stay out.
 /js/tests           export-ignore
-/amd/src            export-ignore
 /jest.config.js     export-ignore
-/.eslintrc.js       export-ignore
-/.eslintrc.json     export-ignore
-/eslint.config.js   export-ignore
-/.stylelintrc.json  export-ignore
-/babel.config.js    export-ignore
-/.browserslistrc    export-ignore
+
+# Everything not listed above ships — in particular amd/src and js/src, so the
+# checked-in build artefacts (amd/build/*.min.js and their source maps) can be
+# reviewed and reproduced from the package itself.

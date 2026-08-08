@@ -65,6 +65,9 @@ class get_workspace extends external_api {
      * @param int $cmid Course module id.
      * @param int $groupid Requested group id (group mode).
      * @param int $targetuserid Owner user to view read-only (0 = self).
+     * @param bool $includeelements Whether to include the full node/relation/
+     *                              container arrays; false returns metadata plus
+     *                              element counts for paginated loading.
      * @return array
      */
     public static function execute(int $cmid, int $groupid = 0, int $targetuserid = 0, bool $includeelements = true): array {
@@ -170,7 +173,9 @@ class get_workspace extends external_api {
             'canmanage' => $canmanage,
             'lockmodeforlearners' => $lockmodeforlearners,
             'journalallowprivate' => !empty($instance->journalallowprivate),
-            'collab' => helper::collab_config((int) $workspace->id),
+            // No workspace exists yet, so there is no push topic/token to scope:
+            // passing null keeps the collab block free of a channel for id 0.
+            'collab' => helper::collab_config(null),
         ];
     }
 

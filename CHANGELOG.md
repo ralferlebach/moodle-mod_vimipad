@@ -4,7 +4,54 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.34** (2026072804).
+> release is **0.8.35** (2026072805).
+
+## 0.8.35 (2026072805) — Audit-Befunde: Bugfix, POST-Härtung, Paginierung
+
+Umsetzung der P1-Befunde des externen Audits vor dem 0.9-Beta-Schnitt.
+
+**Fehlerbehebung (P1.1).** `get_workspace::empty_state()` griff auf eine dort
+nicht existierende Variable `$workspace` zu. Der Pfad ist real: eine Lehrkraft
+öffnet eine Lernende, die die Aktivität noch nie geöffnet hat. Der Aufruf
+liefert jetzt `collab_config(null)` — kein Push-Kanal für Workspace 0 — und ist
+durch einen Regressionstest abgesichert.
+
+**POST-Härtung (P1.2).** Alle zustandsändernden klassischen PHP-Handler
+(Abgabe, Gruppenkonsens, Annotation, Referenzmodell, KI-Entwurf/-Übernahme,
+Bewertung speichern, Wiederöffnen, Peer-Review speichern) prüfen jetzt zentral
+über `local\policy\request_policy::is_mutating_request()`, dass die Anfrage ein
+POST ist. `sesskey` war bereits vorhanden; damit sind Mutationen zusätzlich
+gegen Prefetch, History-Replay und URL-Wiederverwendung inert (fail closed,
+wenn die Methode fehlt).
+
+**Paginierung produktionskritischer Ansichten (P1/§12).** Drei Ansichten luden
+unbegrenzt viele Zeilen in einen Seitenaufruf:
+
+* Submissionübersicht (`view.php`): lud jede Abgabe **und** dekodierte pro Zeile
+  das eingefrorene Snapshot-JSON — jetzt 50 pro Seite mit `paging_bar`.
+* Journalhistorie: wächst über einen Kurs hinweg unbegrenzt — jetzt 50 pro
+  Seite; `journal_service` erhielt Limit- und Count-Methoden.
+* Statistik-Übersicht (`report.php`): eine Zeile je Workspace, also je
+  Teilnehmendem — jetzt 50 pro Seite.
+
+Reviewerlisten wurden bewusst **nicht** paginiert: sie sind durch die Zahl der
+Allokationen je Reviewer begrenzt, nicht durch die Kohortengröße.
+
+**Lasttest-Schwellenwerte (P1.3).** Fachliche Fehler werden nicht mehr in die
+globale Check-Rate hineingemittelt, wo einzelne echte Exceptions hinter
+Tausenden bestandenen Latenz-Checks verschwanden. Neue Metriken
+`vimipad_exceptions` und `vimipad_http_errors` mit **Nulltoleranz**
+(`rate==0`); Latenz bleibt statistisch (`p(95)`). Der Server-Fehlertext wird
+protokolliert, damit ein Verstoß diagnostizierbar ist.
+
+**Release-Hygiene (P1.4).** `package.json`/`package-lock.json` (0.7.31) sind
+wieder mit `version.php` synchron.
+
+**Paketierung.** Neue `.gitattributes`: `tests/load` und `tests/playwright`
+(Seeder, Token-Erzeugung, Testnutzer-Zugangsdaten) sowie `docs`, `tools`,
+`.github` und `js/tests` werden nicht mehr ausgeliefert; `amd/src` und `js/src`
+dagegen schon, damit die eingecheckten Build-Artefakte aus dem Paket heraus
+nachvollzogen werden können. PHPUnit- und Behat-Tests bleiben enthalten.
 
 ## 0.8.34 (2026072804) — Paginiertes Laden gro{ß}er Maps
 
