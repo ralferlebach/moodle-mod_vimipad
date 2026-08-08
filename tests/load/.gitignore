@@ -1,0 +1,9 @@
+apache-jmeter-*/
+jmeter.tgz
+*.jtl
+vimipad-load-results.jtl
+.load-env
+.load-seed.out
+k6
+k6.tgz
+jmeter.log

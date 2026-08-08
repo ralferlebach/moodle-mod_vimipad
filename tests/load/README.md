@@ -6,6 +6,17 @@ against a seeded **large** map, to check server response times and catch N+1
 regressions. It runs against a live Moodle over the REST web service; it is not
 part of the static `moodle-plugin-ci` jobs.
 
+>
+> **Shortcut (recommended):** run
+> ```
+> make load-seed      # seeds a large map + op-log + REST token
+> make jmeter         # (or: make load-k6)
+> ```
+> `make load-seed` stores BASE_URL/TOKEN/WORKSPACEID/CMID in `tests/load/.load-env`,
+> which `make jmeter` / `make load-k6` read automatically — no `eval`, no copying
+> values. Command-line overrides (`make jmeter TOKEN=…`) still win. The manual
+> steps below are the alternative if you'd rather mint the token yourself.
+
 ## 1. Seed a large map
 
 Use the plugin generator's large profile (1000 nodes / 2000 relations /

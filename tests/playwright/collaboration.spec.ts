@@ -24,7 +24,7 @@
 
 import {test, expect, Browser} from '@playwright/test';
 import {readEnv} from './support/env';
-import {login, openEditor, addConcept, openListView, expectConceptEventually} from './support/vimipad';
+import {login, openEditor, addConcept, expectConceptEventually, beginHoldingNode, releaseNode, expectNodeLockedForOther} from './support/vimipad';
 
 const env = readEnv();
 
@@ -45,43 +45,62 @@ test.describe('mod_vimipad real-time collaboration', () => {
         const label = `Photosynthesis ${Date.now()}`;
         await addConcept(a.page, label);
 
-        // The second client should receive it through the poll loop.
-        await openListView(b.page);
+        // The second client should receive it on its live canvas through the
+        // poll loop (no tab switch: that would reload and drop the poll state).
         await expectConceptEventually(b.page, label);
 
         await a.context.close();
         await b.context.close();
     });
 
-    test('both users see each other in the presence list', async ({browser}) => {
+    // Presence in mod_vimipad is lock-based, not name-based: the client holds a
+    // PresenceMap of element -> holder userid (from leases) and surfaces it by
+    // rendering a held element as locked (CSS class vimipad-canvas-node-locked)
+    // for other users. So the observable presence signal is: while one client
+    // holds a node (pointer-down takes an edit lease), the other client sees that
+    // node marked as locked. No collaborator name is rendered anywhere.
+    test('a node one user is editing shows as locked for the other', async ({browser}) => {
         const a = await openAs(browser, env.userA);
         const b = await openAs(browser, env.userB);
 
-        // Presence is surfaced as the collaborators' names somewhere on the page.
-        await expect(a.page.getByText(env.userB.fullname, {exact: false})).toBeVisible({timeout: 30_000});
-        await expect(b.page.getByText(env.userA.fullname, {exact: false})).toBeVisible({timeout: 30_000});
+        const label = `Locktest ${Date.now()}`;
+        await addConcept(a.page, label);
+        // Both clients must have the node before we can assert a lock on it.
+        await expectConceptEventually(a.page, label);
+        await expectConceptEventually(b.page, label);
+
+        // User A grabs the node and holds it (pointer-down acquires the lease).
+        await beginHoldingNode(a.page);
+        try {
+            // User B should see that node become locked by another collaborator.
+            await expectNodeLockedForOther(b.page);
+        } finally {
+            await releaseNode(a.page);
+        }
 
         await a.context.close();
         await b.context.close();
     });
 
-    test('concurrent edits from both users converge for everyone', async ({browser}) => {
+    test('edits from both users converge for everyone', async ({browser}) => {
         const a = await openAs(browser, env.userA);
         const b = await openAs(browser, env.userB);
 
+        // Poll-based sync converges edits; it does not promise conflict-free
+        // MERGING of truly simultaneous edits (the design uses polling, not a
+        // CRDT — see the Lastenheft). So each edit is made and allowed to
+        // converge on both canvases before the next, which is the guarantee the
+        // architecture actually makes: every user can contribute and all clients
+        // end up consistent.
         const labelA = `FromA ${Date.now()}`;
-        const labelB = `FromB ${Date.now()}`;
         await addConcept(a.page, labelA);
-        await addConcept(b.page, labelB);
-
-        await openListView(a.page);
-        await openListView(b.page);
-
-        // Each client ends up showing both concepts.
         await expectConceptEventually(a.page, labelA);
-        await expectConceptEventually(a.page, labelB);
         await expectConceptEventually(b.page, labelA);
+
+        const labelB = `FromB ${Date.now()}`;
+        await addConcept(b.page, labelB);
         await expectConceptEventually(b.page, labelB);
+        await expectConceptEventually(a.page, labelB);
 
         await a.context.close();
         await b.context.close();

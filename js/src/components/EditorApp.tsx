@@ -269,7 +269,8 @@ export function EditorApp(props: Props): React.ReactElement {
             dispatch({kind: 'setLocked', locked: s.locked});
             dispatch({kind: 'setProfile', profile: s.profile});
         },
-        (e) => setError(e.message)
+        (e) => setError(e.message),
+        state.revision
     );
 
     const layout = useMemo(

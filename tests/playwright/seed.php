@@ -107,6 +107,7 @@ $moduleinfo = (object) [
     'name' => 'Shared map',
     'intro' => 'Collaboration fixture',
     'introformat' => FORMAT_HTML,
+    'cmidnumber' => '',
     'defaultprofile' => 'conceptmap',
     'collaborationmode' => 2,
     'gradingmode' => 0,
@@ -116,7 +117,11 @@ $created = add_moduleinfo($moduleinfo, $course);
 
 $activitypath = '/mod/vimipad/view.php?id=' . $created->coursemodule;
 
-// Print shell exports for the Playwright run.
+// Print shell exports for the Playwright run. The base URL is derived from the
+// site's own wwwroot, so `eval "$(php seed.php)"` sets everything the run needs
+// and works for any install location (root or subdirectory) without a manual
+// VIMIPAD_BASE_URL. The specs still allow overriding it via the environment.
+echo "export VIMIPAD_BASE_URL='{$CFG->wwwroot}'\n";
 echo "export VIMIPAD_ACTIVITY_PATH='{$activitypath}'\n";
 echo "export VIMIPAD_USER_A='{$usera->username}'\n";
 echo "export VIMIPAD_PASS_A='Vimi!pad_A1'\n";

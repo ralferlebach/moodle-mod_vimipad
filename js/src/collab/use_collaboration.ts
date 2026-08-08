@@ -89,11 +89,21 @@ export function useCollaboration(
     onOperations: (operations: PolledOperation[]) => void,
     onLayout?: (layoutjson: string) => void,
     onWorkspaceState?: (state: {locked: number; profile: string}) => void,
-    onError?: (error: Error) => void
+    onError?: (error: Error) => void,
+    baseRevision = 0
 ): Collaboration {
     const [presence, setPresence] = useState<PresenceMap>({});
     const pollRef = useRef<PollClient | null>(null);
     const lockRef = useRef<LockClient | null>(null);
+
+    // The revision the initial workspace load has already applied. The poll
+    // cursor is initialised from this, so the first fetch asks only for NEWER
+    // operations. Without it the poll starts at revision 0 and re-fetches the
+    // whole op-log on every (re)load, re-applying every historical container
+    // move/resize — which makes containers visibly wander through their edit
+    // history until the log is caught up.
+    const baseRevisionRef = useRef(baseRevision);
+    baseRevisionRef.current = baseRevision;
 
     // Keep the latest operations handler without restarting the loop.
     const opsHandler = useRef(onOperations);
@@ -183,6 +193,9 @@ export function useCollaboration(
             onError: handleError,
         });
         pollRef.current = poll;
+        // Start the cursor at the already-applied revision so the first fetch
+        // returns only newer operations, not the entire op-log replayed.
+        poll.setRevision(baseRevisionRef.current);
         poll.start();
 
         // Optional real-time accelerator: if an admin configured a hub, wake an

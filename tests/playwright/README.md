@@ -27,18 +27,27 @@ npm install
 npm run install-browsers
 
 # 2. Seed the shared course-mode fixture and load the exports it prints.
-eval "$(php ../../../../admin/cli/... )"   # see note below
-eval "$(php seed.php)"                       # creates course + users, prints exports
+#    seed.php bootstraps Moodle via its own path, so the working directory does
+#    not matter. It also emits VIMIPAD_BASE_URL from the site's wwwroot, so no
+#    manual base URL is needed — it works for root and subdirectory installs.
+eval "$(php seed.php)"
 
-# 3. Point the run at the site and go.
-export VIMIPAD_BASE_URL="http://localhost:8000"
+# 3. Go.
 npm test
 ```
 
-`seed.php` is a Moodle CLI script (run it from the Moodle root or with the
-relative path shown). It creates a course, a course-mode activity and three
-users with known passwords, then prints `export VIMIPAD_*` lines that the specs
-read via `support/env.ts`.
+To point the run at a different host (e.g. a reverse proxy) you can still override
+the base URL after seeding:
+
+```bash
+export VIMIPAD_BASE_URL="https://your.site/moodle"
+npm test
+```
+
+`seed.php` is a Moodle CLI script. It creates a course, a course-mode activity
+and three users with known passwords, then prints `export VIMIPAD_*` lines that
+the specs read via `support/env.ts` — including `VIMIPAD_BASE_URL`, taken from
+`$CFG->wwwroot`.
 
 ## Notes
 

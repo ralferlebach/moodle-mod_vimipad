@@ -131,10 +131,16 @@
                 <stringProp name="Argument.value">${WORKSPACEID}</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
-              <elementProp name="sincerevision" elementType="HTTPArgument">
+              <elementProp name="torevision" elementType="HTTPArgument">
                 <boolProp name="HTTPArgument.always_encode">true</boolProp>
-                <stringProp name="Argument.name">sincerevision</stringProp>
-                <stringProp name="Argument.value">0</stringProp>
+                <stringProp name="Argument.name">torevision</stringProp>
+                <stringProp name="Argument.value">${REVISION}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+              <elementProp name="fromrevision" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">true</boolProp>
+                <stringProp name="Argument.name">fromrevision</stringProp>
+                <stringProp name="Argument.value">1</stringProp>
                 <stringProp name="Argument.metadata">=</stringProp>
               </elementProp>
             </collectionProp>

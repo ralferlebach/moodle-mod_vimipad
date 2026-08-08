@@ -4,7 +4,24 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.31** (2026072801).
+> release is **0.8.32** (2026072802).
+
+## 0.8.32 (2026072802) — Fix: Container wandern beim (Re-)Load
+
+Behebt ein sichtbares Fehlverhalten beim Laden/Neuladen eines ViMis: Container
+(und andere Elemente) „wanderten" mehrere Sekunden lang durch ihre
+Bearbeitungshistorie — gro{ß} wurden, schrumpften und verschoben sich — bis sich
+das Bild beruhigte.
+
+**Ursache:** Der Poll-Client startete seinen Revisions-Cursor bei 0. Der erste
+Poll holte damit `get_operations` ab Revision 0, also den **kompletten Op-Log**,
+und wandte jede historische Container-Verschiebung/-Grö{ß}enänderung erneut an —
+bei jedem (Re-)Load.
+
+**Fix:** `useCollaboration` erhält die beim Laden bereits angewandte Revision und
+setzt den Poll-Cursor **vor** dem Start darauf. Der erste Poll fragt dadurch nur
+noch **neuere** Operationen ab; die Historie wird nicht mehr abgespielt. Regressions-
+test (`use_collaboration_baserevision`) sichert die Verdrahtung ab.
 
 ## 0.8.31 (2026072801) — Typisierte Relationen für Flow und semantisches Netz
 
