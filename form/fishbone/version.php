@@ -25,11 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'vimipadform_fishbone';
-$plugin->version   = 2026072797;
+$plugin->version   = 2026080800;
 $plugin->requires  = 2024100700;   // Moodle 4.5.0.
-$plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.1.0';
+$plugin->maturity  = MATURITY_BETA;
+$plugin->release   = '0.9.0';
 $plugin->dependencies = [
     // Requires the per-branch (fishbone) direction contract added in mod_vimipad 0.8.27.
-    'mod_vimipad' => 2026072797,
+    'mod_vimipad' => 2026080800,
 ];

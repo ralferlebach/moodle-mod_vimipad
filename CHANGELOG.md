@@ -4,7 +4,33 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.35** (2026072805).
+> release is **0.9.0** (2026080800).
+
+## 0.9.0 (2026080800) — Beta-Schnitt
+
+Erstes Release der Beta-Linie. Inhaltlich identisch mit 0.8.35; dieser Schnitt
+setzt den Reifegrad und vereinheitlicht die Versionierung über das gesamte
+Paket.
+
+* `mod_vimipad` steht auf **`MATURITY_BETA`**, Release `0.9.0`,
+  Versionsnummer `2026080800`.
+* **Alle 19 gebündelten Subplugins** (13 `vimipadform_*`, 6 `vimipadassess_*`)
+  tragen denselben Reifegrad, dasselbe Release und dieselbe Versionsnummer, und
+  ihre Abhängigkeit auf den Kern verweist auf `2026080800`. Damit zeigt die
+  Moodle-Plugin-Übersicht ein konsistentes Bild, statt ein Beta-Produkt aus 19
+  Alpha-Bestandteilen zusammenzusetzen.
+* `package.json` / `package-lock.json` folgen dem Release (`0.9.0`).
+* README erhält einen Status-Abschnitt, der benennt, was Beta hier heißt und
+  wofür sie da ist (Feld-, Browser-, Last- und Barrierefreiheitsvalidierung).
+* Roadmap und Backlog sind auf den Beta-Stand gezogen; die Release-Checkliste
+  formuliert die Upgrade-Prüfung so, dass sie beim ersten öffentlichen Release
+  eine leere Menge beschreibt statt eine unerfuellbare Bedingung.
+* `tests/load/.gitignore` schließt `jmeter.log` (und `*.log`) aus: der jMeter-
+  Startlog protokolliert jede `-J`-Property im Klartext, einschließlich des
+  REST-Tokens.
+
+Voraussetzung dieses Schnitts waren die in 0.8.33-0.8.35 geschlossenen
+P1-Befunde des externen Audits; Einzelheiten in den jeweiligen Einträgen.
 
 ## 0.8.35 (2026072805) — Audit-Befunde: Bugfix, POST-Härtung, Paginierung
 

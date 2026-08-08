@@ -1,55 +1,58 @@
 # Arbeitsplanung / Backlog
 
-> **Stand: 0.7.30.** Autoritativ für den *Umsetzungsstand* ist das
+> **Stand: 0.9.0 (MATURITY_BETA).** Autoritativ für den *Umsetzungsstand* ist das
 > [`CHANGELOG.md`](../../CHANGELOG.md), für die *Versionsplanung* die
 > [roadmap.md](roadmap.md). Dieses Dokument fasst nur die *nächsten*
 > Arbeitsschritte zusammen; erledigte Historie steht im Changelog.
 
 Lebendes Planungsdokument. Reihenfolge = grobe Priorität, nicht fix.
 
-## Laufend: 0.7.x — Hardening, Datenschutz & Persistenz
+## Laufend: 0.9.x — Beta-Validierung
 
-Der Datenschutz- (Privacy API) und Backup/Restore-Kern ist umgesetzt; 0.7.x
-prüft und vervollständigt. Offen in dieser Phase:
+Der Beta-Schnitt `0.9.0` ist erfolgt (Kern und alle 19 gebündelten Subplugins auf
+`MATURITY_BETA`). Der Härtungs-Arc (0.7.x) und der Darstellungsform-Arc (0.8.x)
+sind code-seitig abgeschlossen; die P1-Befunde des externen 0.8.32-Audits sind
+in 0.8.33–0.8.35 geschlossen (Details im CHANGELOG). Offen ist überwiegend
+**empirischer** Reifenachweis, kein Code-Befund:
 
-1. **Systematischer Security-Review** (dokumentierter Durchgang):
-   - XSS beim Label-/Text-Rendering (Nodes, Relationen, Container, Journal).
-   - `sesskey`/Capability-/Kontext-Prüfung in *jeder* External-Function,
-     inklusive Gruppen-/Fremdzugriff (IDOR).
-   - Eingabevalidierung aller External-Function-Parameter.
-   - Ergebnis als Stored-XSS/IDOR-Matrix dokumentieren.
-2. **Allgemeines Code-Hardening**: Fehlerbehandlung, Performance (keine
-   N+1-Abfragen in Übersichten/Dashboards), Determinismus.
-3. **Stabile öffentliche API** als Voraussetzung für die abgeleiteten Plugins
-   (0.9.x): Namespace-Trennung `\mod_vimipad\api\*` / `\mod_vimipad\profile\*`
-   (stabil, öffentlich) gegenüber `\mod_vimipad\local\*` (intern); einbettbarer
-   Editor mit `mount(element, config)`-Entrypoint und austauschbarem
-   Persistenz-Adapter; kontextfrei aufrufbare Profilvalidierung.
+1. **Feldvalidierung in echten Kursen** — der eigentliche Zweck der Beta.
+2. **Barrierefreiheits-Audit** (siehe [barrierearmut.md](barrierearmut.md)):
+   Tastaturbedienung, Fokusführung, Dialog-/Escape-Verhalten, Listenansicht ohne
+   Canvas — geprüft mit echten Hilfsmitteln (NVDA/JAWS/VoiceOver), nicht nur axe.
+3. **Browser-Matrix für Playwright**: derzeit nur Chromium/Moodle 4.5. Nightly
+   um Firefox und WebKit sowie um Moodle 5.2 erweitern.
+4. **Echte Collaboration-Races in Playwright**: stale-revision-Update, Delete
+   vs. Update, Relation-Retarget vs. Node-Delete, Lease-Übernahme nach
+   Netzausfall, Offline-/Resync-Verhalten.
+5. **Realistischeres Lastprofil (k6)**: `poll_changes` fehlt bislang völlig;
+   sinnvoll sind getrennte Profile für Classroom-Start, Idle-Polling, aktive
+   Kollaboration, Spike und Soak sowie eine Map-Größen-Matrix (small/medium/
+   large). Der bestehende Read-Endpoint-Test bleibt als Stress-Test bestehen.
+6. **jMeter-Plateauphase**: statt fester Loop-Zahl mit Scheduler und Dauer
+   fahren, damit wirklich 25 VUs gleichzeitig arbeiten.
+7. **Arrange-Engine unter Last messen** (Playwright, 100/250/500/1000 Knoten):
+   Zeit bis zur Bedienbarkeit, keine NaN/Infinity, fixierte Knoten unverändert,
+   zweiter Lauf konvergiert. Jest kann das Einfrieren des Event-Loops nicht sehen.
+8. **Stored-XSS-Matrix** über alle Textfelder (Node/Relation/Container/Journal/
+   Peer-Review/Annotation/Feedback/KI/Import) — PHPUnit für den Speicher-/
+   Formatvertrag, Playwright oder Behat für „wird nirgends ausführbar gerendert".
+9. **Moodle 5.1 im Release-/Nightly-Gate** — `supported = [405, 502]` schließt
+   5.1 ein, die CI testet aber nur 4.5/5.0/5.2.
+10. **Lasttest-Token als Secret** in `load.yml` (`::add-mask::`, kurzlebiger
+    Token, Testsite nach dem Lauf verwerfen).
 
-## Voraussetzung für die Beta (0.8.0)
+### Kann bis Stable warten
 
-Der Code-seitige Härtungsarc (0.7.x) ist abgeschlossen; das abschließende Audit
-gibt für kontrollierten Beta-/Pilotbetrieb GO. Offen ist der **empirische**
-Reifenachweis (kein Code-Befund):
-
-- Concurrency-/Last-Tests (nebenläufige Operationen, Poll/Lock unter Last).
-- Replay-Benchmarks (1k/5k/10k/20k/100k Operationen, kleine/große Maps,
-  sequentielles Scrubbing vs. zufällige Sprünge) zur empirischen Bestätigung des
-  begrenzten Checkpoint-/Replay-Modells.
-- Accessibility-Durchgang (siehe [barrierearmut.md](barrierearmut.md)):
-  Tastaturbedienung, ARIA, Listen-/Tabellen-Alternative.
-- Browser-/DB-Matrix sowie Upgrade-/Backup-Restore-Tests in der CI.
-
-### Kleine, nicht-blockierende Restpunkte aus dem 0.7.30-Audit — geschlossen (0.8.19)
-
-- ✅ **Heartbeat `renew()` vollständig CAS-sicher gemacht** (`lock_service::renew`:
-  bedingtes `UPDATE … WHERE id AND userid AND timeexpires` + Re-Read; Test
-  `test_renew_after_takeover_reports_new_holder`).
-- ✅ **`get_operations`-Testabdeckung erweitert** um Gruppen-, Course-Workspace-,
-  Cross-Activity-, Guest-, unenrolled- und suspended-Fälle.
-- ✅ **Gastzugriff auf Course-Workspaces** als bewusste Entscheidung dokumentiert
-  und erzwungen (`:view` erforderlich; Gäste/unenrolled/suspended abgewiesen —
-  Kommentar in `helper::validate_workspace_for_read`, `security_review.md`).
+- Paginierung *aller* übrigen Lehrendenlisten (die produktionskritischen sind in
+  0.9.0 paginiert: Submissionübersicht, Journalhistorie, Statistik-Übersicht).
+- Gradebook-Ad-hoc-Task bei sehr großen Kohorten (`grading_service` iteriert
+  bewusst über Empfänger) — erst messen, dann ggf. chunken.
+- Vollständige Lokalisierung technischer Exception-Texte (Programmer-Errors
+  dürfen englisch bleiben; benutzer-/API-ausgelöste Validierung nicht).
+- Aufräumen historischer „legacy/pre-migration"-Kommentare und des zugehörigen
+  Kompatibilitätscodes — vor 1.0 bewusst entscheiden, ob es ausgelieferte Daten
+  gibt, mit denen Kompatibilität bestehen muss (vor dem ersten öffentlichen
+  Release: nein).
 
 ## Als Nächstes (0.6.x-Autoren-Werkzeuge, teils vorgezogen)
 

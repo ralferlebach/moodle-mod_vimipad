@@ -47,11 +47,14 @@ A clean full-install package (never a patch), excluding dev artifacts:
 ```bash
 zip -rq vimipad-<version>.zip vimipad \
   -x "vimipad/node_modules/*" -x "*/.git/*" \
-  -x "vimipad/js/build/*" -x "*.map"
+  -x "vimipad/js/build/*" (keep *.map — CI verifies the source maps exist and are reproducible)
 ```
 
 - [ ] ZIP contains `amd/build/*.min.js` and excludes `node_modules`.
-- [ ] Fresh install and upgrade-from-previous both succeed on a clean site.
+- [ ] Fresh installation of the release package succeeds on a clean site.
+- [ ] For every previously published release: upgrading to this release succeeds.
+      (For the first public release this set is empty — there is no previous
+      published version to upgrade from.)
 
 ## 4. RC pilot
 

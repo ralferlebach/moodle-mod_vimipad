@@ -571,3 +571,70 @@ namensbasiertes Assert.
 - Reihenfolge im Zweifel: (1) Site-DB da? (2) behat_wwwroot ≠ wwwroot? (3) Server
   mit Workern + 200 auf /login? (4) Chromium installiert? (5) geseedet in Datei?
   (6) Runner detached + pollen.
+
+---
+
+## 16. local_moodlecheck lokal ausführen (der PHPDoc-Gate-Check der CI)
+
+Die GitHub-CI lässt `moodle-plugin-ci phpdoc --max-warnings 0` laufen; darunter
+steckt `local_moodlecheck`. `phpcs` findet dessen Befunde **nicht** — ein
+fehlender `@param` nach einer Signaturänderung ist phpcs-sauber und bricht
+trotzdem die CI. Deshalb gehört der Check in die lokale Kette:
+
+```bash
+cd /home/claude/moodle
+git clone -q --depth 1 \
+  https://github.com/moodlehq/moodle-local_moodlecheck.git local/moodlecheck
+php local/moodlecheck/cli/moodlecheck.php \
+  --path=mod/vimipad --exclude=mod/vimipad/tools --format=text \
+  | grep -B1 '    Line' | grep -v '^--$'
+```
+
+Leere Ausgabe = keine Befunde. Häufigster Treffer nach einer Änderung:
+„Phpdocs for function … has incomplete parameters list" — ein neuer Parameter
+wurde der Signatur hinzugefügt, aber nicht dem Docblock.
+
+---
+
+## 17. k6 live in der Sandbox ausführen
+
+Wie bei Playwright (Abschnitt 15) überlebt weder der PHP-Built-in-Server noch
+ein laufender k6-Prozess die Grenze eines Tool-Aufrufs. Dasselbe Runner-Muster
+verwenden: ein `setsid`-abgekoppeltes Skript startet Server und Lauf, schreibt
+in eine Logdatei und setzt am Ende einen Marker, der dann gepollt wird.
+
+```bash
+curl -sSL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz \
+  -o /tmp/k6.tgz
+tar xzf /tmp/k6.tgz -C /tmp --strip-components=1 k6-v0.54.0-linux-amd64/k6
+```
+
+Seed und Umgebungsvariablen kommen aus `tests/load/seed_large.php`
+(`export BASE_URL/TOKEN/WORKSPACEID/CMID/REVISION`). Wichtig: `REVISION` muss
+`<= currentrevision` sein, sonst wirft `get_revision_state`
+„revision out of range".
+
+**Schwellenwerte prüfen, nicht nur Zahlen lesen.** Ein Lasttest, der bei echten
+Fehlern grün bleibt, ist wertlos. Die Nulltoleranz-Metriken
+(`vimipad_exceptions`, `vimipad_http_errors` mit `rate==0`) lassen sich negativ
+verifizieren, indem man mit einem ungültigen Token fährt: der Threshold muss
+brechen und k6 mit **Exit 99** enden.
+
+---
+
+## 18. Paketierung real prüfen statt annehmen
+
+`.gitattributes`-`export-ignore`-Regeln wirken nur bei `git archive`, nicht beim
+Arbeitsbaum. Prüfen, was tatsächlich ausgeliefert würde:
+
+```bash
+git archive --format=tar --prefix=vimipad/ HEAD | tar -tf - > /tmp/ga.txt
+grep -c '^vimipad/docs/'            /tmp/ga.txt   # muss 0 sein
+grep -c '^vimipad/tests/load/'      /tmp/ga.txt   # muss 0 sein
+grep -c '^vimipad/amd/src/'         /tmp/ga.txt   # muss > 0 sein
+grep    'amd/build/.*\.map'         /tmp/ga.txt   # CI verlangt die Source-Maps
+```
+
+Die Source-Maps dürfen **nicht** aus dem Paket ausgeschlossen werden: die CI
+prüft ihre Existenz mit `test -f` und ihre Reproduzierbarkeit mit
+`git diff --exit-code`.

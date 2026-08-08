@@ -25,11 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'vimipadform_timeline';
-$plugin->version   = 2026072791;
+$plugin->version   = 2026080800;
 $plugin->requires  = 2024100700;   // Moodle 4.5.0.
-$plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '0.1.0';
+$plugin->maturity  = MATURITY_BETA;
+$plugin->release   = '0.9.0';
 $plugin->dependencies = [
     // Requires the layout line-axis contract added in mod_vimipad 0.8.21.
-    'mod_vimipad' => 2026072791,
+    'mod_vimipad' => 2026080800,
 ];

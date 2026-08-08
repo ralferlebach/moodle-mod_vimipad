@@ -9,6 +9,20 @@ as a whole course — while teachers set the task, grade an immutable snapshot,
 annotate directly on the artefact and draft elaborated feedback with the help of
 the Moodle AI subsystem.
 
+## Status
+
+**0.9.0 — beta** (`MATURITY_BETA`). The core plugin and all 19 bundled
+subplugins carry the same release and maturity, so the plugin overview shows a
+consistent picture.
+
+Beta means: the architecture, data model, security model, privacy and backup
+paths are complete and covered by an automated suite (PHPUnit, Jest, Behat,
+Playwright, plus jMeter/k6 load harnesses), and an external audit has signed the
+codebase off for a beta branch. What beta is *for* is the validation that only
+real use can provide — classroom-scale field testing, browser matrix, long-run
+collaboration and accessibility verification with actual assistive technology.
+Please report findings via the issue tracker; see `docs/beta/beta-testing.md`.
+
 ## Requirements
 
 This plugin requires Moodle 4.5+
