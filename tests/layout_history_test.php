@@ -18,6 +18,10 @@ namespace mod_vimipad;
 
 use mod_vimipad\local\service\layout_service;
 
+defined('MOODLE_INTERNAL') || die();
+
+require_once(__DIR__ . '/fixtures/workspace_fixture.php');
+
 /**
  * Tests for the append-only layout history that lets past revisions replay with
  * their real topology (R10).
@@ -28,32 +32,17 @@ use mod_vimipad\local\service\layout_service;
  * @covers     \mod_vimipad\local\service\layout_service
  */
 final class layout_history_test extends \advanced_testcase {
-    /** @var int Workspace id under test. */
-    private $workspaceid;
-
-    /** @var int Acting user id. */
-    private $userid;
+    use \mod_vimipad\workspace_fixture;
 
     /**
-     * Create a course, activity, user and empty workspace.
+     * Create a course, activity, enrolled user and a workspace owned by them.
      *
      * @return void
      */
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
-
-        $course = $this->getDataGenerator()->create_course();
-        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
-        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
-        $this->userid = (int) $user->id;
-
-        global $DB;
-        $now = time();
-        $this->workspaceid = (int) $DB->insert_record('vimipad_workspace', (object) [
-            'vimipadid' => $instance->id, 'userid' => $this->userid, 'groupid' => null,
-            'currentrevision' => 0, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
-        ]);
+        $this->set_up_owned_workspace();
     }
 
     /**

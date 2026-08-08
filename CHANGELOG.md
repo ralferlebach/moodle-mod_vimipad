@@ -4,7 +4,23 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.8.32** (2026072802).
+> release is **0.8.33** (2026072803).
+
+## 0.8.33 (2026072803) — Performance: schlankeres get_workspace
+
+`workspace_service::get_state()` — die Datenquelle von `get_workspace` — lud
+bisher via `get_records(...)` **alle** Spalten der Knoten/Relationen/Container,
+obwohl die externen Mapper nur einen Teil nutzen. Bei gro{ß}en Maps (Tausende
+Zeilen) lädt es jetzt nur noch die tatsächlich benötigten Felder (Audit-IDs und
+Zeitstempel entfallen). Messbar: Query-Zeit der Zustandsabfrage ≈ −40%, Peak-
+Speicher pro Request ≈ −13% — was vor allem unter gleichzeitigen Ladevorgängen
+den Speicherdruck und die Tail-Latenz senkt. Rückgabe-Struktur und Verhalten
+sind unverändert.
+
+Hinweis: Der grö{ß}te verbleibende Posten pro Aufruf ist Moodles Rückgabe-
+Validierung (`clean_returnvalue`) über die volle Map; ihn zu senken hie{ß}e, die
+Rückgabe-Struktur zu ändern (API-Freeze 0.7.27) und ist daher bewusst nicht
+Teil dieser Änderung.
 
 ## 0.8.32 (2026072802) — Fix: Container wandern beim (Re-)Load
 

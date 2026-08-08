@@ -265,9 +265,17 @@ class workspace_service {
         global $DB;
 
         $workspace = $DB->get_record('vimipad_workspace', ['id' => $workspaceid], '*', MUST_EXIST);
-        $nodes = $DB->get_records('vimipad_node', ['workspaceid' => $workspaceid, 'deleted' => 0]);
-        $relations = $DB->get_records('vimipad_relation', ['workspaceid' => $workspaceid, 'deleted' => 0]);
-        $containers = $DB->get_records('vimipad_container', ['workspaceid' => $workspaceid, 'deleted' => 0]);
+        // Fetch only the columns the external mappers actually use. The full map
+        // can run to thousands of rows, so skipping the unused audit ids and
+        // timestamps measurably cuts both the query time and the per-request
+        // memory footprint under concurrent workspace loads.
+        $nodefields = 'id, stableid, type, label, content, contentformat, metadatajson';
+        $relationfields = 'id, stableid, sourceid, targetid, type, label, direction, metadatajson';
+        $containerfields = 'id, stableid, type, label, geometryjson, metadatajson';
+        $conditions = ['workspaceid' => $workspaceid, 'deleted' => 0];
+        $nodes = $DB->get_records('vimipad_node', $conditions, '', $nodefields);
+        $relations = $DB->get_records('vimipad_relation', $conditions, '', $relationfields);
+        $containers = $DB->get_records('vimipad_container', $conditions, '', $containerfields);
 
         return [
             'workspace' => $workspace,
