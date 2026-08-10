@@ -4,7 +4,21 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.9.0** (2026080800).
+> release is **0.9.1** (2026080801).
+
+## 0.9.1 (2026080801) — Öffentliche Scoring-Fassade
+
+Neue stabile öffentliche API `\mod_vimipad\api\score`: eine kontextfreie Naht
+über die interne Assessment-Engine (`vimipadassess_*`). Abgeleitete Plugins
+(z. B. der Fragetyp `qtype_vimipad`) können damit eine Map gegen eine Referenz-
+Map bewerten und erhalten exakt dasselbe Ergebnis wie die Aktivität, ohne
+interne Klassen anzufassen oder Scoring zu duplizieren.
+
+* `score::against_reference()` / `score::fraction()` / `score::reference_scorers()`
+  plus `MATCH_EXACT`/`MATCH_FUZZY`/`MATCH_TOKEN`; delegiert an denselben
+  Scorer/Matcher-Pfad wie `assess_service` (Snapshot-JSON rein, Ergebnis raus).
+* Abgesichert durch `api_score_test` (6 Tests gegen den echten Reference-Scorer).
+* Dokumentiert in `docs/design/public-api.md`. Reifegrad bleibt `MATURITY_BETA`.
 
 ## 0.9.0 (2026080800) — Beta-Schnitt
 

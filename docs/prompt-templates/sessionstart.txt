@@ -15,6 +15,10 @@ Reihenfolge und Versionsvergabe):**
 Weitere Planungs-/Entwurfsdokumente:
   docs/design/backlog.md
   docs/design/connector-styles.md
+  docs/design/barrierearmut.md
+  docs/design/public-api.md
+  docs/beta/beta-testing.md
+  docs/beta/release-checklist.md
 
 Fach-, Technik- und Strategiedokumente liegen im Plugin-Repo:
   docs/materials/pflicht_lastenheft_knowledgemap.md
@@ -30,8 +34,15 @@ die materials/-Dokumente liefern Strategie, Machbarkeit und Fachanforderungen.
 
 ### B) Kontext-Dokument der letzten Sitzung
 
-Das aktuelle Kontext-Dokument (sessionende der Vorsitzung) ist im Anhang
-zu finden. Ältere Kontext-Dokumente zwecks Referenz: docs/sessions/
+Konvention: EINE Sitzung = EIN Chat = EIN Report docs/sessions/session-NNN.md.
+Der Report der unmittelbar vorangegangenen Sitzung ist im Anhang zu finden und
+beschreibt Stand, Entscheidungen und offene Punkte. Ältere Reports zwecks
+Referenz: docs/sessions/
+
+Dieser Startprompt ist bewusst GENERISCH und wird von Sitzung zu Sitzung
+fortgeschrieben (docs/prompt-templates/sessionstart.txt). Es werden KEINE
+sitzungsspezifischen Startprompts mehr angelegt; der sitzungsspezifische
+Kontext kommt ausschließlich aus dem angehängten session-NNN.md.
 
 ---
 
@@ -82,6 +93,19 @@ Haupt-Dependencies:
      dependency auf mod_vimipad.
   9. Alle READMEs folgen dem Template von Moodle an Hochschulen e.V.:
      https://github.com/moodle-an-hochschulen/moodle-readmetemplate
+ 10. Mutierende klassische PHP-Handler (view.php, Output-Panels) sind POST-only.
+     Der Guard ist zentral: \mod_vimipad\local\policy\request_policy::
+     is_mutating_request(). Reihenfolge im Handler: ERST require_capability
+     (wer darf), DANN der POST-Guard (wie kam die Anfrage) — sonst kehrt ein
+     unautorisierter GET still zurueck, statt die Exception zu werfen.
+ 11. Grosse Datenmengen werden PAGINIERT geliefert, nicht per PARAM_RAW an der
+     Rueckgabe-Validierung vorbei. get_workspace kennt includeelements (Default
+     true = altes Verhalten); mit false liefert es Metadaten + counts, die
+     Elemente kommen seitenweise ueber mod_vimipad_get_workspace_elements.
+     Jede Zeile geht weiterhin durch clean_returnvalue.
+ 12. Jede Liste, deren Laenge mit Kohorte, Kursdauer oder Mapgroesse waechst,
+     wird von vornherein paginiert (count-Query + limitfrom/limitnum +
+     paging_bar), nicht nachtraeglich.
 
 ---
 
@@ -108,6 +132,17 @@ Kurzfassung des Ablaufs (Details in der Anleitung):
   9. Moodles Grunt-Toolchain (npm ci) -> npx grunt amd (AMD reproduzierbar bauen)
  10. Behat init + dry-run (Steps validieren; @javascript nur in CI)
  11. Frontend: ./node_modules/.bin/tsc --noEmit, node build.mjs, ./node_modules/.bin/jest
+ 12. local_moodlecheck klonen und laufen lassen — der PHPDoc-Gate-Check der CI.
+     phpcs findet dessen Befunde NICHT: ein fehlender @param nach einer
+     Signaturaenderung ist phpcs-sauber und bricht trotzdem die CI.
+       git clone -q --depth 1 \
+         https://github.com/moodlehq/moodle-local_moodlecheck.git local/moodlecheck
+       php local/moodlecheck/cli/moodlecheck.php --path=mod/vimipad \
+         --exclude=mod/vimipad/tools --format=text | grep -B1 '    Line'
+ 13. Lasttest optional: k6/jMeter aus tests/load (siehe
+     docs/dev/moodle-test-environment-setup.md, Abschnitte 15-17). Live-Laeufe
+     brauchen einen setsid-abgekoppelten Runner mit Marker-Polling; weder der
+     PHP-Built-in-Server noch k6 ueberleben eine Tool-Aufruf-Grenze.
 
 WICHTIGE FALLSTRICKE (siehe Anleitung, Abschnitt 0):
   - PostgreSQL schläft ein -> vor JEDEM DB-Kommando: service postgresql start; sleep 3
@@ -121,8 +156,8 @@ WICHTIGE FALLSTRICKE (siehe Anleitung, Abschnitt 0):
   - AMD-Build MUSS reproduzierbar sein (zweiter grunt-Lauf == erster), sonst CI rot
 
 Zielzustand vor Beginn der eigentlichen Arbeit:
-  PHPUnit grün, phpcs 0/0, AMD identisch, tsc/Jest grün,
-  phpdoc/validate/savepoints/mustache ohne Fehlerzeilen.
+  PHPUnit grün, phpcs 0/0, moodlecheck ohne Befunde, AMD identisch,
+  tsc/Jest grün, phpdoc/validate/savepoints/mustache ohne Fehlerzeilen.
 
 Wenn ein Schritt in der Sandbox nicht stabil läuft (z. B. voller Site-Install
 wegen instabilem PostgreSQL), dokumentiere das ehrlich und stütze die
@@ -130,7 +165,57 @@ Verifikation auf die stabile PHPUnit-Env, statt Erfolg vorzutäuschen.
 
 ---
 
-### F) Ziel dieser Sitzung
+### F) Verifikationskette vor JEDER Auslieferung
+
+  service postgresql start; sleep 2
+  phpcs (moodle-Standard, ohne node_modules/js)
+  local_moodlecheck (PHPDoc — CI-Gate)
+  moodle-plugin-ci: validate, savepoints, mustache, phpcpd
+  PHPUnit (nach Version-Bump oder neuen Testdateien vorher init.php erneut,
+           immer mit --no-composer-self-update)
+  tsc --noEmit, jest, npx grunt eslint --root=mod/vimipad
+  node build.mjs + npx grunt amd --root=mod/vimipad, Byte-Reproduzierbarkeit
+  Lang-Paritaet EN/DE (byte-sortiert, gleiche Schluesselmenge)
+  CHANGELOG-Eintrag; Version-Bump in version.php UND package.json/-lock
+  ZIP bauen, Frisch-Installation aus dem ZIP testen, Dateien praesentieren
+
+Fixes werden GEGEN den Fehler validiert: Bug zurueckbauen, Test muss rot
+werden. Ein gruener Test, der den Fehler nicht faengt, ist wertlos.
+
+Audit-/Reviewbefunde werden IMMER erst im Code gegengeprueft, bevor sie
+umgesetzt werden — Fehlbefunde ehrlich benennen statt still mitzuschleppen.
+
+---
+
+### G) Auslieferung
+
+Zwei Pakete pro Release:
+  vimipad-X.Y.Z-release.zip  Distributionspaket nach .gitattributes
+                             (Root vimipad/; ohne docs, tools, .github,
+                             tests/load, tests/playwright, js/tests; MIT
+                             amd/src, js/src, PHPUnit-/Behat-Tests und den
+                             Source-Maps — die CI prueft deren Existenz und
+                             Reproduzierbarkeit)
+  vimipad-X.Y.Z.zip          Arbeitspaket inklusive Tooling
+
+Paketierung real pruefen, nicht annehmen:
+  git archive --format=tar --prefix=vimipad/ HEAD | tar -tf -
+
+---
+
+### H) Sitzungsabschluss
+
+  1. docs/sessions/session-NNN.md schreiben (Ergebnis, Releases, Entscheidungen,
+     Gegenbefunde, Verifikation, Methodisches).
+  2. docs/design/roadmap.md und docs/design/backlog.md auf den neuen Stand
+     ziehen; CHANGELOG pruefen.
+  3. DIESEN generischen Startprompt fortschreiben, falls sich Konventionen,
+     Entwurfsentscheidungen oder die Verifikationskette geaendert haben.
+     KEINE sitzungsspezifischen Startprompts anlegen.
+
+---
+
+### I) Ziel dieser Sitzung
 
 Wir knüpfen an die Arbeiten an, die im aktuellen Kontext-Dokument
 und in der angehängten Code-Base vorliegen, und gehen, wenn der letzte

@@ -8,7 +8,8 @@ Lastwerkzeuge, Performance) sind abgeschlossen. Ein externes Audit des Standes
 PHP-Handler, Paginierung der produktionskritischen Ansichten, Nulltoleranz für
 fachliche Fehler im Lasttest, Versions- und Paketierungshygiene). Mit diesem
 Schnitt stehen Kern **und** alle 19 gebündelten Subplugins auf
-`MATURITY_BETA` / Release `0.9.0`.
+`MATURITY_BETA` / Release `0.9.0`. Die GitHub-CI ist für diesen Stand komplett
+grün (inklusive Merge-CI).
 
 Nächste Stufe: Feldvalidierung im echten Kursbetrieb sowie die noch offenen
 0.9.x-Themen (Barrierefreiheits-Audit, Stabilisierung der öffentlichen API für

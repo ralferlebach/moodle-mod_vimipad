@@ -1,7 +1,9 @@
-# Session 011 — Lastnachweis, Performance, Audit-P1 und Beta-Schnitt (0.8.32 → 0.9.0)
+# Session 005 — Lastnachweis, Performance, Audit-P1 und Beta-Schnitt (0.8.32 → 0.9.0)
 
-> Versionierter Report der Sitzung. Kurzfassung für den Einstieg in Session 012
-> steht in `sessionstart-012.txt`.
+> Versionierter Report der Sitzung. Der Startprompt für die
+> Folgesitzung ist generisch und liegt in
+> `docs/prompt-templates/sessionstart.txt`; dieses Dokument wird dort als
+> Kontext-Dokument der Vorsitzung angehängt.
 
 ## Ergebnis in einem Satz
 
@@ -142,6 +144,11 @@ phpcs 0 · **moodlecheck 0** · validate/savepoints/mustache 0 · phpcpd „no c
 Upgrade auf 2026080800 für Kern und Subplugins erfolgreich ·
 Frisch-Installation aus dem Release-ZIP erfolgreich.
 
+**Extern bestätigt:** die GitHub-CI ist für `0.9.0` **komplett grün**,
+einschließlich der Merge-CI. Damit ist die sandbox-lokale Verifikation über die
+volle Moodle-/DB-/PHP-Matrix hinweg unabhängig nachvollzogen — das war die vom
+Audit genannte Bedingung dafür, `MATURITY_BETA` sachlich zu vertreten.
+
 ## 7. Methodisches aus dieser Sitzung
 
 - **Live-Playwright in der Sandbox** funktioniert nur über einen `setsid`-
@@ -152,3 +159,61 @@ Frisch-Installation aus dem Release-ZIP erfolgreich.
   wurden durch Zurückbauen des Fehlers geprüft.
 - Der PHP-Built-in-Server überlebt keine Tool-Aufruf-Grenze — dasselbe
   Runner-Muster gilt für k6-Läufe.
+
+## 8. Playwright unter GitHub Actions repariert
+
+Der Workflow lief nie durch. Drei Ursachen, alle am Quellcode bzw. praktisch
+belegt statt vermutet:
+
+1. **`cp config-dist.php config.php` vor `install.php`** — `install.php` schreibt
+   die Datei selbst und bricht bei vorhandener `config.php` ab
+   („The configuration file config.php already exists"). Der Installationsschritt
+   konnte gar nicht laufen.
+2. **`seed.php`-Ausgabe direkt nach `$GITHUB_ENV`** — das Skript gibt
+   `export KEY='wert'` aus (für `source`), `$GITHUB_ENV` erwartet `KEY=wert`.
+   Ergebnis: Variablenname `export VIMIPAD_BASE_URL`, Wert mit Anführungszeichen;
+   `support/env.ts` wirft bei der ersten Pflichtvariablen. Jetzt wird per `sed`
+   konvertiert.
+3. **`php -S` ohne `PHP_CLI_SERVER_WORKERS`** — single-threaded, blockiert unter
+   einem Browser. Jetzt acht Worker, Bereitschaftsprüfung auf HTTP 200 von
+   `/login/index.php`, Server-Log bei Fehlschlag, `test-results` zusätzlich als
+   Artefakt.
+
+Gegenprobe: der gesamte korrigierte Pfad wurde in der Sandbox real durchgespielt
+(frische Installation ohne vorhandene `config.php` → Server mit Workern → Seed →
+Konvertierung → `npx playwright test`) und endet mit **`3 passed`**, Exit 0.
+
+Nebenbefund aus der Simulation, der auch anderswo beißt: ein
+`rsync --exclude='config.php'` trifft **jede** `config.php` im Baum, auch
+Moodles `cache/classes/config.php`. Für die Wurzeldatei gehört ein führender
+Schrägstrich davor: `--exclude='/config.php'`.
+
+## 9. Chatty-Review, GitHub-Workflow-Fixes und neue Feature-Wünsche
+
+**Chatty-Review des Release-ZIPs** ins Backlog aufgenommen (Punkte 15–29):
+Endurteil GO nach drei P1-Punkten (paginiertes Live-Laden unter Nebenläufigkeit
+via Revision-Pinning/Keyset konsistent machen; `poll_changes` für echten
+Read-only-Zugriff auf `validate_workspace_for_read` + `view`-Capability
+umstellen; Gast-Policy zwischen `helper.php`-Doku und `db/access.php`
+entscheiden), dazu P2-Politur (README-Link, `db/upgrade.php`-Urknall,
+öffentlicher Changelog, `phpunit.xml`, `npm test`-Hinweis, init.js-Kommentar,
+version.php-Kommentar) und 0.9.x-Absicherungen.
+
+**Zwei neue Feature-Wünsche** (Backlog 30/31): Revision-Playback auch im
+Bewertungskontext mit Geschwindigkeitsstufen 1×/10×/100× (Batch pro Tick statt
+schnellerem Timer); Admin-Mail bei der Installation (Dank für die Beta, kurze
+Vorstellung, Bitte um Praxistest und GitHub-Issues; `email_to_user(get_admin())`,
+EN/DE-Strings, einmalig über Config-Flag, im Post-Install-Hook).
+
+**GitHub-Playwright real diagnostiziert** (Log `neu_12.txt`): der Lauf checkt
+`origin/main` aus (alte `playwright.yml` mit `cp config-dist.php config.php`) und
+scheitert an `$CFG->dataroot is not configured properly`. Zwei Ursachen: die
+vorab kopierte config.php (in 0.9.0 bereits behoben) UND ein fehlendes
+`mkdir -p /tmp/moodledata` — Letzteres jetzt in `playwright.yml` und `load.yml`
+ergänzt. (Der zugehörige Screenshot zeigte `load.yml`, nicht `playwright.yml`.)
+
+**`load.yml` neu gebaut:** Standardmodus self-contained (baut/seedet/lastet
+selbst, kein Eintrag nötig, kein Klartext-Token), optionaler external-Modus mit
+Token aus dem Secret `VIMIPAD_LOAD_TOKEN` (+ `::add-mask::`). Der jMeter-Plan
+fährt jetzt ein echtes Plateau (`scheduler` + `duration` + `continue_forever`).
+Real gegengeprüft: 223 Samples, 0,00 % Fehler, Plateau ~21 s.
