@@ -4,7 +4,23 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.9.1** (2026080801).
+> release is **0.9.2** (2026080802).
+
+## 0.9.2 (2026080802) — Einbettbarer Editor auf einem Wert
+
+Neue öffentliche Embedding-Naht für abgeleitete Plugins, die die ganze Map als
+einen selbst-enthaltenen Wert speichern (Fragetyp-Attempt, Datenbankfeld) statt
+als lebende Aktivitäts-Workspace.
+
+* `mountValue(element, {value, onChange, profile?, readonly?, ...})` und die
+  Primitive `createValueTransport(valuejson, options)` im AMD-Modul
+  `mod_vimipad/editor_lazy`. Der Transport seedet aus dem Wert, wendet die
+  Operationen des Editors über den bestehenden internen Reducer an und meldet
+  den re-serialisierten Wert per `onChange` — ohne Netzwerk, ohne service.php.
+* Der Wert hat dieselbe Snapshot-Form wie der Aktivitäts-Export und ist direkt
+  über `\mod_vimipad\api\score` bewertbar.
+* Abgesichert durch `value_transport.test.ts` (8 Tests). Bundle byte-identisch
+  reproduzierbar; Reifegrad bleibt `MATURITY_BETA`.
 
 ## 0.9.1 (2026080801) — Öffentliche Scoring-Fassade
 
