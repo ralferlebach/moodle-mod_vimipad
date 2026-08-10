@@ -17,7 +17,7 @@
 namespace mod_vimipad;
 
 /**
- * The AMD module requests its editor strings by key. If a key is requested but
+ * The AMD editor-strings module lists the editor string keys. If a key is requested but
  * missing from the language file, Moodle's get_strings returns a placeholder and
  * the editor shows a broken label, so guard the two lists against drift.
  *
@@ -39,7 +39,7 @@ final class amd_string_keys_test extends \advanced_testcase {
         require($CFG->dirroot . '/mod/vimipad/lang/en/vimipad.php');
         $available = array_keys($string);
 
-        foreach (['amd/src/init.js', 'amd/src/revision.js'] as $module) {
+        foreach (['amd/src/editor_strings.js', 'amd/src/revision.js'] as $module) {
             $requested = $this->requested_keys($module);
             $this->assertNotEmpty($requested, "No STRING_KEYS parsed from $module");
             $missing = array_values(array_diff($requested, $available));

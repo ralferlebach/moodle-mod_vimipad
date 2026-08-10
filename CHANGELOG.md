@@ -4,7 +4,13 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.9.4** (2026080804).
+> release is **0.9.5** (2026080805).
+
+## 0.9.5 (2026080805) — CI-Fix: amd_string_keys liest editor_strings.js
+
+Der Test `amd_string_keys_test` suchte die `STRING_KEYS` noch in `init.js`; seit
+0.9.3 liegt die Liste in `amd/src/editor_strings.js`. Der Test liest jetzt dort
+(plus `revision.js`). Reiner Test-Fix; keine Verhaltensänderung.
 
 ## 0.9.4 (2026080804) — Editor-Embed: Formconfig durchgereicht, Embedded-Modus
 
