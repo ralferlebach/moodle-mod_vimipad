@@ -97,6 +97,8 @@ interface Props {
     arrangeIterations?: number;
     /** Site setting: may the Arrange action shrink oversized containers. Default true. */
     arrangeShrink?: boolean;
+    /** Embedded (single-value) mode: hide journal, data export/import and submit. */
+    embedded?: boolean;
 }
 
 type ViewMode = 'canvas' | 'list' | 'tools';
@@ -115,7 +117,7 @@ const EMPTY: EditorState = {
  */
 export function EditorApp(props: Props): React.ReactElement {
     const {api, t, groupid = 0, initialView = 'canvas', targetUserid = 0, arrangeIterations,
-        arrangeShrink = true} = props;
+        arrangeShrink = true, embedded = false} = props;
     const [state, dispatch] = useReducer(reduce, EMPTY);
     const view = initialView;
     const [stored, setStored] = useState<LayoutMap>({});
@@ -1047,6 +1049,7 @@ export function EditorApp(props: Props): React.ReactElement {
                         onExportSvg={exportSvg}
                         onExportPng={exportPng}
                         onExportPdf={exportPdf}
+                        embedded={embedded}
                         t={t}
                         isLockedByOther={collab.isLockedByOther}
                         beginEdit={collab.beginEdit}
@@ -1069,13 +1072,15 @@ export function EditorApp(props: Props): React.ReactElement {
                         {addNodeControls}
                         {addRelationControls}
                     </div>
-                    <JournalPanel
-                        api={api}
-                        workspaceid={state.workspaceid}
-                        allowPrivate={state.journalallowprivate === true}
-                        revision={state.revision}
-                        t={t}
-                    />
+                    {!embedded && (
+                        <JournalPanel
+                            api={api}
+                            workspaceid={state.workspaceid}
+                            allowPrivate={state.journalallowprivate === true}
+                            revision={state.revision}
+                            t={t}
+                        />
+                    )}
                 </>
             ) : (
                 <>
@@ -1094,13 +1099,15 @@ export function EditorApp(props: Props): React.ReactElement {
                         onChangeType={changeType}
                         t={t}
                     />
-                    <JournalPanel
-                        api={api}
-                        workspaceid={state.workspaceid}
-                        allowPrivate={state.journalallowprivate === true}
-                        revision={state.revision}
-                        t={t}
-                    />
+                    {!embedded && (
+                        <JournalPanel
+                            api={api}
+                            workspaceid={state.workspaceid}
+                            allowPrivate={state.journalallowprivate === true}
+                            revision={state.revision}
+                            t={t}
+                        />
+                    )}
                 </>
             )}
             </div>

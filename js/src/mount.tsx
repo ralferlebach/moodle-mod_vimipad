@@ -81,6 +81,7 @@ export function mount(element: HTMLElement, config: MountConfig): void {
         targetUserid={config.targetUserid ?? 0}
         arrangeIterations={config.arrangeIterations}
         arrangeShrink={config.arrangeShrink}
+        embedded={config.embedded ?? false}
     />);
 }
 
@@ -94,6 +95,8 @@ export interface ValueMountConfig {
     onChange: (valuejson: string) => void;
     /** The diagram profile to constrain the map to. Default 'conceptmap'. */
     profile?: string;
+    /** The profile form config (node/relation types, shapes) from the activity. */
+    formconfig?: Record<string, unknown>;
     /** View-only when true (submitted attempts, teacher inspection). */
     readonly?: boolean;
     /** Which view opens first. */
@@ -119,6 +122,7 @@ export function mountValue(element: HTMLElement, config: ValueMountConfig): Valu
         profile: config.profile,
         onChange: config.onChange,
         readonly: config.readonly,
+        formconfig: config.formconfig,
     });
     mount(element, {
         cmid: 0,
@@ -126,6 +130,7 @@ export function mountValue(element: HTMLElement, config: ValueMountConfig): Valu
         readonly: config.readonly,
         initialView: config.initialView,
         getString: config.getString,
+        embedded: true,
     });
     return handle;
 }

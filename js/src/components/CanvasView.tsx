@@ -109,6 +109,8 @@ interface Props {
     onReArrange?: () => void;
     /** True while an arrange is in flight; disables the button for feedback. */
     arrangeBusy?: boolean;
+    /** Embedded mode: hide the graphic export control. */
+    embedded?: boolean;
     onExportSvg?: () => void;
     onExportPng?: () => void;
     onExportPdf?: () => void;
@@ -996,7 +998,7 @@ export function CanvasView(props: Props): React.ReactElement {
                         <Icon name={FA.container} />
                     </button>
                 )}
-                {!expanded && (
+                {!expanded && !props.embedded && (
                     <div className="vimipad-export" ref={exportRef}>
                         <button
                             type="button"

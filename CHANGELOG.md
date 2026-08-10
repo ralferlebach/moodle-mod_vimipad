@@ -4,7 +4,34 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.9.2** (2026080802).
+> release is **0.9.4** (2026080804).
+
+## 0.9.4 (2026080804) — Editor-Embed: Formconfig durchgereicht, Embedded-Modus
+
+Behebt die Kernprobleme des wertgebundenen Embeds (Fragetyp/Datenfeld):
+
+* `mountValue`/`createValueTransport` reichen jetzt die `formconfig` des Profils
+  durch, sodass `get_workspace` sie liefert. Ohne sie fehlten dem Editor die
+  Knoten-/Relationstypen: Relationsmenü inaktiv, neue Knoten vom Anordnen aus
+  dem Canvas gedrückt. Hosts holen die Config kontextfrei über die öffentliche
+  `\mod_vimipad\profile\profiles::form_config()`.
+* Neuer `embedded`-Modus (von `mountValue` gesetzt): blendet Lernjournal und den
+  Grafik-Export im eingebetteten Editor aus. Ein manuelles Einreichen/Snapshot
+  gibt es im Embed ohnehin nicht — der Wert wird bei jeder Änderung gespiegelt.
+* Bundle byte-reproduzierbar; tsc/jest grün. Reifegrad bleibt `MATURITY_BETA`.
+
+## 0.9.3 (2026080803) — Editor-Strings als eigenes AMD-Modul
+
+Die Editor-String-Schlüsselliste (`STRING_KEYS`) ist aus `init.js` in ein
+eigenes, öffentliches AMD-Modul `mod_vimipad/editor_strings` ausgelagert (single
+source of truth). `init.js` importiert die Liste von dort; einbettende Hosts
+können `editor_strings.load()` für einen fertigen getString-Resolver nutzen,
+ohne die Liste zu duplizieren.
+
+* Neu: `amd/src/editor_strings.js` (+ committeter Build). `init.js`-Rebuild
+  hängt jetzt als AMD-Abhaengigkeit an `mod_vimipad/editor_strings`.
+* CI baut und verifiziert das neue Modul mit (byte-reproduzierbarer Build).
+* Rein strukturell; keine Verhaltensänderung. Reifegrad bleibt `MATURITY_BETA`.
 
 ## 0.9.2 (2026080802) — Einbettbarer Editor auf einem Wert
 

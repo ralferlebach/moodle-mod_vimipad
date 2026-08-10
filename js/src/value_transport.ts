@@ -46,6 +46,8 @@ export interface ValueTransportOptions {
     onChange?: (valuejson: string) => void;
     /** When true, operations and layout writes are ignored (view-only). */
     readonly?: boolean;
+    /** The profile form config (node/relation types, shapes) from the activity. */
+    formconfig?: Record<string, unknown>;
 }
 
 /** The handle returned by {@link createValueTransport}. */
@@ -152,7 +154,11 @@ export function createValueTransport(
     ): Promise<unknown> => {
         switch (method) {
             case 'mod_vimipad_get_workspace':
-                return state;
+                return {
+                    ...state,
+                    formconfig: options.formconfig,
+                    canmanage: false,
+                };
             case 'mod_vimipad_get_constraint_status':
                 return {configured: false, satisfied: true, messages: []};
             case 'mod_vimipad_get_journal_entries':

@@ -231,6 +231,8 @@ export interface MountConfig {
     callService?: ServiceTransport;
     /** Optional string getter for i18n; if absent, keys are echoed. */
     getString?: (key: string) => string | undefined;
+    /** Embedded (single-value) mode: hide journal, data export/import and submit. */
+    embedded?: boolean;
 }
 
 /**

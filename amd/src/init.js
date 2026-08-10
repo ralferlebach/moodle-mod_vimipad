@@ -33,40 +33,11 @@
  */
 
 import {get_strings as getStrings} from 'core/str';
+import {STRING_KEYS} from 'mod_vimipad/editor_strings';
 import {call as fetchMany} from 'core/ajax';
 import Notification from 'core/notification';
 
 /** @type {string[]} Editor string keys, kept in sync with lang/en/vimipad.php. */
-const STRING_KEYS = [
-    'constraint:hintsheading',
-    'editor:concepts', 'editor:conceptsandrelations',
-    'editor:containers', 'editor:drawcontainer', 'editor:drawcontainerdone', 'editor:newcontainer',
-    'editor:node', 'editor:templatelocks', 'editor:templatelockshint', 'editor:lockallowlabel',
-    'editor:importnovimidata', 'editor:authortools',
-    'editor:lockmode', 'editor:lockelement', 'editor:unlockelement', 'editor:elementlocked',
-    'editor:lockgroup_move', 'editor:lockgroup_color', 'editor:lockgroup_text',
-    'editor:fmt_fontsans', 'editor:fmt_fontserif', 'editor:fmt_fontmono',
-    'editor:add', 'editor:addnode', 'editor:addrelation', 'editor:actions',
-    'editor:beingedited', 'editor:cancel', 'editor:canvasaria', 'editor:canvashint',
-    'editor:canvasview', 'editor:canvasplaceholder',
-    'editor:confirm', 'editor:deleterelation', 'editor:fmt_bold', 'editor:fmt_italic', 'editor:fmt_underline', 'editor:fullview',
-    'editor:dir_both', 'editor:dir_left', 'editor:dir_none', 'editor:dir_right',
-    'editor:import', 'editor:importheading', 'editor:importhint', 'editor:importreplace',
-    'editor:exportdataheading', 'editor:exportdatahint', 'editor:exportjson', 'editor:exportxml',
-    'editor:journal', 'editor:journalnew', 'editor:journalprivate', 'editor:journalsave', 'editor:journalsaved',
-    'editor:dragnodes', 'editor:export', 'editor:line_curved', 'editor:line_orthogonal',
-    'editor:line_straight', 'editor:listview', 'editor:loading',
-    'editor:locked', 'editor:nodelabel', 'editor:norelations', 'editor:normalview', 'editor:object',
-    'editor:readonly', 'editor:rearrange', 'editor:redo', 'editor:undo',
-    'editor:relation', 'editor:relations', 'editor:reledit',
-    'editor:reverse', 'editor:retarget', 'editor:revision',
-    'editor:subject', 'editor:submit', 'editor:submitconfirm', 'editor:submitpending',
-    'editor:fmt_bigger', 'editor:fmt_delete', 'editor:fmt_duplicate', 'editor:fmt_ellipse',
-    'editor:fmt_fill', 'editor:fmt_font', 'editor:fmt_fontdefault', 'editor:fmt_highlight',
-    'editor:fmt_move', 'editor:fmt_rect', 'editor:fmt_reset', 'editor:fmt_roundrect',
-    'editor:fmt_shape', 'editor:fmt_smaller', 'editor:fmt_text', 'editor:fmt_textcolor',
-    'editor:fmt_toolbar',
-];
 
 /**
  * Load all editor strings and return a key → text map.
