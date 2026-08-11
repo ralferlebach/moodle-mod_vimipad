@@ -82,6 +82,7 @@ export function mount(element: HTMLElement, config: MountConfig): void {
         arrangeIterations={config.arrangeIterations}
         arrangeShrink={config.arrangeShrink}
         embedded={config.embedded ?? false}
+        showViewToggle={config.showViewToggle ?? false}
     />);
 }
 
@@ -97,6 +98,8 @@ export interface ValueMountConfig {
     profile?: string;
     /** The profile form config (node/relation types, shapes) from the activity. */
     formconfig?: Record<string, unknown>;
+    /** Show an in-editor Map/List toggle. */
+    showViewToggle?: boolean;
     /** View-only when true (submitted attempts, teacher inspection). */
     readonly?: boolean;
     /** Which view opens first. */
@@ -131,6 +134,7 @@ export function mountValue(element: HTMLElement, config: ValueMountConfig): Valu
         initialView: config.initialView,
         getString: config.getString,
         embedded: true,
+        showViewToggle: config.showViewToggle,
     });
     return handle;
 }

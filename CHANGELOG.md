@@ -4,7 +4,25 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.9.8** (2026080808).
+> release is **0.9.10** (2026080810).
+
+## 0.9.10 (2026080810) — Editor: Map/List-Umschalter für read-only Embeds
+
+`mountValue`/`mount` akzeptieren jetzt `showViewToggle`. Ist es gesetzt, zeigt der
+eingebettete Editor einen Map/Liste-Umschalter (nutzt die vorhandenen Strings
+`editor:canvasview`/`editor:listview`); die Ansicht ist damit umschaltbar statt
+fix. Ohne das Flag bleibt alles wie bisher (rückwärtskompatibel). Damit wird das
+`showtabs`-Setting der ViMi-Galerie wirksam.
+
+* tsc sauber, jest 442/442, Bundle byte-reproduzierbar. Reifegrad bleibt BETA.
+
+## 0.9.9 (2026080809) — Phasenwechsel idempotent
+
+`snapshot_service::transition()` behandelt einen Wechsel in die bereits aktive
+Phase jetzt als idempotenten No-op. Damit können Aufrufer eine Aktion (z. B. eine
+Neubewertung -> `GRADED`) wiederholen, ohne den Sonderfall selbst zu behandeln;
+illegale Wechsel werfen weiterhin. Rein additive Härtung der 0.9.8-API - kein
+bestehender Pfad geändert (volle Testsuite 331/331).
 
 ## 0.9.8 (2026080808) — Abgabe-Lebenszyklus als validierter Zustandsautomat
 

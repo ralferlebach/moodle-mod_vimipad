@@ -328,7 +328,8 @@ class snapshot_service {
      *
      * Unlike {@see self::set_status()}, which writes any value, this consults the
      * {@see snapshot_phase} state machine and throws when the move is not legal
-     * from the snapshot's current phase.
+     * from the snapshot's current phase. Moving to the current phase is an
+     * idempotent no-op.
      *
      * @param int $snapshotid The snapshot to move.
      * @param int $to The target status constant.
@@ -338,6 +339,11 @@ class snapshot_service {
     public function transition(int $snapshotid, int $to): void {
         global $DB;
         $current = (int) $DB->get_field('vimipad_snapshot', 'status', ['id' => $snapshotid], MUST_EXIST);
+        if ($current === $to) {
+            // Already in the target phase: an idempotent no-op, so callers can
+            // re-run an action (for example a regrade) without special-casing.
+            return;
+        }
         if (!snapshot_phase::can_transition($current, $to)) {
             throw new \moodle_exception(
                 'error:illegalphasetransition',

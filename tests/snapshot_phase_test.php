@@ -131,6 +131,13 @@ final class snapshot_phase_test extends \advanced_testcase {
             (int) $DB->get_field('vimipad_snapshot', 'status', ['id' => $id])
         );
 
+        // Idempotent: transitioning to the current phase is a no-op (e.g. regrade).
+        $service->transition($id, snapshot_service::STATUS_GRADED);
+        $this->assertSame(
+            snapshot_service::STATUS_GRADED,
+            (int) $DB->get_field('vimipad_snapshot', 'status', ['id' => $id])
+        );
+
         // Illegal: draft -> graded throws and leaves the phase unchanged.
         $draftid = $insert(snapshot_service::STATUS_DRAFT);
         try {

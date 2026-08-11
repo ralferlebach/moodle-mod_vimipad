@@ -233,6 +233,8 @@ export interface MountConfig {
     getString?: (key: string) => string | undefined;
     /** Embedded (single-value) mode: hide journal, data export/import and submit. */
     embedded?: boolean;
+    /** Show an in-editor Map/List toggle (used by read-only embeds). */
+    showViewToggle?: boolean;
 }
 
 /**

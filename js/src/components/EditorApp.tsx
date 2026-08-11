@@ -99,6 +99,8 @@ interface Props {
     arrangeShrink?: boolean;
     /** Embedded (single-value) mode: hide journal, data export/import and submit. */
     embedded?: boolean;
+    /** Show an in-editor Map/List toggle (read-only embeds). */
+    showViewToggle?: boolean;
 }
 
 type ViewMode = 'canvas' | 'list' | 'tools';
@@ -117,9 +119,9 @@ const EMPTY: EditorState = {
  */
 export function EditorApp(props: Props): React.ReactElement {
     const {api, t, groupid = 0, initialView = 'canvas', targetUserid = 0, arrangeIterations,
-        arrangeShrink = true, embedded = false} = props;
+        arrangeShrink = true, embedded = false, showViewToggle = false} = props;
     const [state, dispatch] = useReducer(reduce, EMPTY);
-    const view = initialView;
+    const [view, setView] = useState<ViewMode>(initialView);
     const [stored, setStored] = useState<LayoutMap>({});
     const [sizes, setSizes] = useState<SizeMap>({});
     const [loading, setLoading] = useState(true);
@@ -1018,6 +1020,23 @@ export function EditorApp(props: Props): React.ReactElement {
                 <div className="alert alert-warning" role="status">{t('editor:locked')}</div>
             )}
             <ConstraintBanner status={constraintStatus} t={t} />
+
+            {showViewToggle && view !== 'tools' && (
+                <div className="btn-group btn-group-sm mb-2 vimipad-view-toggle" role="group">
+                    <button
+                        type="button"
+                        className={'btn btn-outline-secondary' + (view === 'canvas' ? ' active' : '')}
+                        aria-pressed={view === 'canvas'}
+                        onClick={() => setView('canvas')}
+                    >{t('editor:canvasview')}</button>
+                    <button
+                        type="button"
+                        className={'btn btn-outline-secondary' + (view === 'list' ? ' active' : '')}
+                        aria-pressed={view === 'list'}
+                        onClick={() => setView('list')}
+                    >{t('editor:listview')}</button>
+                </div>
+            )}
 
             <div className="vimipad-viewpanel">
             {view === 'tools' ? null : view === 'canvas' ? (
