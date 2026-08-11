@@ -286,7 +286,7 @@ class grading_panel {
         echo html_writer::div(
             get_string('gradetab:phase', 'mod_vimipad') . ' ' . html_writer::span(
                 \mod_vimipad\local\snapshot_phase::label((int) $snapshot->status),
-                'badge badge-info bg-info text-dark'
+                'badge badge-dark'
             ),
             'mb-3 small'
         );

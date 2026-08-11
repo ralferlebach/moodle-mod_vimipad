@@ -4,7 +4,14 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.9.10** (2026080810).
+> release is **0.9.11** (2026080811).
+
+## 0.9.11 (2026080811) — Fix: Kontrast des Phasen-Badges (Accessibility)
+
+Das in 0.9.8 ergänzte Phasen-Badge im Bewertungs-Panel nutzte `text-dark` auf
+`bg-info` (Kontrast 2.5:1) und ließ die Behat-Accessibility-Prüfung der
+Grading-Ansicht durchfallen (WCAG AA verlangt 4.5:1). Jetzt `badge-dark` (weiß
+auf dunkel, ~11.8:1). Reifegrad bleibt BETA.
 
 ## 0.9.10 (2026080810) — Editor: Map/List-Umschalter für read-only Embeds
 
