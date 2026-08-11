@@ -277,16 +277,16 @@ class grading_panel {
         if (\mod_vimipad\local\service\snapshot_service::is_late($instance, $submittedtime)) {
             $meta .= ' ' . html_writer::span(
                 get_string('gradetab:late', 'mod_vimipad'),
-                'badge badge-warning bg-warning text-dark'
+                'badge bg-warning text-dark'
             );
         }
         echo html_writer::div($meta, 'mb-3 text-muted small');
 
         // Current lifecycle phase of this submission.
         echo html_writer::div(
-            get_string('gradetab:phase', 'mod_vimipad') . ' ' . html_writer::span(
-                \mod_vimipad\local\snapshot_phase::label((int) $snapshot->status),
-                'badge badge-dark'
+            get_string('gradetab:phase', 'mod_vimipad') . ' ' . html_writer::tag(
+                'strong',
+                s(\mod_vimipad\local\snapshot_phase::label((int) $snapshot->status))
             ),
             'mb-3 small'
         );

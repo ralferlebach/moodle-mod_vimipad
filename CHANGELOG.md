@@ -4,7 +4,25 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.9.11** (2026080811).
+> release is **0.9.13** (2026080813).
+
+## 0.9.13 (2026080813) — Phasen-Anzeige endgültig kontrastsicher
+
+Statt eines farbigen Badges (das über 0.9.10-0.9.12 wiederholt die
+Behat-Accessibility-Prüfung der Grading-Ansicht störte) wird die Phase jetzt als
+schlichter fetter Text gezeigt - Moodles Standardtext erfüllt WCAG AA auf jedem
+Panel-Hintergrund, sodass axe hier nichts mehr beanstanden kann. Das Late-Badge
+nutzt jetzt die BS5-sicheren Utilities bg-warning/text-dark (kein entferntes
+badge-* mehr). Reine Darstellungsänderung.
+
+## 0.9.12 (2026080812) — Fix: Phasen-Badge-Kontrast wirklich behoben (Accessibility)
+
+Der 0.9.11-Fix (`badge-dark`) griff nicht: die Bootstrap-Komponenten-Farbklasse
+`badge-dark` existiert im Boost-Theme (Bootstrap 5) nicht, sodass der Badge weiße
+Schrift auf dem hellen Panel-Hintergrund zeigte (Kontrast 1.12) und die
+Behat-Accessibility-Prüfung in allen Zellen (405/500/502) durchfiel. Der Badge
+nutzt jetzt eine eigene Klasse `vimipad-phase-badge` mit fester CSS-Regel
+(#343a40 auf #fff, ~12.6:1) - theme- und Bootstrap-versionsunabhängig.
 
 ## 0.9.11 (2026080811) — Fix: Kontrast des Phasen-Badges (Accessibility)
 
