@@ -49,6 +49,15 @@ final class score {
     /** @var int Word-overlap label matching. */
     public const MATCH_TOKEN = matcher_factory::MODE_TOKEN;
 
+    /** Aggregate several peer fractions by their arithmetic mean. */
+    public const AGG_MEAN = 'mean';
+
+    /** Aggregate several peer fractions by their median (robust to one outlier). */
+    public const AGG_MEDIAN = 'median';
+
+    /** Aggregate by trimmed mean: drop one lowest and one highest, then mean. */
+    public const AGG_TRIMMED = 'trimmedmean';
+
     /**
      * Score a response map against a reference map.
      *
@@ -104,6 +113,52 @@ final class score {
     ): ?float {
         $result = self::against_reference($responsejson, $referencejson, $scorerkey, $matchmode);
         return $result === null ? null : (float) $result['score'];
+    }
+
+    /**
+     * Combine several peer fractions into one final fraction.
+     *
+     * Peer review compares each reviewer's map against the author's map with
+     * {@see self::fraction()}, which yields one fraction per reviewer. This
+     * aggregates those fractions into a single grade fraction. Values are
+     * clamped to 0.0-1.0 and non-numeric entries are ignored.
+     *
+     * @param float[] $fractions Peer fractions, each expected in 0.0-1.0.
+     * @param string $method One of the AGG_* constants (default AGG_MEAN).
+     * @return float|null The aggregated fraction, or null when there is no
+     *     usable value to aggregate.
+     */
+    public static function aggregate_fractions(array $fractions, string $method = self::AGG_MEAN): ?float {
+        $values = [];
+        foreach ($fractions as $fraction) {
+            if (is_numeric($fraction)) {
+                $values[] = min(1.0, max(0.0, (float) $fraction));
+            }
+        }
+        if (empty($values)) {
+            return null;
+        }
+        sort($values, SORT_NUMERIC);
+        $count = count($values);
+
+        switch ($method) {
+            case self::AGG_MEDIAN:
+                $mid = intdiv($count, 2);
+                if ($count % 2 === 1) {
+                    return $values[$mid];
+                }
+                return ($values[$mid - 1] + $values[$mid]) / 2.0;
+
+            case self::AGG_TRIMMED:
+                if ($count >= 3) {
+                    $values = array_slice($values, 1, $count - 2);
+                }
+                return array_sum($values) / count($values);
+
+            case self::AGG_MEAN:
+            default:
+                return array_sum($values) / $count;
+        }
     }
 
     /**

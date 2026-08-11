@@ -398,6 +398,7 @@ class grading_panel {
             'count' => $aggregate['count'],
             'mean' => ($aggregate['mean'] === null) ? '-' : round($aggregate['mean'] * 100),
             'median' => ($aggregate['median'] === null) ? '-' : round($aggregate['median'] * 100),
+            'trimmedmean' => ($aggregate['trimmedmean'] === null) ? '-' : round($aggregate['trimmedmean'] * 100),
             'pending' => $aggregate['pending'],
         ]), 'alert alert-secondary');
 

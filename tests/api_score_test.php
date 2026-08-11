@@ -144,4 +144,89 @@ final class api_score_test extends \advanced_testcase {
         $this->assertContains('reference', $keys);
         $this->assertNotContains('llm', $keys);
     }
+    /**
+     * The mean of several peer fractions.
+     *
+     * @covers \mod_vimipad\api\score::aggregate_fractions
+     * @return void
+     */
+    public function test_aggregate_mean(): void {
+        $this->assertEqualsWithDelta(0.5, score::aggregate_fractions([0.2, 0.4, 0.9]), 0.0001);
+        $this->assertEqualsWithDelta(0.7, score::aggregate_fractions([0.7]), 0.0001);
+    }
+
+    /**
+     * The median is robust to a single outlier.
+     *
+     * @covers \mod_vimipad\api\score::aggregate_fractions
+     * @return void
+     */
+    public function test_aggregate_median(): void {
+        // Odd count: middle value.
+        $this->assertEqualsWithDelta(
+            0.4,
+            score::aggregate_fractions([0.1, 0.4, 1.0], score::AGG_MEDIAN),
+            0.0001
+        );
+        // Even count: mean of the two middle values.
+        $this->assertEqualsWithDelta(
+            0.35,
+            score::aggregate_fractions([0.2, 0.3, 0.4, 0.9], score::AGG_MEDIAN),
+            0.0001
+        );
+    }
+
+    /**
+     * The trimmed mean drops one lowest and one highest value.
+     *
+     * @covers \mod_vimipad\api\score::aggregate_fractions
+     * @return void
+     */
+    public function test_aggregate_trimmed_mean(): void {
+        // 0.0 and 1.0 are dropped; mean of 0.4, 0.5, 0.6 = 0.5.
+        $this->assertEqualsWithDelta(
+            0.5,
+            score::aggregate_fractions([0.0, 0.4, 0.5, 0.6, 1.0], score::AGG_TRIMMED),
+            0.0001
+        );
+        // With fewer than three values nothing is trimmed.
+        $this->assertEqualsWithDelta(
+            0.5,
+            score::aggregate_fractions([0.3, 0.7], score::AGG_TRIMMED),
+            0.0001
+        );
+    }
+
+    /**
+     * Values are clamped, non-numeric entries ignored, empty input yields null.
+     *
+     * @covers \mod_vimipad\api\score::aggregate_fractions
+     * @return void
+     */
+    public function test_aggregate_clamps_and_guards(): void {
+        // 1.5 clamps to 1.0, -0.5 clamps to 0.0, 'x' ignored: mean of 1.0, 0.0, 0.5.
+        $this->assertEqualsWithDelta(
+            0.5,
+            score::aggregate_fractions([1.5, -0.5, 0.5, 'x']),
+            0.0001
+        );
+        $this->assertNull(score::aggregate_fractions([]));
+        $this->assertNull(score::aggregate_fractions(['nope', null]));
+    }
+
+    /**
+     * Peer comparison is just fraction() with a peer map as the reference.
+     *
+     * @covers \mod_vimipad\api\score::fraction
+     * @return void
+     */
+    public function test_peer_comparison_via_fraction(): void {
+        $this->resetAfterTest();
+        $author = $this->map(
+            ['Water', 'Ice'],
+            [['Water', 'freezes to', 'Ice']]
+        );
+        // A reviewer reproducing the author's map scores a perfect peer match.
+        $this->assertEqualsWithDelta(1.0, score::fraction($author, $author), 0.0001);
+    }
 }

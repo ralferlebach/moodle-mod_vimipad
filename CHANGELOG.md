@@ -4,7 +4,30 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.9.5** (2026080805).
+> release is **0.9.7** (2026080807).
+
+## 0.9.7 (2026080807) — Peer-Review: robustes getrimmtes Mittel
+
+Der Peer-Review-Service aggregiert die Gutachten-Bewertungen jetzt über die
+öffentliche Fassade `score::aggregate_fractions()` (eine Implementierung für
+Mittel/Median) und meldet zusätzlich das **getrimmte Mittel** (je einen
+tiefsten/höchsten Ausreißer verwerfen) - die robuste Standard-Aggregation im
+Peer-Review. Das Bewertungs-Panel der Lehrenden zeigt es neben Mittel und Median.
+
+* `peer_review_service::aggregate()` liefert nun zusätzlich `trimmedmean`.
+* Sprachstring `peerreviewaggregatedetail` (en/de) erweitert. Reifegrad bleibt BETA.
+
+## 0.9.6 (2026080806) — Peer-Review-Primitive auf der Scoring-Fassade
+
+Bausteine, auf denen ein Peer-Review-Workflow aufsetzt, ohne neuen Einstiegspunkt:
+
+* Peer-Vergleich ist `\mod_vimipad\api\score::fraction($reviewermap,
+  $authormap)` - eine Map gegen eine andere (Reviewer-vs-Autor bzw. Peer-vs-Peer).
+* Neu: `score::aggregate_fractions($fractions, $method)` fügt mehrere
+  Peer-Bewertungen zu einer Endnote zusammen (`AGG_MEAN`, `AGG_MEDIAN`,
+  `AGG_TRIMMED`); Werte werden auf 0.0-1.0 geklemmt, nicht-numerische ignoriert,
+  leere Eingabe ergibt null.
+* Abgesichert durch fünf neue Tests in `api_score_test`. Reifegrad bleibt BETA.
 
 ## 0.9.5 (2026080805) — CI-Fix: amd_string_keys liest editor_strings.js
 
