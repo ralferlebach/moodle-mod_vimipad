@@ -16,6 +16,7 @@
 
 namespace mod_vimipad\local\service;
 
+use mod_vimipad\local\snapshot_phase;
 use stdClass;
 
 /**
@@ -320,6 +321,32 @@ class snapshot_service {
     public function set_status(int $snapshotid, int $status): void {
         global $DB;
         $DB->set_field('vimipad_snapshot', 'status', $status, ['id' => $snapshotid]);
+    }
+
+    /**
+     * Move a snapshot to a new phase, rejecting illegal transitions.
+     *
+     * Unlike {@see self::set_status()}, which writes any value, this consults the
+     * {@see snapshot_phase} state machine and throws when the move is not legal
+     * from the snapshot's current phase.
+     *
+     * @param int $snapshotid The snapshot to move.
+     * @param int $to The target status constant.
+     * @throws \moodle_exception If the move is not allowed from the current phase.
+     * @return void
+     */
+    public function transition(int $snapshotid, int $to): void {
+        global $DB;
+        $current = (int) $DB->get_field('vimipad_snapshot', 'status', ['id' => $snapshotid], MUST_EXIST);
+        if (!snapshot_phase::can_transition($current, $to)) {
+            throw new \moodle_exception(
+                'error:illegalphasetransition',
+                'mod_vimipad',
+                '',
+                snapshot_phase::label($current) . ' -> ' . snapshot_phase::label($to)
+            );
+        }
+        $this->set_status($snapshotid, $to);
     }
 
     /**

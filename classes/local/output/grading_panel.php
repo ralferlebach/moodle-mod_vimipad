@@ -282,6 +282,15 @@ class grading_panel {
         }
         echo html_writer::div($meta, 'mb-3 text-muted small');
 
+        // Current lifecycle phase of this submission.
+        echo html_writer::div(
+            get_string('gradetab:phase', 'mod_vimipad') . ' ' . html_writer::span(
+                \mod_vimipad\local\snapshot_phase::label((int) $snapshot->status),
+                'badge badge-info bg-info text-dark'
+            ),
+            'mb-3 small'
+        );
+
         // Offer to reopen the workspace for revision while it is locked.
         if ((int) $workspace->locked === 1) {
             echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false), 'class' => 'mb-3']);

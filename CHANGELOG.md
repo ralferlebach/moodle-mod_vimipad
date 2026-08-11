@@ -4,7 +4,22 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.9.7** (2026080807).
+> release is **0.9.8** (2026080808).
+
+## 0.9.8 (2026080808) — Abgabe-Lebenszyklus als validierter Zustandsautomat
+
+Der Abgabe-Status (Entwurf -> Eingereicht -> In Begutachtung -> Bewertet ->
+Zurückgegeben, plus Wieder-Geöffnet) hatte bislang keine Übergangsprüfung -
+`set_status()` schrieb jeden Wert.
+
+* Neu: `\mod_vimipad\local\snapshot_phase` als single source der legalen
+  Übergänge (`can_transition`, `next_phases`, `is_terminal`, `is_valid`,
+  lokalisierte `label`).
+* Neu: `snapshot_service::transition()` schreibt nur legale Übergänge und wirft
+  sonst `error:illegalphasetransition` (bestehendes `set_status()` bleibt für
+  interne Aufrufer unverändert - keine Verhaltensänderung an aktuellen Pfaden).
+* Das Bewertungs-Panel zeigt die aktuelle Phase als Badge.
+* Keine Schemaänderung (nutzt das bestehende `status`-Feld). Reifegrad BETA.
 
 ## 0.9.7 (2026080807) — Peer-Review: robustes getrimmtes Mittel
 
