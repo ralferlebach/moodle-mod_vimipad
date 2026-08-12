@@ -75,7 +75,7 @@ class poll_changes extends external_api {
             'layoutsince' => $layoutsince,
         ]);
 
-        helper::validate_workspace_for_edit($params['cmid'], $params['workspaceid'], $instance, $workspace);
+        helper::validate_workspace_for_read($params['cmid'], $params['workspaceid'], $instance, $workspace);
 
         $operationservice = new operation_service();
         $batch = 200;

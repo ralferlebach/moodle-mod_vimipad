@@ -124,6 +124,39 @@ final class collaboration_external_test extends externallib_advanced_testcase {
     }
 
     /**
+     * After the caller's lease expires and another user takes it over, the
+     * caller's renew fails and reports the new holder. This exercises the
+     * compare-and-swap in renew(): the stale holder must not clobber the new one.
+     *
+     * @return void
+     */
+    public function test_renew_fails_after_takeover(): void {
+        global $DB;
+
+        $this->setUser($this->usera);
+        acquire_lock::execute($this->cm->id, $this->workspaceid, 'node', 'node_aaaaaaaaaaaa');
+
+        // Force A's lease to expire so B can legitimately take it over.
+        $DB->set_field('vimipad_lock', 'timeexpires', time() - 10, [
+            'workspaceid' => $this->workspaceid,
+            'targetstableid' => 'node_aaaaaaaaaaaa',
+        ]);
+
+        $this->setUser($this->userb);
+        $b = acquire_lock::execute($this->cm->id, $this->workspaceid, 'node', 'node_aaaaaaaaaaaa');
+        $b = \core_external\external_api::clean_returnvalue(acquire_lock::execute_returns(), $b);
+        $this->assertTrue($b['acquired']);
+        $this->assertSame((int) $this->userb->id, (int) $b['userid']);
+
+        // A's stale renew must refuse and name B as the real holder.
+        $this->setUser($this->usera);
+        $r = renew_lock::execute($this->cm->id, $this->workspaceid, 'node', 'node_aaaaaaaaaaaa');
+        $r = \core_external\external_api::clean_returnvalue(renew_lock::execute_returns(), $r);
+        $this->assertFalse($r['acquired']);
+        $this->assertSame((int) $this->userb->id, (int) $r['userid']);
+    }
+
+    /**
      * Releasing frees the element for another user.
      *
      * @return void
@@ -203,15 +236,52 @@ final class collaboration_external_test extends externallib_advanced_testcase {
     }
 
     /**
-     * A user without edit access cannot poll.
+     * A user who cannot even access the module cannot poll.
      *
      * @return void
      */
-    public function test_poll_requires_edit_access(): void {
+    public function test_poll_denies_unenrolled_user(): void {
         $outsider = $this->getDataGenerator()->create_user();
         $this->setUser($outsider);
 
         $this->expectException(\require_login_exception::class);
         poll_changes::execute($this->cm->id, $this->workspaceid, 0);
+    }
+
+    /**
+     * A read-only teacher (grader, without edit rights on the map) can poll a
+     * learner's individual workspace to observe live changes. Polling is a read,
+     * so it must not require edit access.
+     *
+     * @return void
+     */
+    public function test_poll_allows_read_only_grader(): void {
+        global $DB;
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module(
+            'vimipad',
+            ['course' => $course->id, 'collaborationmode' => \mod_vimipad\local\service\workspace_service::MODE_INDIVIDUAL]
+        );
+        $cm = get_coursemodule_from_instance('vimipad', $instance->id);
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'editingteacher');
+
+        $workspaceid = (int) $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id,
+            'userid' => (int) $student->id,
+            'groupid' => null,
+            'currentrevision' => 0,
+            'locked' => 0,
+            'timecreated' => time(),
+            'timemodified' => time(),
+        ]);
+
+        // The teacher does not own the map and has no edit rights on it, but as a
+        // grader may read it — and therefore poll it.
+        $this->setUser($teacher);
+        $poll = poll_changes::execute($cm->id, $workspaceid, 0);
+        $poll = \core_external\external_api::clean_returnvalue(poll_changes::execute_returns(), $poll);
+        $this->assertArrayHasKey('operations', $poll);
+        $this->assertSame(0, (int) $poll['revision']);
     }
 }

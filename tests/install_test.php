@@ -14,26 +14,35 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
+namespace mod_vimipad;
+
 /**
- * Plugin version definition for mod_vimipad (ViMi Pad - Visual Mind Pad).
+ * Tests for the install-time admin notification.
  *
  * @package    mod_vimipad
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ * @covers     ::xmldb_vimipad_install
  */
+final class install_test extends \advanced_testcase {
+    /**
+     * The install hook emails the site administrator once, outside the initial
+     * site install.
+     *
+     * @return void
+     */
+    public function test_install_emails_admin(): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/vimipad/db/install.php');
+        $this->resetAfterTest();
 
-defined('MOODLE_INTERNAL') || die();
+        $sink = $this->redirectEmails();
+        xmldb_vimipad_install();
+        $messages = $sink->get_messages();
+        $sink->close();
 
-$plugin->component    = 'mod_vimipad';
-$plugin->version      = 2026081202;
-$plugin->requires     = 2024100700;   // Moodle 4.5.0 — hard minimum, per Lastenheft.
-// Target range: Moodle 4.5 LTS up to 5.3. From 5.3 the React runtime ships in
-// core (react_autoinit); 4.5-5.2 use the bundled editor asset shipped here.
-$plugin->supported    = [405, 502];
-$plugin->maturity     = MATURITY_BETA;
-$plugin->release      = '0.9.14';
-
-// No plugin dependencies. AI feedback uses the core AI subsystem (Moodle >= 4.5),
-// detected and gated at runtime — deliberately NOT declared as a dependency so the
-// activity installs and runs on instances without any AI provider configured.
-$plugin->dependencies = [];
+        $this->assertCount(1, $messages);
+        $this->assertSame(get_admin()->email, $messages[0]->to);
+        $this->assertStringContainsString('ViMi Pad', $messages[0]->subject);
+    }
+}

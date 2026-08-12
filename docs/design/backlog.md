@@ -218,3 +218,27 @@ Paketierung beta-reif. Drei P1-Punkte vor `0.9.0-beta1`, dazu P2-Politur und
 Die versionierte Gesamtplanung bis 1.0 steht in [roadmap.md](roadmap.md); der
 Umsetzungsstand im [CHANGELOG.md](../../CHANGELOG.md). Strategie und
 Fachanforderungen liegen unter `docs/materials/`.
+
+## Satelliten-Plugins (0.1.x) — nach Session 006
+
+Erledigt in Session 006: `qtype_vimipad` (0.1.3) und `datafield_vimipad` (0.1.2)
+als erste Stubs gebaut und verifiziert, Scoring-Fassade (Kern 0.9.1) und
+Editor-Embed `mountValue` (Kern 0.9.2) geliefert, volle CI-Suite (Dev + Release)
+je Satellit.
+
+Erledigt seither: Editor-Embed-Fixes (formconfig durchgereicht, `embedded`-Modus
+blendet Journal/Grafik-Export aus); `mod_vimipad/editor_strings` als single source
+der `STRING_KEYS`; Behat-Szenarien je Satellit; qtype-Walkthrough-Tests;
+datafield-Browse-Editor (read-only) mit Lazy-Mount; Peer-Review-Primitive
+`score::aggregate_fractions` (Kern 0.9.6); lokale `makefile`s je Satellit.
+
+Offen:
+
+1. **Browser-Verifikation** des Editor-Embeds und des Lazy-Mount-Scrollverhaltens
+   (nur im Browser; testbare Kernlogik ist per jest/PHPUnit abgedeckt).
+2. **Peer-Review-Host-Workflow** in mod_vimipad (Phasenmodell auf Snapshots/
+   Annotationen) auf Basis von `aggregate_fractions`.
+3. **Read-only Block-/Kursformat-Viewer** als dritter Satellit (`mountValue`
+   readonly).
+4. **Behat live** in der CI (Chrome); in der Sandbox nur Dry-Run.
+

@@ -162,6 +162,28 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
   Hilfsmitteln (NVDA/JAWS/VoiceOver, Tastatur-only, Vergrößerung), Behebung der
   Befunde und Dokumentation des Konformitätsstands
 
+
+## Abgeleitete Plugins — Umsetzungsstand (Satelliten, eigene 0.1.x-Spur)
+
+Die in 0.9.x vorgesehenen abgeleiteten Zusatz-Plugins werden als eigene Repos mit
+eigener `0.1.x`-Versionierung geführt, entkoppelt von der Beta-Stabilisierung des
+Kerns. Voraussetzung waren zwei stabile öffentliche Nahtstellen in mod_vimipad,
+die in dieser Stufe geliefert wurden:
+
+- **`\mod_vimipad\api\score`** (Kern 0.9.1) — kontextfreie Bewertung einer Map
+  gegen eine Referenz über die `vimipadassess`-Engine.
+- **`mountValue` / `createValueTransport`** (Kern 0.9.2) — wertgebundener
+  Editor-Embed für Hosts, die die Map als einen Wert speichern.
+
+- **`score::aggregate_fractions()`** (Kern 0.9.6) — Aggregation mehrerer
+  Peer-Bewertungen (Mean/Median/Trimmed) als Peer-Review-Primitive; Peer-Vergleich
+  selbst ist `score::fraction(reviewermap, authormap)`.
+
+Stand: `qtype_vimipad` (0.1.6) und `datafield_vimipad` (0.1.7) mit eingebettetem
+Editor (formconfig + embedded-Modus), read-only Browse-Editor mit Lazy-Mount,
+Walkthrough-/Behat-Tests und voller CI (Dev + Release, `--extra-plugins`,
+lint-js-AMD-Gate) je Satellit; lokale `makefile`s zum Vorprüfen.
+
 ## Richtung 1.0
 
 Nach erfolgreichen Feldtests: Politur, vollständige Doku, Stabilität.

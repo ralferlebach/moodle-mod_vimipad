@@ -6,6 +6,34 @@
 > line; those entries are kept for historical reference only. The current
 > release is **0.9.13** (2026080813).
 
+## 0.9.14 - 2026-08-12
+
+### Fixed
+- Element paging (get_workspace_elements) now offers a race-safe keyset cursor
+  (afterid/nextafterid) alongside the legacy offset. Concurrent edits on an
+  earlier page can no longer make the client skip or duplicate elements. The
+  editor client pages by keyset; offset remains for backward compatibility.
+- poll_changes now validates for read instead of edit, so a read-only teacher
+  (grader) or embedded read-only viewer can observe a learners map live without
+  edit rights. Polling has no write side effect.
+- Guest policy hardened: get_workspace never creates a workspace for a guest even
+  if the guest role is misconfigured with an edit capability, mirroring the
+  explicit guest check already enforced on every write path.
+
+### Added
+- Administrators receive a notification email when ViMi Pad is installed into a
+  running site (skipped during the initial site install).
+
+## 0.9.14 - 2026-08-12
+
+### Fixed
+- Element paging is now race-safe. get_workspace_elements gained an optional
+  keyset cursor (afterid / nextafterid) so a concurrent create or delete on an
+  earlier page can no longer make the client skip or duplicate an element; the
+  editor uses it. The legacy offset parameter remains for older callers.
+- poll_changes now validates for read rather than edit, so a read-only teacher
+  (grader) or other view-only observer can follow a learners map live instead of
+  being refused. Writes remain blocked separately.
 ## 0.9.13 (2026080813) — Phasen-Anzeige endgültig kontrastsicher
 
 Statt eines farbigen Badges (das über 0.9.10-0.9.12 wiederholt die

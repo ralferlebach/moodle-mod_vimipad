@@ -177,4 +177,48 @@ final class get_workspace_elements_test extends externallib_advanced_testcase {
         $this->assertSame('', $result['collab']['pushtopic']);
         $this->assertSame('', $result['collab']['pushtoken']);
     }
+
+    /**
+     * Keyset paging (afterid) returns every surviving element even when an
+     * earlier element is deleted between page fetches, where offset paging would
+     * skip a row. This is the concurrent-edit race the keyset cursor closes.
+     *
+     * @return void
+     */
+    public function test_keyset_paging_survives_concurrent_delete(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $instance = $this->getDataGenerator()->create_module('vimipad', ['course' => $course->id]);
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $this->setUser($student);
+
+        $meta = get_workspace::execute($instance->cmid, 0, 0, false);
+        $meta = \core_external\external_api::clean_returnvalue(get_workspace::execute_returns(), $meta);
+        $wsid = (int) $meta['workspaceid'];
+        $this->seed_nodes($wsid, 4);
+        $ids = array_values($DB->get_records('vimipad_node', ['workspaceid' => $wsid], 'id ASC', 'id, stableid'));
+
+        // Keyset page 1: node_0, node_1; cursor is node_1's id.
+        $page1 = get_workspace_elements::execute($instance->cmid, $wsid, 'nodes', 0, 2, 0);
+        $page1 = \core_external\external_api::clean_returnvalue(get_workspace_elements::execute_returns(), $page1);
+        $this->assertSame(['node_0', 'node_1'], array_column($page1['nodes'], 'stableid'));
+        $this->assertTrue($page1['hasmore']);
+        $cursor = (int) $page1['nextafterid'];
+        $this->assertSame((int) $ids[1]->id, $cursor);
+
+        // A collaborator deletes node_0 between the two page fetches.
+        $DB->set_field('vimipad_node', 'deleted', 1, ['id' => $ids[0]->id]);
+
+        // Keyset page 2 (afterid = cursor) still returns node_2 and node_3.
+        $page2 = get_workspace_elements::execute($instance->cmid, $wsid, 'nodes', 0, 2, $cursor);
+        $page2 = \core_external\external_api::clean_returnvalue(get_workspace_elements::execute_returns(), $page2);
+        $this->assertSame(['node_2', 'node_3'], array_column($page2['nodes'], 'stableid'));
+
+        // Offset paging, by contrast, skips node_2: after the delete the live rows
+        // are node_1, node_2, node_3, so offset 2 lands on node_3.
+        $offsetpage = get_workspace_elements::execute($instance->cmid, $wsid, 'nodes', 2, 2, 0);
+        $offsetpage = \core_external\external_api::clean_returnvalue(get_workspace_elements::execute_returns(), $offsetpage);
+        $this->assertSame(['node_3'], array_column($offsetpage['nodes'], 'stableid'));
+    }
 }

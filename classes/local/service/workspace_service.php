@@ -107,6 +107,44 @@ class workspace_service {
     }
 
     /**
+     * Resolve the workspace a user would read, without creating one and without
+     * requiring edit access. Used for read-only viewers (guests, or roles with
+     * view but not edit) so that reading a map never has the side effect of
+     * creating a workspace and never demands an edit capability.
+     *
+     * @param stdClass $instance The vimipad instance.
+     * @param context_module $context The module context.
+     * @param int $userid The reading user.
+     * @param int|null $groupid Requested group id (group mode), or null to auto-pick.
+     * @return stdClass|null The existing workspace, or null if there is none.
+     */
+    public function find_existing_for_user(
+        stdClass $instance,
+        context_module $context,
+        int $userid,
+        ?int $groupid = null
+    ): ?stdClass {
+        global $DB;
+
+        $mode = (int) $instance->collaborationmode;
+        if ($mode === self::MODE_INDIVIDUAL) {
+            $criteria = ['vimipadid' => $instance->id, 'userid' => $userid, 'groupid' => null];
+        } else if ($mode === self::MODE_GROUP) {
+            try {
+                $groupid = $this->resolve_group($context, $userid, $groupid);
+            } catch (\moodle_exception $e) {
+                return null;
+            }
+            $criteria = ['vimipadid' => $instance->id, 'userid' => null, 'groupid' => $groupid];
+        } else {
+            $criteria = ['vimipadid' => $instance->id, 'userid' => null, 'groupid' => null];
+        }
+
+        $existing = $DB->get_record('vimipad_workspace', $criteria);
+        return $existing ?: null;
+    }
+
+    /**
      * Determine and validate the group to use in group mode.
      *
      * @param context_module $context The course module context.
@@ -326,5 +364,40 @@ class workspace_service {
         [$table, $fields] = $map[$kind];
         $cond = ['workspaceid' => $workspaceid, 'deleted' => 0];
         return array_values($DB->get_records($table, $cond, 'id ASC', $fields, $offset, $limit));
+    }
+
+    /**
+     * Fetch one page of a workspace's live elements by keyset, returning only
+     * rows with an id greater than the last one the client already has. Because
+     * ids are monotonic and never reused, this is immune to the row-shifting that
+     * makes offset paging skip or duplicate elements when the map is edited
+     * concurrently (a node deleted on an earlier page cannot move a later page).
+     *
+     * @param int $workspaceid The workspace id.
+     * @param string $kind One of nodes, relations, containers.
+     * @param int $afterid Only rows with id greater than this are returned.
+     * @param int $limit Maximum rows to return.
+     * @return array The element records for the page.
+     */
+    public function get_elements_keyset(int $workspaceid, string $kind, int $afterid, int $limit): array {
+        global $DB;
+        $map = [
+            'nodes' => ['vimipad_node', 'id, stableid, type, label, content, contentformat, metadatajson'],
+            'relations' => ['vimipad_relation', 'id, stableid, sourceid, targetid, type, label, direction, metadatajson'],
+            'containers' => ['vimipad_container', 'id, stableid, type, label, geometryjson, metadatajson'],
+        ];
+        if (!isset($map[$kind])) {
+            throw new \invalid_parameter_exception('unknown element kind');
+        }
+        [$table, $fields] = $map[$kind];
+        return array_values($DB->get_records_select(
+            $table,
+            'workspaceid = :wid AND deleted = 0 AND id > :afterid',
+            ['wid' => $workspaceid, 'afterid' => $afterid],
+            'id ASC',
+            $fields,
+            0,
+            $limit
+        ));
     }
 }

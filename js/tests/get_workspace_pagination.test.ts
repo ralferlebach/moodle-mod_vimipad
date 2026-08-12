@@ -28,6 +28,7 @@ describe('ApiClient.getWorkspace pagination', () => {
     test('pages nodes across multiple requests and reassembles them in order', async () => {
         const total = 600;
         const allNodes = Array.from({length: total}, (_, i) => ({
+            id: i + 1,
             stableid: `n${i}`, type: 'concept', label: `N${i}`,
             content: '', contentformat: 1, metadatajson: '',
         }));
@@ -45,15 +46,17 @@ describe('ApiClient.getWorkspace pagination', () => {
             }
             if (method === 'mod_vimipad_get_workspace_elements') {
                 const kind = args.kind as string;
-                const offset = args.offset as number;
+                const afterid = args.afterid as number;
                 const limit = args.limit as number;
                 if (kind !== 'nodes') {
-                    return {kind, offset, limit, total: 0, hasmore: false, [kind]: []};
+                    return {kind, offset: 0, limit, total: 0, hasmore: false, nextafterid: 0, [kind]: []};
                 }
-                const slice = allNodes.slice(offset, offset + limit);
+                // Keyset paging: rows with id greater than the cursor.
+                const slice = allNodes.filter(n => n.id > afterid).slice(0, limit);
+                const nextafterid = slice.length ? slice[slice.length - 1].id : 0;
                 return {
-                    kind: 'nodes', offset, limit, total,
-                    hasmore: offset + slice.length < total, nodes: slice,
+                    kind: 'nodes', offset: 0, limit, total,
+                    hasmore: nextafterid > 0 && nextafterid < total, nextafterid, nodes: slice,
                 };
             }
             throw new Error(`unexpected method ${method}`);

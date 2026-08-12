@@ -98,12 +98,33 @@ class get_workspace extends external_api {
                 return self::empty_state($instance, $canmanage, $lockmodeforlearners);
             }
         } else {
-            $workspace = $service->get_or_create_for_user(
-                $instance,
-                $context,
-                (int) $USER->id,
-                $params['groupid'] ?: null
-            );
+            // Editors get (or create) their workspace; read-only viewers such as
+            // guests resolve any existing workspace without creating one and
+            // without needing an edit capability. This keeps reading side-effect
+            // free and lets view-only users load the map read-only. Guests never
+            // create, independent of how the guest role is configured, mirroring
+            // the explicit guest check in access::require_edit.
+            $canedit = !isguestuser($USER->id)
+                && (has_capability('mod/vimipad:editown', $context)
+                    || has_capability('mod/vimipad:editgroup', $context));
+            if ($canedit) {
+                $workspace = $service->get_or_create_for_user(
+                    $instance,
+                    $context,
+                    (int) $USER->id,
+                    $params['groupid'] ?: null
+                );
+            } else {
+                $workspace = $service->find_existing_for_user(
+                    $instance,
+                    $context,
+                    (int) $USER->id,
+                    $params['groupid'] ?: null
+                );
+                if ($workspace === null) {
+                    return self::empty_state($instance, $canmanage, $lockmodeforlearners);
+                }
+            }
         }
 
         $layoutservice = new layout_service();

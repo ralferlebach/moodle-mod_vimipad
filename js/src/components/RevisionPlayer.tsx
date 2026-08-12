@@ -31,6 +31,7 @@ import {computeLayout} from '../graph/autolayout';
 import {decodeLayout} from '../canvas/layout_codec';
 import {LayoutMap} from '../types';
 import {ReplayEngine, Operation} from '../graph/reconstruct';
+import {PLAYBACK_SPEEDS, PlaybackSpeed, stepDelayMs} from '../graph/player_timing';
 import {EditorState} from '../store/reducer';
 
 interface Props {
@@ -118,6 +119,7 @@ export function RevisionPlayer(props: Props): React.ReactElement {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [playing, setPlaying] = useState(false);
+    const [speed, setSpeed] = useState<PlaybackSpeed>(1);
     // Fallback for maps whose element create-operations predate the op-log:
     // the replay reconstructs from the op-log, so such elements never appear.
     // When the live map has more elements than the reconstruction at the final
@@ -279,9 +281,12 @@ export function RevisionPlayer(props: Props): React.ReactElement {
             setPlaying(false);
             return undefined;
         }
-        const timer = window.setTimeout(() => setCurrent(c => Math.min(effectiveMax, c + 1)), STEP_MS);
+        const timer = window.setTimeout(
+            () => setCurrent(c => Math.min(effectiveMax, c + 1)),
+            stepDelayMs(STEP_MS, speed)
+        );
         return () => window.clearTimeout(timer);
-    }, [playing, current, effectiveMax]);
+    }, [playing, current, effectiveMax, speed]);
 
     // When the history is incomplete, show the live current map (a faithful
     // static view) instead of an unfaithful partial animation.
@@ -350,6 +355,23 @@ export function RevisionPlayer(props: Props): React.ReactElement {
                     <span className="vimipad-revision-counter text-muted small">
                         {t('journal:revisiontitle')} {current} / {effectiveMax}
                     </span>
+                    <div
+                        className="vimipad-revision-speed btn-group btn-group-sm"
+                        role="group"
+                        aria-label={t('revision:speed')}
+                    >
+                        {PLAYBACK_SPEEDS.map((s) => (
+                            <button
+                                key={s}
+                                type="button"
+                                className={`btn btn-sm ${s === speed ? 'btn-secondary' : 'btn-outline-secondary'}`}
+                                aria-pressed={s === speed}
+                                onClick={() => setSpeed(s)}
+                            >
+                                {s}×
+                            </button>
+                        ))}
+                    </div>
                 </div>
             )}
 

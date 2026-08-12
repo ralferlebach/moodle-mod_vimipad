@@ -137,7 +137,8 @@ $CFG->directorypermissions = 0777;
 require_once(__DIR__ . '/lib/setup.php');
 
 // PHPUnit.
-define('PHPUNIT_UTIL', false);
+// HINWEIS (Session 006): Diese Zeile NICHT setzen. Sie kollidiert mit Moodles
+// eigenem PHPUNIT_UTIL-Define und erzeugt ~20 Scheinfehler in PHPUnit.
 $CFG->phpunit_prefix = 'phpu_';
 $CFG->phpunit_dataroot = '/home/claude/moodledata_phpu';
 
