@@ -253,6 +253,7 @@ $string['error:importtoolarge'] = 'The import file is too large.';
 $string['error:importversion'] = 'The file uses an unsupported ViMi Pad export format version.';
 $string['error:invalidgeometry'] = 'The container geometry is invalid.';
 $string['error:invalidlayout'] = 'The layout data is not in a valid format.';
+$string['error:invalidmapvalue'] = 'The map value does not satisfy the ViMi Pad map policy ({$a}).';
 $string['error:layoutbusy'] = 'The layout is being saved by someone else right now. Please try again.';
 $string['error:maplimit'] = 'The map has reached its maximum number of {$a->what} ({$a->max}).';
 $string['error:noconsensus'] = 'This activity does not use group-consensus submission.';

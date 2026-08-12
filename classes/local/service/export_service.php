@@ -23,7 +23,7 @@ use stdClass;
  *
  * The JSON envelope wraps the same normalized structure used for snapshots
  * (nodes, relations, containers, layout) with export metadata, so it can be
- * re-imported (a later milestone) and used as a master-solution source.
+ * re-imported and used as a master-solution source.
  *
  * @package    mod_vimipad
  * @copyright  2026 Ralf Erlebach

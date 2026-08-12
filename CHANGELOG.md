@@ -4,7 +4,23 @@
 > (`$plugin->release` / `$plugin->version`). Some early Session-002 entries below
 > used an exploratory 0.5.0–0.9.1 numbering that was later reset to the 0.2.x
 > line; those entries are kept for historical reference only. The current
-> release is **0.9.13** (2026080813).
+> release is **0.9.15**.
+
+## 0.9.15 - 2026-08-12
+
+### Added
+- Public map value policy: \mod_vimipad\api\value validates a map document
+  (size, JSON shape, known profile, element counts, stable ids, unique ids,
+  relation endpoints, memberships, text limits and optionally an expected
+  profile and permitted node shapes). Consumer plugins previously each had to
+  re-derive these limits, which let a forged request store documents the editor
+  itself could never produce. Offers validate(), is_valid(), assert_valid() and
+  normalise().
+
+### Fixed
+- Corrected the guest-policy comment in external/helper.php, which still claimed
+  guests are kept out by the view capability. The enforced (and tested) contract
+  is that guests may read but never write.
 
 ## 0.9.14 - 2026-08-12
 
@@ -24,16 +40,6 @@
 - Administrators receive a notification email when ViMi Pad is installed into a
   running site (skipped during the initial site install).
 
-## 0.9.14 - 2026-08-12
-
-### Fixed
-- Element paging is now race-safe. get_workspace_elements gained an optional
-  keyset cursor (afterid / nextafterid) so a concurrent create or delete on an
-  earlier page can no longer make the client skip or duplicate an element; the
-  editor uses it. The legacy offset parameter remains for older callers.
-- poll_changes now validates for read rather than edit, so a read-only teacher
-  (grader) or other view-only observer can follow a learners map live instead of
-  being refused. Writes remain blocked separately.
 ## 0.9.13 (2026080813) — Phasen-Anzeige endgültig kontrastsicher
 
 Statt eines farbigen Badges (das über 0.9.10-0.9.12 wiederholt die
