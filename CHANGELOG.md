@@ -6,6 +6,19 @@
 > line; those entries are kept for historical reference only. The current
 > release is **0.9.15**.
 
+## 0.9.16 - 2026-08-12
+
+### Added
+- Load-test results documented in tests/load/RESULTS-2026-08-12.md.
+
+### Changed
+- Frontend dependencies can be refreshed before Jest with NPM_REFRESH=1
+  (npm update plus npm audit fix --force). Off by default: --force accepts
+  breaking major versions, which changes the bundled output and therefore the
+  committed amd/build artefacts.
+- Load-test downloads and run artefacts are now gitignored (the JMeter
+  distribution, the k6 binary, .jtl results and .load-env).
+
 ## 0.9.15 - 2026-08-12
 
 ### Added

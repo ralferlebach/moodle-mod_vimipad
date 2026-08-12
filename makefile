@@ -53,6 +53,12 @@ PHPCS         ?= phpcs
 PHPCBF        ?= phpcbf
 NPX           ?= npx
 NPM           ?= npm
+# Refresh frontend dependencies before running Jest: `npm update` plus
+# `npm audit fix --force`. Off by default because --force accepts breaking major
+# versions, which changes the bundled output and therefore the committed
+# amd/build artefacts; run it deliberately, then rebuild and re-commit them.
+#   make test-react NPM_REFRESH=1
+NPM_REFRESH   ?= 0
 
 # --- Browser / load-test tooling -------------------------------------------
 PLAYWRIGHT_DIR ?= $(PLUGIN_DIR)/tests/playwright
@@ -219,6 +225,11 @@ test-react:
 		if [ ! -x $(PLUGIN_DIR)/node_modules/.bin/jest ]; then \
 			echo "Installing frontend dev dependencies..."; \
 			cd $(PLUGIN_DIR) && $(NPM) install --no-audit --no-fund; \
+		fi; \
+		if [ "$(NPM_REFRESH)" = "1" ]; then \
+			echo "Refreshing frontend dependencies (NPM_REFRESH=1)..."; \
+			cd $(PLUGIN_DIR) && $(NPM) update --no-fund || true; \
+			cd $(PLUGIN_DIR) && $(NPM) audit fix --force --no-fund || true; \
 		fi; \
 		cd $(PLUGIN_DIR) && ./node_modules/.bin/jest; \
 	else \
