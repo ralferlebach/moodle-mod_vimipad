@@ -58,6 +58,12 @@ class get_journal_entries extends external_api {
             'workspaceid' => $workspaceid,
         ]);
 
+        // The helper fills these two by reference.
+
+        $instance = null;
+
+        $workspace = null;
+
         helper::validate_workspace_for_edit($params['cmid'], $params['workspaceid'], $instance, $workspace);
 
         $service = new journal_service();

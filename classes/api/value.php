@@ -17,6 +17,7 @@
 namespace mod_vimipad\api;
 
 use mod_vimipad\local\policy\limits;
+use mod_vimipad\local\style\node_style;
 use mod_vimipad\profile\profiles;
 
 /**
@@ -34,6 +35,11 @@ use mod_vimipad\profile\profiles;
  * @package    mod_vimipad
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ *
+ * The class-level complexity rule is suppressed: a policy validator is by nature
+ * a collection of independent checks, and its total complexity is the sum of
+ * them. Each individual check is small; merging them would not reduce the work,
+ * and splitting the class would scatter one contract across several files.
  */
 class value {
     /** @var int Maximum accepted size of a map document in bytes. */
@@ -76,8 +82,6 @@ class value {
         ?string $expectedprofile = null,
         array $allowedshapes = []
     ): array {
-        $errors = [];
-
         if (strlen($json) > self::MAX_BYTES) {
             return ['toolarge'];
         }
@@ -86,68 +90,111 @@ class value {
             return ['notjson'];
         }
 
-        // Profile.
-        $profile = isset($data['profile']) && is_string($data['profile']) ? $data['profile'] : '';
-        if ($profile === '' || !profiles::exists($profile)) {
-            $errors[] = 'unknownprofile';
-        } else if ($expectedprofile !== null && $profile !== $expectedprofile) {
-            $errors[] = 'wrongprofile';
-        }
+        $errors = self::check_profile($data, $expectedprofile);
 
-        // Element collections must be lists.
+        // Element collections must be lists before anything else can be said.
         foreach (['nodes', 'relations', 'containers', 'memberships'] as $kind) {
-            if (array_key_exists($kind, $data) && !is_array($data[$kind])) {
+            if (array_key_exists($kind, $data) && (!is_array($data[$kind]) || !array_is_list($data[$kind]))) {
                 $errors[] = 'badstructure';
-                return $errors;
+                return array_values(array_unique($errors));
             }
         }
-        $nodes = $data['nodes'] ?? [];
-        $relations = $data['relations'] ?? [];
-        $containers = $data['containers'] ?? [];
 
-        // Counts.
-        if (count($nodes) > limits::MAX_NODES) {
+        $errors = array_merge($errors, self::check_counts($data));
+
+        $profile = isset($data['profile']) && is_string($data['profile']) ? $data['profile'] : '';
+        [$nodeerrors, $nodeids] = self::check_nodes($data['nodes'] ?? [], $profile, $allowedshapes);
+        [$relerrors, $relationids] = self::check_relations($data['relations'] ?? [], $nodeids);
+        [$conterrors, $containerids] = self::check_containers($data['containers'] ?? []);
+        $membererrors = self::check_memberships(
+            $data['memberships'] ?? [],
+            $nodeids,
+            $relationids,
+            $containerids
+        );
+
+        $errors = array_merge($errors, $nodeerrors, $relerrors, $conterrors, $membererrors);
+        return array_values(array_unique($errors));
+    }
+
+    /**
+     * Check that the document declares a known (and, if required, expected) profile.
+     *
+     * @param array $data The decoded document.
+     * @param string|null $expectedprofile The required profile, or null.
+     * @return array The error identifiers.
+     */
+    private static function check_profile(array $data, ?string $expectedprofile): array {
+        $profile = isset($data['profile']) && is_string($data['profile']) ? $data['profile'] : '';
+        if ($profile === '' || !profiles::exists($profile)) {
+            return ['unknownprofile'];
+        }
+        if ($expectedprofile !== null && $profile !== $expectedprofile) {
+            return ['wrongprofile'];
+        }
+        return [];
+    }
+
+    /**
+     * Check the element counts against the policy limits.
+     *
+     * @param array $data The decoded document.
+     * @return array The error identifiers.
+     */
+    private static function check_counts(array $data): array {
+        $errors = [];
+        if (count($data['nodes'] ?? []) > limits::MAX_NODES) {
             $errors[] = 'toomanynodes';
         }
-        if (count($relations) > limits::MAX_RELATIONS) {
+        if (count($data['relations'] ?? []) > limits::MAX_RELATIONS) {
             $errors[] = 'toomanyrelations';
         }
-        if (count($containers) > limits::MAX_CONTAINERS) {
+        if (count($data['containers'] ?? []) > limits::MAX_CONTAINERS) {
             $errors[] = 'toomanycontainers';
         }
+        return $errors;
+    }
 
-        // Nodes: stable ids must be present, well formed and unique; text bounded.
+    /**
+     * Check the nodes: usable unique ids, bounded text, permitted shapes.
+     *
+     * @param array $nodes The node definitions.
+     * @param string $profile The document's profile key.
+     * @param array $allowedshapes Extra consumer restriction; empty means none.
+     * @return array [error identifiers, set of node ids]
+     */
+    private static function check_nodes(array $nodes, string $profile, array $allowedshapes): array {
+        $errors = [];
         $nodeids = [];
         foreach ($nodes as $node) {
             if (!is_array($node)) {
                 $errors[] = 'badnode';
                 continue;
             }
-            $stableid = $node['stableid'] ?? null;
-            if (!self::is_acceptable_id($stableid)) {
+            if (!self::is_acceptable_id($node['stableid'] ?? null)) {
                 $errors[] = 'badstableid';
                 continue;
             }
-            $stableid = (string) $stableid;
+            $stableid = (string) $node['stableid'];
             if (isset($nodeids[$stableid])) {
                 $errors[] = 'duplicateid';
             }
             $nodeids[$stableid] = true;
-            if (\core_text::strlen((string) ($node['label'] ?? '')) > limits::MAX_LABEL) {
-                $errors[] = 'labeltoolong';
-            }
-            if (\core_text::strlen((string) ($node['content'] ?? '')) > limits::MAX_CONTENT) {
-                $errors[] = 'contenttoolong';
-            }
-            if (!empty($allowedshapes)) {
-                $shape = (string) ($node['shape'] ?? ($node['type'] ?? ''));
-                if ($shape !== '' && !in_array($shape, $allowedshapes, true)) {
-                    $errors[] = 'shapenotallowed';
-                }
-            }
-        }
 
-        // Relations: valid ids, unique, and endpoints that exist among the nodes.
+            $errors = array_merge($errors, self::check_node_content($node, $profile, $allowedshapes));
+        }
+        return [$errors, $nodeids];
+    }
+
+    /**
+     * Check the relations: unique ids, bounded labels, endpoints that exist.
+     *
+     * @param array $relations The relation definitions.
+     * @param array $nodeids The set of known node ids.
+     * @return array [error identifiers, set of relation ids]
+     */
+    private static function check_relations(array $relations, array $nodeids): array {
+        $errors = [];
         $relationids = [];
         foreach ($relations as $relation) {
             if (!is_array($relation)) {
@@ -155,64 +202,175 @@ class value {
                 continue;
             }
             $stableid = (string) ($relation['stableid'] ?? '');
-            if ($stableid !== '' && !self::is_acceptable_id($stableid)) {
-                $errors[] = 'badstableid';
-            }
             if ($stableid !== '') {
-                if (isset($relationids[$stableid])) {
+                if (!self::is_acceptable_id($stableid)) {
+                    $errors[] = 'badstableid';
+                } else if (isset($relationids[$stableid])) {
                     $errors[] = 'duplicateid';
                 }
                 $relationids[$stableid] = true;
             }
-            $source = (string) ($relation['sourceid'] ?? '');
-            $target = (string) ($relation['targetid'] ?? '');
-            if ($source === '' || $target === '' || !isset($nodeids[$source]) || !isset($nodeids[$target])) {
-                $errors[] = 'danglingrelation';
-            }
-            if (\core_text::strlen((string) ($relation['label'] ?? '')) > limits::MAX_LABEL) {
-                $errors[] = 'labeltoolong';
-            }
+
+            $errors = array_merge($errors, self::check_relation_endpoints($relation, $nodeids));
+        }
+        return [$errors, $relationids];
+    }
+
+    /**
+     * Check one node's text limits, metadata and shape.
+     *
+     * The visual shape of a node is not a top-level key and is not the node
+     * type: `type` carries the profile-defined semantic type (for example
+     * "concept"), while the shape lives in metadatajson as one of the values
+     * node_style permits. The profile decides which shapes it allows; a consumer
+     * may narrow that set further but never widen it.
+     *
+     * @param array $node The node definition.
+     * @param string $profile The document's profile key.
+     * @param array $allowedshapes Extra consumer restriction; empty means none.
+     * @return array The error identifiers.
+     */
+    private static function check_node_content(array $node, string $profile, array $allowedshapes): array {
+        $errors = [];
+        if (\core_text::strlen((string) ($node['label'] ?? '')) > limits::MAX_LABEL) {
+            $errors[] = 'labeltoolong';
+        }
+        if (\core_text::strlen((string) ($node['content'] ?? '')) > limits::MAX_CONTENT) {
+            $errors[] = 'contenttoolong';
         }
 
-        // Containers: valid, unique ids.
+        $metadata = $node['metadatajson'] ?? null;
+        if ($metadata !== null && !is_string($metadata)) {
+            $errors[] = 'badmetadata';
+            return $errors;
+        }
+        if (is_string($metadata) && \core_text::strlen($metadata) > limits::MAX_METADATA) {
+            $errors[] = 'metadatatoolong';
+        }
+        try {
+            node_style::validate_metadata($metadata);
+        } catch (\Throwable $e) {
+            $errors[] = 'badmetadata';
+            return $errors;
+        }
+
+        return array_merge($errors, self::check_shape($metadata, $profile, $allowedshapes));
+    }
+
+    /**
+     * Check a node's shape against the profile and any consumer restriction.
+     *
+     * @param string|null $metadatajson The node's metadata, if any.
+     * @param string $profile The document's profile key.
+     * @param array $allowedshapes Extra consumer restriction; empty means none.
+     * @return array The error identifiers.
+     */
+    private static function check_shape(?string $metadatajson, string $profile, array $allowedshapes): array {
+        if ($profile === '' || !profiles::exists($profile)) {
+            // The profile itself is already reported; nothing further to say.
+            return [];
+        }
+
+        $decoded = ($metadatajson === null || $metadatajson === '') ? [] : json_decode($metadatajson, true);
+        $shape = (is_array($decoded) && isset($decoded['shape']) && is_string($decoded['shape']))
+            ? $decoded['shape']
+            : null;
+
+        // An absent shape means the profile default, which is allowed by
+        // definition, so only an explicit shape can be wrong.
+        if ($shape === null) {
+            return [];
+        }
+        if (!profiles::is_shape_allowed($profile, $shape)) {
+            return ['shapenotallowedbyprofile'];
+        }
+        if (!empty($allowedshapes) && !in_array($shape, $allowedshapes, true)) {
+            return ['shapenotallowed'];
+        }
+        return [];
+    }
+
+    /**
+     * Check that one relation resolves to existing nodes and has a bounded label.
+     *
+     * @param array $relation The relation definition.
+     * @param array $nodeids The set of known node ids.
+     * @return array The error identifiers.
+     */
+    private static function check_relation_endpoints(array $relation, array $nodeids): array {
+        $errors = [];
+        $source = (string) ($relation['sourceid'] ?? '');
+        $target = (string) ($relation['targetid'] ?? '');
+        if ($source === '' || $target === '' || !isset($nodeids[$source]) || !isset($nodeids[$target])) {
+            $errors[] = 'danglingrelation';
+        }
+        if (\core_text::strlen((string) ($relation['label'] ?? '')) > limits::MAX_LABEL) {
+            $errors[] = 'labeltoolong';
+        }
+        return $errors;
+    }
+
+    /**
+     * Check the containers: usable, unique ids.
+     *
+     * @param array $containers The container definitions.
+     * @return array [error identifiers, set of container ids]
+     */
+    private static function check_containers(array $containers): array {
+        $errors = [];
         $containerids = [];
         foreach ($containers as $container) {
             if (!is_array($container)) {
                 $errors[] = 'badcontainer';
                 continue;
             }
-            $stableid = $container['stableid'] ?? null;
-            if (!self::is_acceptable_id($stableid)) {
+            if (!self::is_acceptable_id($container['stableid'] ?? null)) {
                 $errors[] = 'badstableid';
                 continue;
             }
-            $stableid = (string) $stableid;
+            $stableid = (string) $container['stableid'];
             if (isset($containerids[$stableid])) {
                 $errors[] = 'duplicateid';
             }
             $containerids[$stableid] = true;
         }
+        return [$errors, $containerids];
+    }
 
-        // Memberships must point at elements that exist.
-        foreach (($data['memberships'] ?? []) as $membership) {
+    /**
+     * Check that memberships point at elements that exist.
+     *
+     * @param array $memberships The membership definitions.
+     * @param array $nodeids The set of known node ids.
+     * @param array $relationids The set of known relation ids.
+     * @param array $containerids The set of known container ids.
+     * @return array The error identifiers.
+     */
+    private static function check_memberships(
+        array $memberships,
+        array $nodeids,
+        array $relationids,
+        array $containerids
+    ): array {
+        $errors = [];
+        foreach ($memberships as $membership) {
             if (!is_array($membership)) {
                 $errors[] = 'badmembership';
                 continue;
             }
-            $containerid = (string) ($membership['containerstableid'] ?? '');
-            $itemid = (string) ($membership['itemstableid'] ?? '');
-            if (!isset($containerids[$containerid])) {
+            if (!isset($containerids[(string) ($membership['containerstableid'] ?? '')])) {
                 $errors[] = 'danglingmembership';
                 continue;
             }
-            $itemtype = (string) ($membership['itemtype'] ?? 'node');
-            $known = ($itemtype === 'relation') ? isset($relationids[$itemid]) : isset($nodeids[$itemid]);
+            $itemid = (string) ($membership['itemstableid'] ?? '');
+            $known = ((string) ($membership['itemtype'] ?? 'node') === 'relation')
+                ? isset($relationids[$itemid])
+                : isset($nodeids[$itemid]);
             if (!$known) {
                 $errors[] = 'danglingmembership';
             }
         }
-
-        return array_values(array_unique($errors));
+        return $errors;
     }
 
     /**

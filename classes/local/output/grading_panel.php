@@ -198,7 +198,8 @@ class grading_panel {
         $advanced = self::resolve_advanced($cm, $context, $instance, $snapshot);
         if ($advanced !== null) {
             [$form, $gradinginstance, $itemid] = $advanced;
-            if ($data = $form->get_data()) {
+            $data = $form->get_data();
+            if ($data) {
                 $grade = $gradinginstance->submit_and_get_grade($data->advancedgrading, $itemid);
                 self::store_instance($itemid, (int) $USER->id, (int) $gradinginstance->get_id());
                 (new grading_service())->save_grade(
@@ -257,7 +258,7 @@ class grading_panel {
         stdClass $snapshot,
         stdClass $workspace
     ): void {
-        global $DB, $USER, $OUTPUT;
+        global $DB;
 
         $snapshotid = (int) $snapshot->id;
         $pageurl = self::detail_url($cm, $snapshotid);

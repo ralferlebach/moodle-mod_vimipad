@@ -50,7 +50,7 @@ class acquire_lock extends external_api {
      * @return array{acquired: bool, userid: int, timeexpires: int}
      */
     public static function execute(int $cmid, int $workspaceid, string $targettype, string $targetstableid): array {
-        global $USER, $DB;
+        global $USER;
 
         $params = self::validate_parameters(self::execute_parameters(), [
             'cmid' => $cmid,
@@ -58,6 +58,12 @@ class acquire_lock extends external_api {
             'targettype' => $targettype,
             'targetstableid' => $targetstableid,
         ]);
+
+        // The instance and workspace are filled by reference.
+
+        $instance = null;
+
+        $workspace = null;
 
         $context = helper::validate_workspace_for_edit($params['cmid'], $params['workspaceid'], $instance, $workspace);
         unset($context);

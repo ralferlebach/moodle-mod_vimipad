@@ -153,6 +153,21 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->setDefault('lockmodeforlearners', 0);
         $mform->addHelpButton('lockmodeforlearners', 'lockmodeforlearners', 'mod_vimipad');
 
+        $this->add_availability_elements($mform);
+
+        $this->add_constraint_elements($mform);
+
+        $this->standard_coursemodule_elements();
+        $this->add_action_buttons();
+    }
+
+    /**
+     * The availability section: optional due and cut-off dates.
+     *
+     * @param MoodleQuickForm $mform The form being built.
+     * @return void
+     */
+    protected function add_availability_elements($mform) {
         // Availability: optional due and cut-off dates.
         $mform->addElement('header', 'availability', get_string('availability', 'mod_vimipad'));
 
@@ -171,7 +186,15 @@ class mod_vimipad_mod_form extends moodleform_mod {
             ['optional' => true]
         );
         $mform->addHelpButton('cutoffdate', 'cutoffdate', 'mod_vimipad');
+    }
 
+    /**
+     * The constraints section: the limits a teacher may put on a map.
+     *
+     * @param MoodleQuickForm $mform The form being built.
+     * @return void
+     */
+    protected function add_constraint_elements($mform) {
         // Map requirements: enforced as a hard gate when the learner submits.
         $mform->addElement('header', 'constraints', get_string('constraints', 'mod_vimipad'));
 
@@ -215,9 +238,6 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $mform->setExpanded('constraints', false);
 
         $this->standard_grading_coursemodule_elements();
-
-        $this->standard_coursemodule_elements();
-        $this->add_action_buttons();
     }
 
     /**
@@ -303,7 +323,8 @@ class mod_vimipad_mod_form extends moodleform_mod {
         $groupmode = (int) ($data['groupmode'] ?? NOGROUPS);
         $collaborationmode = (int) ($data['collaborationmode'] ?? 0);
         $forced = !empty($this->_course->groupmodeforce);
-        if ($grouperror = self::group_mode_error($collaborationmode, $groupmode, $forced)) {
+        $grouperror = self::group_mode_error($collaborationmode, $groupmode, $forced);
+        if ($grouperror) {
             $errors[$grouperror[0]] = get_string($grouperror[1], 'mod_vimipad');
         }
 

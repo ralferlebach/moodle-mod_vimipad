@@ -11,9 +11,10 @@ the Moodle AI subsystem.
 
 ## Status
 
-**0.9.0 — beta** (`MATURITY_BETA`). The core plugin and all 19 bundled
-subplugins carry the same release and maturity, so the plugin overview shows a
-consistent picture.
+**0.9.17 — beta** (`MATURITY_BETA`). The core plugin and its bundled subplugins
+are versioned independently: a subplugin keeps its own release until it actually
+changes, so the numbers differ on purpose and only the core version is the one to
+quote for compatibility.
 
 Beta means: the architecture, data model, security model, privacy and backup
 paths are complete and covered by an automated suite (PHPUnit, Jest, Behat,

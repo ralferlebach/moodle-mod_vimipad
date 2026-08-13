@@ -52,6 +52,12 @@ PHP           ?= $(shell which php 2>/dev/null || echo /usr/bin/php)
 PHPCS         ?= phpcs
 PHPCBF        ?= phpcbf
 NPX           ?= npx
+# Refresh the browserslist database before a Grunt/ESLint run. Off by default:
+# it writes to the lockfile and reaches the network, which a plain `make check`
+# should not do. caniuse-lite going stale only produces a warning, never a wrong
+# build, so this is a maintenance step rather than part of every run.
+#   make amd BROWSERSLIST_UPDATE=1
+BROWSERSLIST_UPDATE ?= 0
 NPM           ?= npm
 # Refresh frontend dependencies before running Jest: `npm update` plus
 # `npm audit fix --force`. Off by default because --force accepts breaking major
@@ -165,9 +171,10 @@ lint-cpd:
 lint-md:
 	@echo ""
 	@echo "=== PHP Mess Detector ==="
-	-cd $(PLUGIN_DIR) && phpmd . text \
-		cleancode,codesize,controversial,design,naming,unusedcode \
-		--exclude tests,tools || true
+	@echo "Rules: phpmd.xml (Moodle-incompatible rules excluded, each with a reason)."
+	@echo "db/upgrade.php is exempt: its shape is prescribed by Moodle."
+	-cd $(PLUGIN_DIR) && phpmd . text phpmd.xml \
+		--exclude tests,tools,tests/load,db/upgrade.php || true
 
 lint-js:
 	@echo ""
@@ -182,6 +189,10 @@ lint-js:
 amd:
 	@echo ""
 	@echo "=== AMD rebuild (skipped when amd/src/ is empty) ==="
+	@if [ "$(BROWSERSLIST_UPDATE)" = "1" ]; then \
+		echo "Updating the browserslist database (BROWSERSLIST_UPDATE=1)..."; \
+		cd $(PLUGIN_DIR) && $(NPX) browserslist@latest --update-db || true; \
+	fi
 	@if ls $(PLUGIN_DIR)/amd/src/*.js 2>/dev/null | grep -q .; then \
 		cd $(PLUGIN_DIR) && $(NPX) grunt amd --force; \
 	else \

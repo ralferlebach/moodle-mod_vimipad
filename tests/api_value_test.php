@@ -147,17 +147,102 @@ final class api_value_test extends \advanced_testcase {
     }
 
     /**
-     * Disallowed node shapes are refused when the caller restricts them.
+     * A node's shape lives in metadatajson, not in a top-level key and not in
+     * `type` (which carries the profile's semantic node type). The profile
+     * decides which shapes it allows; a consumer may narrow that further.
      *
      * @return void
      */
-    public function test_allowed_shapes_are_enforced(): void {
-        $json = $this->map([
-            'nodes' => [['stableid' => 'n1', 'label' => 'One', 'shape' => 'diamond']],
+    public function test_shape_is_read_from_metadata(): void {
+        // The value "concept" is a node type, never a shape: it must not be mistaken for
+        // one and rejected when a consumer restricts shapes.
+        $typed = $this->map([
+            'nodes' => [[
+                'stableid' => 'n1',
+                'label' => 'One',
+                'type' => 'concept',
+                'metadatajson' => '{"shape":"ellipse"}',
+            ]],
             'relations' => [],
         ]);
-        $this->assertContains('shapenotallowed', value::validate($json, null, ['circle', 'rectangle']));
-        $this->assertSame([], value::validate($json, null, ['circle', 'diamond']));
+        $this->assertSame([], value::validate($typed, null, ['ellipse']));
+    }
+
+    /**
+     * A shape the profile does not allow is refused even with no consumer
+     * restriction, so a forged request cannot widen the profile's own rules.
+     *
+     * @return void
+     */
+    public function test_shape_must_satisfy_the_profile(): void {
+        $bogus = $this->map([
+            'nodes' => [[
+                'stableid' => 'n1',
+                'label' => 'One',
+                'metadatajson' => '{"shape":"triangle"}',
+            ]],
+            'relations' => [],
+        ]);
+        $this->assertNotSame([], value::validate($bogus));
+    }
+
+    /**
+     * A consumer restriction narrows the profile's set: a shape the profile
+     * allows but the consumer does not is refused.
+     *
+     * @return void
+     */
+    public function test_consumer_restriction_narrows_the_profile(): void {
+        $json = $this->map([
+            'nodes' => [[
+                'stableid' => 'n1',
+                'label' => 'One',
+                'metadatajson' => '{"shape":"ellipse"}',
+            ]],
+            'relations' => [],
+        ]);
+        $this->assertContains('shapenotallowed', value::validate($json, null, ['rect']));
+        $this->assertSame([], value::validate($json, null, ['rect', 'ellipse']));
+    }
+
+    /**
+     * A node without a shape uses the profile default and is accepted.
+     *
+     * @return void
+     */
+    public function test_absent_shape_is_accepted(): void {
+        $json = $this->map([
+            'nodes' => [['stableid' => 'n1', 'label' => 'One']],
+            'relations' => [],
+        ]);
+        $this->assertSame([], value::validate($json, null, ['rect']));
+    }
+
+    /**
+     * Malformed node metadata is refused.
+     *
+     * @return void
+     */
+    public function test_bad_metadata_is_refused(): void {
+        $json = $this->map([
+            'nodes' => [['stableid' => 'n1', 'label' => 'One', 'metadatajson' => 'not json']],
+            'relations' => [],
+        ]);
+        $this->assertContains('badmetadata', value::validate($json));
+    }
+
+    /**
+     * An element collection sent as an object rather than a list is refused.
+     *
+     * @return void
+     */
+    public function test_collections_must_be_lists(): void {
+        $json = (string) json_encode([
+            'profile' => 'conceptmap',
+            'nodes' => ['a' => ['stableid' => 'n1', 'label' => 'One']],
+            'relations' => [],
+        ]);
+        $this->assertContains('badstructure', value::validate($json));
     }
 
     /**

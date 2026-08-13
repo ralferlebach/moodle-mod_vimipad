@@ -68,6 +68,12 @@ class add_journal_entry extends external_api {
             'private' => $private,
         ]);
 
+        // The instance and workspace are filled by reference.
+
+        $instance = null;
+
+        $workspace = null;
+
         $context = helper::validate_workspace_for_edit($params['cmid'], $params['workspaceid'], $instance, $workspace);
         // Writing a journal entry is a comment action: it requires the comment
         // capability in addition to edit access. validate_workspace_for_edit

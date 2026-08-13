@@ -27,6 +27,13 @@
  *
  * @param int $oldversion The version we are upgrading from.
  * @return bool True on success.
+ *
+ * The shape of a Moodle upgrade function is prescribed: a sequence of
+ * "if ($oldversion < N) { ... upgrade_mod_savepoint(N) }" blocks that must stay
+ * in version order and must never be reordered or merged. It therefore grows by
+ * one branch per release, and is excluded from the phpmd size rules in the
+ * makefile rather than being split.
+ *
  */
 function xmldb_vimipad_upgrade($oldversion) {
     global $DB;

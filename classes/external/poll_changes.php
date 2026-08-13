@@ -66,14 +66,18 @@ class poll_changes extends external_api {
      * @return array The poll payload.
      */
     public static function execute(int $cmid, int $workspaceid, int $sincerevision, int $layoutsince = 0): array {
-        global $DB;
-
         $params = self::validate_parameters(self::execute_parameters(), [
             'cmid' => $cmid,
             'workspaceid' => $workspaceid,
             'sincerevision' => $sincerevision,
             'layoutsince' => $layoutsince,
         ]);
+
+        // The helper fills these two by reference.
+
+        $instance = null;
+
+        $workspace = null;
 
         helper::validate_workspace_for_read($params['cmid'], $params['workspaceid'], $instance, $workspace);
 

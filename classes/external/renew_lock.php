@@ -58,6 +58,12 @@ class renew_lock extends external_api {
             'targetstableid' => $targetstableid,
         ]);
 
+        // The helper fills these two by reference.
+
+        $instance = null;
+
+        $workspace = null;
+
         helper::validate_workspace_for_edit($params['cmid'], $params['workspaceid'], $instance, $workspace);
 
         $service = new lock_service();
