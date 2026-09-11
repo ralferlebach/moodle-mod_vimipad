@@ -218,6 +218,8 @@ jobs:
         exclude:
           # Moodle 5.0 requires PHP 8.2+.
           - { moodle: MOODLE_500_STABLE, php: '8.1' }
+          # Moodle 5.1 requires PHP 8.2+.
+          - { moodle: MOODLE_501_STABLE, php: '8.1' }
           # Moodle 5.2 requires PHP 8.3+.
           - { moodle: MOODLE_502_STABLE, php: '8.1' }
           - { moodle: MOODLE_502_STABLE, php: '8.2' }
