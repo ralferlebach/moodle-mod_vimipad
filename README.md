@@ -11,18 +11,20 @@ the Moodle AI subsystem.
 
 ## Status
 
-**0.9.17 — beta** (`MATURITY_BETA`). The core plugin and its bundled subplugins
-are versioned independently: a subplugin keeps its own release until it actually
-changes, so the numbers differ on purpose and only the core version is the one to
-quote for compatibility.
+**1.0.0-RC1** (`MATURITY_RC`). The whole ViMi family — this activity plus
+qtype_vimipad, datafield_vimipad and mod_vimigallery — moves to a release
+candidate together, since the three satellites qualify against a specific
+mod_vimipad build. This candidate is qualified on Moodle 4.5, 5.0, 5.1 and 5.2
+against PostgreSQL and MariaDB.
 
-Beta means: the architecture, data model, security model, privacy and backup
-paths are complete and covered by an automated suite (PHPUnit, Jest, Behat,
-Playwright, plus jMeter/k6 load harnesses), and an external audit has signed the
-codebase off for a beta branch. What beta is *for* is the validation that only
-real use can provide — classroom-scale field testing, browser matrix, long-run
-collaboration and accessibility verification with actual assistive technology.
-Please report findings via the issue tracker; see `docs/beta/beta-testing.md`.
+Release candidate means: the architecture, data model, security model, privacy
+and backup paths are complete and covered by an automated suite (PHPUnit, Jest,
+Behat, Playwright, plus JMeter/k6 load harnesses), an external audit has signed
+the codebase off, and the last release-blocking finding is closed. What the RC
+phase is *for* is the final confirmation only real use provides — classroom-scale
+field testing, the browser matrix, long-run collaboration and accessibility
+verification with actual assistive technology. Please report findings via the
+issue tracker.
 
 ## Requirements
 

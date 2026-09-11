@@ -6,6 +6,16 @@
 > line; those entries are kept for historical reference only. The current
 > release is **0.9.15**.
 
+## 1.0.0-RC1 - 2026-09-11
+
+First release candidate. Maturity raised to MATURITY_RC; the whole ViMi family
+moves to 1.0.0-RC1 together.
+
+### Changed
+- Development and release CI now cover Moodle 5.1 as well, so the declared
+  support range [405, 502] (4.5, 5.0, 5.1, 5.2) is fully qualified.
+- README status updated from beta to release candidate.
+
 ## 0.9.20 - 2026-08-12
 
 ### Added
