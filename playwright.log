@@ -1,0 +1,17 @@
+clear
+[H[2J[3J
+=== Playwright collaboration tests (needs a running Moodle site) ===
+cd /var/www/html/moodle45_aliseadele/mod/vimipad/tests/playwright && eval "$(/usr/bin/php seed.php)" && \
+	VIMIPAD_BASE_URL='http://localhost/moodle45_aliseadele' npm test
+
+> test
+> playwright test
+
+
+Running 3 tests using 1 worker
+
+  ✓  1 [chromium] › collaboration.spec.ts:41:9 › mod_vimipad real-time collaboration › a concept added by one user appears for the other (28.6s)
+  ✓  2 [chromium] › collaboration.spec.ts:62:9 › mod_vimipad real-time collaboration › a node one user is editing shows as locked for the other (10.5s)
+  ✓  3 [chromium] › collaboration.spec.ts:85:9 › mod_vimipad real-time collaboration › edits from both users converge for everyone (9.3s)
+
+  3 passed (49.2s)

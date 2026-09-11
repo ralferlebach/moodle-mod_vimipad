@@ -198,7 +198,8 @@ class grading_panel {
         $advanced = self::resolve_advanced($cm, $context, $instance, $snapshot);
         if ($advanced !== null) {
             [$form, $gradinginstance, $itemid] = $advanced;
-            if ($data = $form->get_data()) {
+            $data = $form->get_data();
+            if ($data) {
                 $grade = $gradinginstance->submit_and_get_grade($data->advancedgrading, $itemid);
                 self::store_instance($itemid, (int) $USER->id, (int) $gradinginstance->get_id());
                 (new grading_service())->save_grade(
@@ -257,7 +258,7 @@ class grading_panel {
         stdClass $snapshot,
         stdClass $workspace
     ): void {
-        global $DB, $USER, $OUTPUT;
+        global $DB;
 
         $snapshotid = (int) $snapshot->id;
         $pageurl = self::detail_url($cm, $snapshotid);
@@ -277,10 +278,19 @@ class grading_panel {
         if (\mod_vimipad\local\service\snapshot_service::is_late($instance, $submittedtime)) {
             $meta .= ' ' . html_writer::span(
                 get_string('gradetab:late', 'mod_vimipad'),
-                'badge badge-warning bg-warning text-dark'
+                'badge bg-warning text-dark'
             );
         }
         echo html_writer::div($meta, 'mb-3 text-muted small');
+
+        // Current lifecycle phase of this submission.
+        echo html_writer::div(
+            get_string('gradetab:phase', 'mod_vimipad') . ' ' . html_writer::tag(
+                'strong',
+                s(\mod_vimipad\local\snapshot_phase::label((int) $snapshot->status))
+            ),
+            'mb-3 small'
+        );
 
         // Offer to reopen the workspace for revision while it is locked.
         if ((int) $workspace->locked === 1) {
@@ -398,6 +408,7 @@ class grading_panel {
             'count' => $aggregate['count'],
             'mean' => ($aggregate['mean'] === null) ? '-' : round($aggregate['mean'] * 100),
             'median' => ($aggregate['median'] === null) ? '-' : round($aggregate['median'] * 100),
+            'trimmedmean' => ($aggregate['trimmedmean'] === null) ? '-' : round($aggregate['trimmedmean'] * 100),
             'pending' => $aggregate['pending'],
         ]), 'alert alert-secondary');
 

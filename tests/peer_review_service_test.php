@@ -180,6 +180,8 @@ final class peer_review_service_test extends \advanced_testcase {
         $this->assertSame(2, $aggregate['count']);
         $this->assertEqualsWithDelta(0.6, $aggregate['mean'], 0.0001);
         $this->assertEqualsWithDelta(0.6, $aggregate['median'], 0.0001);
+        // Fewer than three scores: trimmed mean equals the plain mean.
+        $this->assertEqualsWithDelta(0.6, $aggregate['trimmedmean'], 0.0001);
         $this->assertSame(1, $aggregate['pending']);
     }
 

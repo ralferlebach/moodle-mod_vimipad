@@ -190,7 +190,7 @@ jobs:
         working-directory: ${{ github.workspace }}/moodle/mod/vimipad/amd
         run: |
           npx grunt amd \
-            --files=mod/vimipad/amd/src/init.js \
+            --files=mod/vimipad/amd/src/init.js,mod/vimipad/amd/src/editor_strings.js \
             --max-lint-warnings=0
 
       - name: Verify editor bundle survived Moodle Grunt

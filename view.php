@@ -355,6 +355,24 @@ switch ($tab) {
                 $gradesnapshot,
                 $gradeworkspace
             );
+
+            // Let the grader replay how the submitted map developed, up to the
+            // revision the snapshot was taken at.
+            if ((int) $gradesnapshot->revision > 0) {
+                echo html_writer::start_div('vimipad-revision-buttons mt-3');
+                echo html_writer::tag('button', get_string('revision:playtitle', 'mod_vimipad'), [
+                    'type' => 'button',
+                    'class' => 'btn btn-sm btn-outline-secondary vimipad-playstate',
+                    'data-vimipad-play-revision' => (int) $gradesnapshot->revision,
+                    'data-workspaceid' => (int) $gradeworkspace->id,
+                ]);
+                echo html_writer::end_div();
+                echo html_writer::div('', '', [
+                    'id' => 'vimipad-revision-viewer',
+                    'class' => 'vimipad-revision-viewer-host mt-3',
+                ]);
+                $PAGE->requires->js_call_amd('mod_vimipad/revision', 'init', [$cm->id]);
+            }
             break;
         }
 

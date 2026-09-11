@@ -17,6 +17,7 @@
 namespace mod_vimipad\local\service;
 
 use stdClass;
+use mod_vimipad\api\score;
 
 /**
  * Peer review: allocating submissions to reviewers, collecting and aggregating reviews.
@@ -206,7 +207,7 @@ class peer_review_service {
      * should not decide a suggestion.
      *
      * @param int $snapshotid The reviewed snapshot.
-     * @return array{count: int, mean: float|null, median: float|null, pending: int}
+     * @return array{count: int, mean: float|null, median: float|null, trimmedmean: float|null, pending: int}
      */
     public function aggregate(int $snapshotid): array {
         $scores = [];
@@ -222,18 +223,22 @@ class peer_review_service {
         }
 
         if (empty($scores)) {
-            return ['count' => 0, 'mean' => null, 'median' => null, 'pending' => $pending];
+            return [
+                'count' => 0,
+                'mean' => null,
+                'median' => null,
+                'trimmedmean' => null,
+                'pending' => $pending,
+            ];
         }
 
-        sort($scores);
-        $count = count($scores);
-        $middle = (int) floor(($count - 1) / 2);
-        $median = ($count % 2) ? $scores[$middle] : (($scores[$middle] + $scores[$middle + 1]) / 2);
-
+        // Aggregate through the public scoring facade so mean, median and the
+        // outlier-robust trimmed mean stay a single implementation.
         return [
-            'count' => $count,
-            'mean' => array_sum($scores) / $count,
-            'median' => $median,
+            'count' => count($scores),
+            'mean' => score::aggregate_fractions($scores, score::AGG_MEAN),
+            'median' => score::aggregate_fractions($scores, score::AGG_MEDIAN),
+            'trimmedmean' => score::aggregate_fractions($scores, score::AGG_TRIMMED),
             'pending' => $pending,
         ];
     }

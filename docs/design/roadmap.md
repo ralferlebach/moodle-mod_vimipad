@@ -8,7 +8,8 @@ Lastwerkzeuge, Performance) sind abgeschlossen. Ein externes Audit des Standes
 PHP-Handler, Paginierung der produktionskritischen Ansichten, Nulltoleranz für
 fachliche Fehler im Lasttest, Versions- und Paketierungshygiene). Mit diesem
 Schnitt stehen Kern **und** alle 19 gebündelten Subplugins auf
-`MATURITY_BETA` / Release `0.9.0`.
+`MATURITY_BETA` / Release `0.9.0`. Die GitHub-CI ist für diesen Stand komplett
+grün (inklusive Merge-CI).
 
 Nächste Stufe: Feldvalidierung im echten Kursbetrieb sowie die noch offenen
 0.9.x-Themen (Barrierefreiheits-Audit, Stabilisierung der öffentlichen API für
@@ -160,6 +161,28 @@ Abgabe/Snapshot/Bewertung; Auslagerung der Darstellungstypen in
   gegen EN 301 549 sowie Prüfung der Einhaltung der BITV 2.0; Prüfung mit echten
   Hilfsmitteln (NVDA/JAWS/VoiceOver, Tastatur-only, Vergrößerung), Behebung der
   Befunde und Dokumentation des Konformitätsstands
+
+
+## Abgeleitete Plugins — Umsetzungsstand (Satelliten, eigene 0.1.x-Spur)
+
+Die in 0.9.x vorgesehenen abgeleiteten Zusatz-Plugins werden als eigene Repos mit
+eigener `0.1.x`-Versionierung geführt, entkoppelt von der Beta-Stabilisierung des
+Kerns. Voraussetzung waren zwei stabile öffentliche Nahtstellen in mod_vimipad,
+die in dieser Stufe geliefert wurden:
+
+- **`\mod_vimipad\api\score`** (Kern 0.9.1) — kontextfreie Bewertung einer Map
+  gegen eine Referenz über die `vimipadassess`-Engine.
+- **`mountValue` / `createValueTransport`** (Kern 0.9.2) — wertgebundener
+  Editor-Embed für Hosts, die die Map als einen Wert speichern.
+
+- **`score::aggregate_fractions()`** (Kern 0.9.6) — Aggregation mehrerer
+  Peer-Bewertungen (Mean/Median/Trimmed) als Peer-Review-Primitive; Peer-Vergleich
+  selbst ist `score::fraction(reviewermap, authormap)`.
+
+Stand: `qtype_vimipad` (0.1.6) und `datafield_vimipad` (0.1.7) mit eingebettetem
+Editor (formconfig + embedded-Modus), read-only Browse-Editor mit Lazy-Mount,
+Walkthrough-/Behat-Tests und voller CI (Dev + Release, `--extra-plugins`,
+lint-js-AMD-Gate) je Satellit; lokale `makefile`s zum Vorprüfen.
 
 ## Richtung 1.0
 

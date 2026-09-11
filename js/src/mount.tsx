@@ -33,6 +33,7 @@ import {EditorApp} from './components/EditorApp';
 import {RevisionViewer} from './components/RevisionViewer';
 import {RevisionPlayer} from './components/RevisionPlayer';
 import {MountConfig, RevisionConfig} from './types';
+import {createValueTransport, ValueTransportHandle} from './value_transport';
 
 /**
  * Resolve a string, preferring Moodle's string store, falling back to English.
@@ -80,13 +81,68 @@ export function mount(element: HTMLElement, config: MountConfig): void {
         targetUserid={config.targetUserid ?? 0}
         arrangeIterations={config.arrangeIterations}
         arrangeShrink={config.arrangeShrink}
+        embedded={config.embedded ?? false}
+        showViewToggle={config.showViewToggle ?? false}
     />);
+}
+
+/**
+ * Configuration for {@link mountValue}: embedding the editor on a single value.
+ */
+export interface ValueMountConfig {
+    /** The initial serialised map value (empty for a blank map). */
+    value: string;
+    /** Called with the re-serialised value after every edit. */
+    onChange: (valuejson: string) => void;
+    /** The diagram profile to constrain the map to. Default 'conceptmap'. */
+    profile?: string;
+    /** The profile form config (node/relation types, shapes) from the activity. */
+    formconfig?: Record<string, unknown>;
+    /** Show an in-editor Map/List toggle. */
+    showViewToggle?: boolean;
+    /** View-only when true (submitted attempts, teacher inspection). */
+    readonly?: boolean;
+    /** Which view opens first. */
+    initialView?: 'canvas' | 'list';
+    /** Optional string getter for i18n; if absent, keys are echoed. */
+    getString?: (key: string) => string | undefined;
+}
+
+/**
+ * Mount the editor bound to a single self-contained value.
+ *
+ * For hosts that store the whole map as one value (a question attempt, a
+ * database field) rather than a live activity workspace. The editor is wired to
+ * an in-memory {@link createValueTransport}; the host receives the serialised
+ * value through `onChange` and typically mirrors it into a hidden form field.
+ *
+ * @param element The container element.
+ * @param config The value mount configuration.
+ * @returns The value transport handle (value/state accessors).
+ */
+export function mountValue(element: HTMLElement, config: ValueMountConfig): ValueTransportHandle {
+    const handle = createValueTransport(config.value, {
+        profile: config.profile,
+        onChange: config.onChange,
+        readonly: config.readonly,
+        formconfig: config.formconfig,
+    });
+    mount(element, {
+        cmid: 0,
+        callService: handle.transport,
+        readonly: config.readonly,
+        initialView: config.initialView,
+        getString: config.getString,
+        embedded: true,
+        showViewToggle: config.showViewToggle,
+    });
+    return handle;
 }
 
 // The bundle is emitted as the AMD module mod_vimipad/editor_lazy. The init
 // module require()s it and calls mount() with an injected transport and string
 // resolver. On Moodle 5.3+ this can be replaced by the core React runtime.
-export default {mount, mountRevision, mountPlayer};
+export default {mount, mountRevision, mountPlayer, mountValue, createValueTransport};
 
 /**
  * Mount the read-only revision viewer into the given element.

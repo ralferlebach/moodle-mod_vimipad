@@ -266,7 +266,8 @@ function vimipad_get_coursemodule_info($coursemodule) {
 function vimipad_delete_instance(int $id): bool {
     global $DB;
 
-    if (!$instance = $DB->get_record('vimipad', ['id' => $id])) {
+    $instance = $DB->get_record('vimipad', ['id' => $id]);
+    if (!$instance) {
         return false;
     }
 

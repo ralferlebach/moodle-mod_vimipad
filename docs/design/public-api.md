@@ -34,6 +34,29 @@ selbst Kontext/Capability prüfen.
   liefert `['nodes' => [...], 'relations' => [...], 'containers' => [...]]`
   (jeweils lebende stdClass-Records bei dieser Revision).
 
+### `\mod_vimipad\api\score`
+
+Kontextfreie Bewertung einer Map gegen eine Referenz-Map. Die öffentliche Naht
+über die interne Assessment-Engine (die `vimipadassess_*`-Subplugins): ein
+abgeleitetes Plugin (Fragetyp, Peer-Review) bewertet damit identisch zur
+Aktivität, ohne interne Klassen anzufassen und ohne Scoring zu duplizieren.
+Beide Maps sind die serialisierte Snapshot-JSON, die der ViMi-Pad-Editor
+exportiert (Knoten mit `stableid`/`label`/`content`, Relationen mit
+`sourceid`/`targetid`/`label`, optional Container/Memberships). Kein Kontext,
+keine Aktivitätsinstanz, kein DB-Zugriff nötig.
+
+- `score::against_reference(string $responsejson, string $referencejson, string $scorerkey = 'reference', int $matchmode = self::MATCH_EXACT): ?array`
+  liefert `['score' => float, 'partscores' => [...], 'concepts' => [...],
+  'propositions' => [...], 'metrics' => [...], 'informational' => bool]` oder
+  `null`, wenn die Eingaben unbrauchbar sind (ungültiges JSON oder Scorer nicht
+  installiert).
+- `score::fraction(string $responsejson, string $referencejson, string $scorerkey = 'reference', int $matchmode = self::MATCH_EXACT): ?float`
+  Bequemer Wrapper, der nur die Gesamtzahl (0.0-1.0) zurückgibt.
+- `score::reference_scorers(): string[]` - Keys der installierten,
+  referenzbasierten Scorer (ohne referenzfreie und ohne KI-Scorer).
+- Konstanten `MATCH_EXACT`, `MATCH_FUZZY`, `MATCH_TOKEN` wählen die
+  Label-Matching-Strategie.
+
 ## PHP: `\mod_vimipad\profile\*`
 
 Kontextfreie Profilvalidierung: benötigt *keinen* Moodle-Aktivitätskontext
@@ -66,6 +89,32 @@ Vollständiger Editor. `config`:
   fehlt er, wird der eingebaute fetch-Client gegen `service.php` genutzt.
 - `getString?: (key: string) => string | undefined` - i18n-Resolver.
 
+### `mountValue(element, config)`
+
+Für Hosts, die die ganze Map als **einen selbst-enthaltenen Wert** speichern
+(Fragetyp-Attempt, Datenbankfeld) statt als lebende Aktivitäts-Workspace. Der
+Editor wird an einen In-Memory-Transport gebunden; der Host bekommt den
+serialisierten Wert per `onChange` und spiegelt ihn typischerweise in ein
+verstecktes Formularfeld. `config`: `value` (Start-Map), `onChange`
+(nach jeder Änderung), optional `profile`, `readonly`, `initialView`,
+`getString`. Rückgabe: ein Handle mit `getValue()` / `getState()`.
+
+Der serialisierte Wert hat dieselbe Snapshot-Form wie der Aktivitaets-Export,
+läuft also durch diesen Transport zurück und ist direkt ueber
+`\mod_vimipad\api\score` bewertbar.
+
+### `mod_vimipad/editor_strings`
+
+Single source of truth der Editor-String-Schlüssel. Exportiert `STRING_KEYS`
+(die Liste) und `load(): Promise<(key) => string>` — einen fertigen getString-
+Resolver. Einbettende Hosts können ihn nutzen, statt die Liste zu duplizieren
+(alternativ laden sie die Strings serverseitig via `strings_for_js`).
+
+### `createValueTransport(valuejson, options)`
+
+Die Primitive hinter `mountValue`: liefert `{transport, getValue, getState}`.
+`options`: `profile`, `onChange`, `readonly`.
+
 ### `mountRevision(element, config)` / `mountPlayer(element, config)`
 
 Schreibgeschützte Einzel-Revisions-Ansicht bzw. animierter Replay. `config`:
@@ -87,6 +136,15 @@ ohne den Editor selbst zu ändern.
 
 ## Teststatus
 
-Der Contract ist durch Tests abgesichert: `api_profiles_test`, `api_map_test`
-(PHP) sowie `embed_mount.test.ts` (Editor mountet mit selbst gestelltem
-In-Memory-Transport, ohne Netzwerk).
+Der Contract ist durch Tests abgesichert: `api_profiles_test`, `api_map_test`,
+`api_score_test`
+(PHP) sowie `embed_mount.test.ts` und `value_transport.test.ts` (wertgebundene Persistenz).
+
+
+**Peer review on the scoring facade.** Peer comparison needs no new entry point:
+`\mod_vimipad\api\score::fraction($reviewermap, $authormap)` scores one map
+against another (reviewer-vs-author or peer-vs-peer). To combine several peer
+fractions into one grade, `score::aggregate_fractions(array $fractions, string
+$method)` offers `AGG_MEAN`, `AGG_MEDIAN` and `AGG_TRIMMED` (drop one lowest and
+one highest, then mean); values are clamped to 0.0-1.0 and non-numeric entries
+ignored, empty input yields null.

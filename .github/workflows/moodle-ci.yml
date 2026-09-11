@@ -162,7 +162,7 @@ jobs:
         working-directory: ${{ github.workspace }}/moodle/mod/vimipad/amd
         run: |
           npx grunt amd \
-            --files=mod/vimipad/amd/src/init.js,mod/vimipad/amd/src/revision.js \
+            --files=mod/vimipad/amd/src/init.js,mod/vimipad/amd/src/revision.js,mod/vimipad/amd/src/editor_strings.js \
             --max-lint-warnings=0
 
       # The AMD build artefacts are committed, so a rebuild must reproduce them
@@ -174,7 +174,8 @@ jobs:
         run: |
           git diff --exit-code -- \
             amd/build/init.min.js amd/build/init.min.js.map \
-            amd/build/revision.min.js amd/build/revision.min.js.map
+            amd/build/revision.min.js amd/build/revision.min.js.map \
+            amd/build/editor_strings.min.js amd/build/editor_strings.min.js.map
 
       - name: Verify editor bundle survived Moodle Grunt
         run: |

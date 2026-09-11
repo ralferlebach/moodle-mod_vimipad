@@ -446,7 +446,7 @@ class layout_service {
         }
 
         // The change token is the strictly monotonic layout revision (seeded
-        // from the former timestamp scheme on upgrade, so old client tokens
+        // from the timestamp scheme used before this format, so old client tokens
         // remain comparable).
         $revision = (int) ($record->layoutrevision ?? 0);
         $changed = $revision > $since;

@@ -1,0 +1,89 @@
+<?xml version="1.0"?>
+<ruleset name="ViMi Pad plugin ruleset"
+         xmlns="http://pmd.sf.net/ruleset/1.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sf.net/ruleset/1.0.0 http://pmd.sf.net/ruleset_xml_schema.xsd">
+
+  <description>
+    PHP Mess Detector rules for this plugin.
+
+    PHPMD's stock rulesets assume a PSR-style codebase. Moodle is not one, and
+    several stock rules therefore contradict the Moodle coding style that phpcs
+    enforces: obeying them would fail the standard the plugin is actually
+    reviewed against. Those rules are excluded below, each with its reason, so
+    that what remains is genuinely actionable rather than several hundred lines
+    of noise that hides real findings.
+  </description>
+
+  <rule ref="rulesets/cleancode.xml">
+    <!-- Moodle's core API is static by design: html_writer, core_text,
+         core_user, context_module, the privacy transform helpers. Wrapping them
+         in instances to satisfy this rule would add indirection for nothing. -->
+    <exclude name="StaticAccess"/>
+    <!-- Moodle files are largely in the global namespace and core classes are
+         referenced fully qualified; import statements are not the convention. -->
+    <exclude name="MissingImport"/>
+    <!-- An early-return style is preferred where it reads better, but a matched
+         if/else is idiomatic in Moodle and not a defect. -->
+    <exclude name="ElseExpression"/>
+    <!-- External functions take their parameters from execute_parameters(); a
+         boolean web-service parameter such as includeelements or enforcelocks is
+         part of the published signature and cannot be split away. The same holds
+         for constructor flags that mirror a documented service mode. -->
+    <exclude name="BooleanArgumentFlag"/>
+  </rule>
+
+  <!-- Size and complexity apply in full, with one exception below. -->
+  <rule ref="rulesets/codesize.xml">
+    <!-- A mod_data field plugin implements a prescribed set of callbacks
+         (define_default_field, display_add_field, display_browse_field,
+         update_content, validate, export_text_value and more). Their number is
+         set by the API, not by this plugin's design. -->
+    <exclude name="TooManyPublicMethods"/>
+    <!-- A policy validator (classes/api/value.php) is by nature a collection of
+         independent checks and its total class complexity is their sum. Each
+         individual check stays small and is still covered by the per-method
+         rules, which remain active. Splitting the class would scatter one public
+         contract across several files without reducing the work. -->
+    <exclude name="ExcessiveClassComplexity"/>
+  </rule>
+
+  <rule ref="rulesets/controversial.xml">
+    <!-- Moodle mandates snake_case for classes, methods and namespaces, and
+         mandates the $DB/$CFG/$USER/$PAGE/$OUTPUT/$COURSE globals verbatim. -->
+    <!-- Moodle namespaces are the plugin's frankenstyle name plus a snake_case
+         sub-namespace (mod_vimigallery\output, qtype_vimipad\local). Many files
+         are also deliberately in the global namespace, which PHPMD reports as
+         "+global". Neither is changeable. -->
+    <exclude name="CamelCaseNamespace"/>
+    <exclude name="CamelCaseClassName"/>
+    <exclude name="CamelCaseMethodName"/>
+    <exclude name="CamelCaseVariableName"/>
+    <exclude name="CamelCasePropertyName"/>
+    <exclude name="CamelCaseParameterName"/>
+  </rule>
+
+  <rule ref="rulesets/design.xml"/>
+
+  <rule ref="rulesets/naming.xml">
+    <!-- $DB, $cm, $qa, $fs, $id, $rs are established Moodle names; renaming
+         them would make the code less recognisable, not more. -->
+    <exclude name="ShortVariable"/>
+    <!-- The get_layout_*() accessors are part of the vimipadform subplugin
+         contract that other plugins implement; renaming them to is_*() would
+         break that published interface. -->
+    <exclude name="BooleanGetMethodName"/>
+    <!-- Moodle's own class names are long and descriptive by convention, e.g.
+         restore_vimigallery_activity_structure_step, whose name is prescribed
+         by the backup API. -->
+    <exclude name="LongClassName"/>
+  </rule>
+
+  <rule ref="rulesets/unusedcode.xml">
+    <!-- Many signatures are prescribed by Moodle APIs (field plugin callbacks,
+         question type hooks, privacy providers) and must keep parameters the
+         implementation does not use. -->
+    <exclude name="UnusedFormalParameter"/>
+  </rule>
+
+</ruleset>

@@ -47,6 +47,12 @@ class access {
         stdClass $workspace,
         int $userid
     ): void {
+        // Guests never write: this is enforced here so every mutating path is
+        // covered in one place, independent of how the guest role is configured.
+        if (isguestuser($userid)) {
+            throw new \moodle_exception('error:guestnoedit', 'mod_vimipad');
+        }
+
         $mode = (int) $instance->collaborationmode;
 
         if ($mode === 0) {

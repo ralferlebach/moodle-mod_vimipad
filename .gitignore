@@ -48,3 +48,14 @@ behatfaildumps/
 # Local developer overrides
 .env
 .env.local
+
+# Load-test downloads and run artefacts. The harness itself (seed, .jmx, .k6.js,
+# README) is versioned; the tools it fetches and the results it produces are not.
+tests/load/apache-jmeter-*/
+tests/load/k6
+tests/load/*.tgz
+tests/load/*.jtl
+tests/load/jmeter.log
+tests/load/itemids.csv
+tests/load/.load-env
+tests/load/.load-seed.out

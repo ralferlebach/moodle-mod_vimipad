@@ -328,7 +328,7 @@ class provider implements
 
             // Load nodes, relations and journal for ALL of this user's
             // workspaces in three IN-queries and group in PHP, instead of three
-            // queries per workspace (the former 3N+1 pattern).
+            // queries per workspace, which would scale with the map count.
             $nodesby = [];
             $relationsby = [];
             $journalby = [];

@@ -51,8 +51,9 @@ class get_workspace_elements extends external_api {
             'cmid' => new external_value(PARAM_INT, 'Course module id'),
             'workspaceid' => new external_value(PARAM_INT, 'Workspace id'),
             'kind' => new external_value(PARAM_ALPHA, 'Element kind: nodes, relations or containers'),
-            'offset' => new external_value(PARAM_INT, 'Zero-based row offset', VALUE_DEFAULT, 0),
+            'offset' => new external_value(PARAM_INT, 'Zero-based row offset (legacy; prefer afterid)', VALUE_DEFAULT, 0),
             'limit' => new external_value(PARAM_INT, 'Maximum rows (capped at MAX_PAGE)', VALUE_DEFAULT, self::MAX_PAGE),
+            'afterid' => new external_value(PARAM_INT, 'Keyset cursor: return rows with id greater than this', VALUE_DEFAULT, 0),
         ]);
     }
 
@@ -62,8 +63,9 @@ class get_workspace_elements extends external_api {
      * @param int $cmid Course module id.
      * @param int $workspaceid Workspace id.
      * @param string $kind Element kind: nodes, relations or containers.
-     * @param int $offset Zero-based row offset.
+     * @param int $offset Zero-based row offset (legacy; prefer afterid).
      * @param int $limit Maximum rows to return.
+     * @param int $afterid Keyset cursor: return rows with id greater than this.
      * @return array
      */
     public static function execute(
@@ -71,13 +73,15 @@ class get_workspace_elements extends external_api {
         int $workspaceid,
         string $kind,
         int $offset = 0,
-        int $limit = self::MAX_PAGE
+        int $limit = self::MAX_PAGE,
+        int $afterid = 0
     ): array {
         $params = self::validate_parameters(self::execute_parameters(), [
             'cmid' => $cmid,
             'workspaceid' => $workspaceid,
             'kind' => $kind,
             'offset' => $offset,
+            'afterid' => $afterid,
             'limit' => $limit,
         ]);
 
@@ -101,10 +105,34 @@ class get_workspace_elements extends external_api {
             $limit = self::MAX_PAGE;
         }
 
+        $afterid = max(0, (int) $params['afterid']);
+
         $service = new workspace_service();
         $counts = $service->count_elements((int) $workspace->id);
         $total = (int) $counts[$kind];
-        $records = $service->get_elements_page((int) $workspace->id, $kind, $offset, $limit);
+
+        // Prefer keyset paging (race-safe): rows with id greater than the client's
+        // cursor cannot be shifted by concurrent edits on earlier pages. Offset
+        // paging is kept for legacy callers. Keyset fetches one extra row to learn
+        // whether more remain.
+        if ($afterid > 0) {
+            $records = $service->get_elements_keyset((int) $workspace->id, $kind, $afterid, $limit + 1);
+            $hasmore = count($records) > $limit;
+            if ($hasmore) {
+                array_splice($records, $limit);
+            }
+        } else {
+            $records = $service->get_elements_page((int) $workspace->id, $kind, $offset, $limit);
+            $hasmore = ($offset + count($records)) < $total;
+        }
+
+        // The next keyset cursor is the highest id in this page.
+        $nextafterid = 0;
+        foreach ($records as $record) {
+            if ((int) $record->id > $nextafterid) {
+                $nextafterid = (int) $record->id;
+            }
+        }
 
         $mappers = [
             'nodes' => [get_workspace::class, 'map_node'],
@@ -118,7 +146,8 @@ class get_workspace_elements extends external_api {
             'offset' => $offset,
             'limit' => $limit,
             'total' => $total,
-            'hasmore' => ($offset + count($elements)) < $total,
+            'hasmore' => $hasmore,
+            'nextafterid' => $nextafterid,
         ];
         $result[$kind] = $elements;
         return $result;
@@ -138,6 +167,7 @@ class get_workspace_elements extends external_api {
             'limit' => new external_value(PARAM_INT, 'Page size applied'),
             'total' => new external_value(PARAM_INT, 'Total live elements of this kind'),
             'hasmore' => new external_value(PARAM_BOOL, 'Whether more rows remain beyond this page'),
+            'nextafterid' => new external_value(PARAM_INT, 'Keyset cursor for the next page (highest id in this page)'),
             'nodes' => new external_multiple_structure(
                 get_workspace::node_structure(),
                 'Node page (present when kind = nodes)',

@@ -21,8 +21,8 @@ use mod_vimipad\local\service\lock_service;
 /**
  * Scheduled task: delete expired collaboration lock leases.
  *
- * Replaces the probabilistic cleanup that used to run inside the poll request,
- * so housekeeping is deterministic and adds no write load to the read path.
+ * Keeps lock cleanup out of the poll request, so housekeeping is deterministic
+ * and adds no write load to the hot read path.
  *
  * @package    mod_vimipad
  * @copyright  2026 Ralf Erlebach

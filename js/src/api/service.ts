@@ -164,19 +164,24 @@ export class ApiClient {
     ): Promise<unknown[]> {
         const pagesize = 500;
         const out: unknown[] = [];
-        for (let offset = 0; offset < total; offset += pagesize) {
+        let afterid = 0;
+        // Keyset paging: request rows with id greater than the last one seen, so
+        // a concurrent edit on an earlier page cannot make us skip or repeat a
+        // row. The total only bounds the loop defensively against a server bug.
+        for (let guard = 0; guard <= total + pagesize; guard += pagesize) {
             const page = await this.transport('mod_vimipad_get_workspace_elements', {
                 cmid: this.cmid,
                 workspaceid,
                 kind,
-                offset,
+                afterid,
                 limit: pagesize,
-            }) as {hasmore: boolean; [key: string]: unknown};
+            }) as {hasmore: boolean; nextafterid: number; [key: string]: unknown};
             const chunk = (page[kind] as unknown[]) ?? [];
             out.push(...chunk);
-            if (!page.hasmore) {
+            if (!page.hasmore || !page.nextafterid || page.nextafterid <= afterid) {
                 break;
             }
+            afterid = page.nextafterid;
         }
         return out;
     }

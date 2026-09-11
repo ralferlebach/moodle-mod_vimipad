@@ -45,7 +45,7 @@ class subplugins extends check {
         $problems = [];
         foreach ($types as $type) {
             $plugins = \core_component::get_plugin_list($type);
-            foreach ($plugins as $name => $dir) {
+            foreach (array_keys($plugins) as $name) {
                 $installed++;
                 $info = $manager->get_plugin_info($type . '_' . $name);
                 if ($info === null || $info->versiondb === null) {

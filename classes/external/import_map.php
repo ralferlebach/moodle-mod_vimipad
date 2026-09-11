@@ -63,6 +63,12 @@ class import_map extends external_api {
             'mode' => $mode,
         ]);
 
+        // The helper fills these two by reference.
+
+        $instance = null;
+
+        $workspace = null;
+
         helper::validate_workspace_for_edit($params['cmid'], $params['workspaceid'], $instance, $workspace);
 
         $service = new import_service();

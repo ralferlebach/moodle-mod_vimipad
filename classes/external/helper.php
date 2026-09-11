@@ -202,10 +202,12 @@ class helper {
         external_api::validate_context($context);
         // Deliberate access decision: reading any workspace — including the
         // shared course-mode workspace — requires mod/vimipad:view in this
-        // module's context. Guests, unenrolled and suspended users therefore do
-        // not get in (they lack the capability), because a course map is course
-        // content, not public data. Course workspaces are shared among enrolled
-        // participants only; cross-course/guest access is intentionally refused.
+        // module's context, so unenrolled and suspended users do not get in.
+        // Guests are a deliberate exception on the read side: where a course
+        // grants guest access they hold this capability and may read what is
+        // readable, but they never create a workspace and never mutate map
+        // state — that is enforced separately in access::require_edit and in
+        // get_workspace, and covered by guest_policy_test.
         require_capability('mod/vimipad:view', $context);
 
         $instance = $DB->get_record('vimipad', ['id' => $cm->instance], '*', MUST_EXIST);

@@ -137,7 +137,8 @@ $CFG->directorypermissions = 0777;
 require_once(__DIR__ . '/lib/setup.php');
 
 // PHPUnit.
-define('PHPUNIT_UTIL', false);
+// HINWEIS (Session 006): Diese Zeile NICHT setzen. Sie kollidiert mit Moodles
+// eigenem PHPUNIT_UTIL-Define und erzeugt ~20 Scheinfehler in PHPUnit.
 $CFG->phpunit_prefix = 'phpu_';
 $CFG->phpunit_dataroot = '/home/claude/moodledata_phpu';
 
@@ -638,3 +639,90 @@ grep    'amd/build/.*\.map'         /tmp/ga.txt   # CI verlangt die Source-Maps
 Die Source-Maps dürfen **nicht** aus dem Paket ausgeschlossen werden: die CI
 prüft ihre Existenz mit `test -f` und ihre Reproduzierbarkeit mit
 `git diff --exit-code`.
+
+---
+
+## 19. Playwright unter GitHub Actions — drei Fallstricke
+
+Der Workflow `.github/workflows/playwright.yml` scheiterte an drei Punkten, die
+lokal nicht auftreten. Alle drei sind in 0.9.0 behoben; die Ursachen sind
+allgemein genug, um sie hier festzuhalten.
+
+**1. `config.php` nicht vorab anlegen.** `admin/cli/install.php` schreibt die
+Datei selbst und bricht ab, sobald schon eine existiert:
+
+```
+The configuration file config.php already exists.
+Please use admin/cli/install_database.php to upgrade Moodle for this site.
+```
+
+Also entweder `install.php` **ohne** vorhandene `config.php`, oder eine
+handgeschriebene `config.php` **plus** `install_database.php` — nie beides.
+
+**2. `seed.php`-Ausgabe ist Shell-Syntax, kein `$GITHUB_ENV`-Format.** Das
+Skript gibt `export KEY='wert'` aus, damit es lokal via `source` eingelesen
+werden kann. `$GITHUB_ENV` erwartet dagegen `KEY=wert`; ein direktes Anhängen
+erzeugt den ungültigen Variablennamen `export KEY` und der Wert behält seine
+Anführungszeichen. `support/env.ts` wirft dann bei der ersten Pflichtvariablen.
+Konvertierung im Workflow:
+
+```bash
+sed -n "s/^export \([A-Z_][A-Z_]*\)='\(.*\)'$/\1=\2/p" seed.env >> "$GITHUB_ENV"
+```
+
+Werte mit Leerzeichen sind unkritisch: GitHub trennt am ersten `=` und nimmt den
+Rest wörtlich (anders als beim `source` in der Shell).
+
+**3. `PHP_CLI_SERVER_WORKERS` setzen.** Der PHP-Built-in-Server ist ohne diese
+Variable single-threaded. Eine Moodle-Seite zieht viele Unterressourcen parallel,
+sodass ein einzelner Worker blockiert, sobald ein Browser darauf zugreift.
+`PHP_CLI_SERVER_WORKERS=8 php -S localhost:8000 -t .` startet neun Prozesse.
+
+Zusätzlich sinnvoll: die Bereitschaftsprüfung auf **HTTP 200** von
+`/login/index.php` stützen (nicht auf `curl -sf` gegen `/`, das schon bei einem
+Redirect zufrieden ist), bei Fehlschlag das Server-Log ausgeben und neben dem
+`playwright-report` auch `test-results` als Artefakt hochladen — dort liegen die
+Screenshots und die ARIA-Snapshots (`error-context.md`) für die Diagnose.
+
+> Gegenprobe in der Sandbox: der komplette korrigierte Pfad (install.php →
+> Server mit Workern → seed.php → Konvertierung → `npx playwright test`) wurde
+> real durchgespielt und endet mit `3 passed`.
+
+---
+
+## 20. GitHub-Actions: `load.yml` (jMeter) und der `dataroot`-Fallstrick
+
+**`--dataroot` muss vor `install.php` existieren.** `install.php` legt das
+Verzeichnis nicht an und bricht sonst ab:
+
+```
+Fatal error: $CFG->dataroot is not configured properly,
+directory does not exist or is not accessible! Exiting.
+```
+
+Also `mkdir -p /tmp/moodledata` **vor** dem Aufruf — und der dataroot liegt
+außerhalb des Moodle-Codebaums. (Dieser Fehler trat im Playwright-Log auf und
+gilt für jeden Workflow, der eine Site frisch installiert.)
+
+**`load.yml` hat zwei Modi.** Standard `selfcontained`: der Job baut Moodle,
+installiert das Plugin, seedet über `seed_large.php` und lastet den eigenen
+`localhost` — es muss **nichts** eingetragen werden, und es entsteht kein
+Klartext-Token. Modus `external`: gegen eine bereits laufende, geseedete Site;
+`base_url`, `workspaceid`, `cmid` sind Inputs, der **Token kommt aus dem Secret
+`VIMIPAD_LOAD_TOKEN`** (nie als Input) und wird zusätzlich per `::add-mask::`
+aus den Logs maskiert.
+
+So legt man das Secret an: Repo → *Settings* → *Secrets and variables* →
+*Actions* → *New repository secret* → Name `VIMIPAD_LOAD_TOKEN`, Wert = der
+REST-Token eines view-fähigen Nutzers auf der Zielsite. Danach im Dispatch-
+Formular `mode=external` samt `base_url`/`workspaceid`/`cmid` wählen.
+
+**Plateau statt fester Loopzahl.** Der Plan fährt jetzt mit
+`scheduler=true` + `duration` + `continue_forever`, gesteuert über
+`-Jthreads/-Jrampup/-Jduration`. Damit sind wirklich N Nutzer für die Plateau-
+Dauer gleichzeitig aktiv, statt dass die ersten Threads fertig sind, bevor die
+letzten starten.
+
+> Gegenprobe in der Sandbox: der self-contained-Pfad (Server mit Workern → Seed
+> → jMeter-Plateau) wurde real durchgespielt — 223 Samples, 0,00 % Fehler, das
+> Plateau lief die vollen ~21 s.

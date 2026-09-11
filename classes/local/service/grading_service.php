@@ -90,7 +90,7 @@ class grading_service {
         $now = time();
 
         // Load existing plugin-grades for all recipients once, instead of a
-        // get_record() per recipient (the former N+1). Wrap the plugin-table
+        // get_record() per recipient, which would scale with the cohort. Wrap the plugin-table
         // writes in a transaction so a large cohort commits atomically.
         $existingby = [];
         if ($recipients !== []) {
