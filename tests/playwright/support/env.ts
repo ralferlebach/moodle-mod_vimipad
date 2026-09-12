@@ -33,6 +33,13 @@ export interface VimipadEnv {
     userA: TestUser;
     userB: TestUser;
     teacher: TestUser;
+    /** An individual-mode activity path, for the single-student stories. */
+    individualPath: string;
+    /** The seeded course id and name, for the teacher create-activity story. */
+    courseId: string;
+    courseName: string;
+    /** The site administrator, for the admin stories. */
+    admin: TestUser;
 }
 
 /**
@@ -69,6 +76,14 @@ export function readEnv(): VimipadEnv {
             username: need('VIMIPAD_TEACHER'),
             password: need('VIMIPAD_TEACHER_PASS'),
             fullname: process.env.VIMIPAD_TEACHER_NAME ?? 'Tay Teacher',
+        },
+        individualPath: process.env.VIMIPAD_INDIVIDUAL_PATH ?? need('VIMIPAD_ACTIVITY_PATH'),
+        courseId: process.env.VIMIPAD_COURSE_ID ?? '',
+        courseName: process.env.VIMIPAD_COURSE_NAME ?? 'ViMi Pad collaboration',
+        admin: {
+            username: process.env.VIMIPAD_ADMIN ?? 'admin',
+            password: process.env.VIMIPAD_ADMIN_PASS ?? '',
+            fullname: process.env.VIMIPAD_ADMIN_NAME ?? 'Admin User',
         },
     };
 }

@@ -35,11 +35,18 @@ export default defineConfig({
     fullyParallel: false,
     workers: 1,
     retries: process.env.CI ? 1 : 0,
-    reporter: process.env.CI ? [['github'], ['html', {open: 'never'}]] : [['list']],
+    // Always emit the HTML report so a green run is not an empty report.
+    reporter: process.env.CI
+        ? [['github'], ['html', {open: 'never'}], ['list']]
+        : [['html', {open: 'never'}], ['list']],
     use: {
         baseURL,
-        trace: 'on-first-retry',
-        screenshot: 'only-on-failure',
+        // Record everything on every run - success included - so the report
+        // shows real usage, not just pass/fail rows. This was the reason the
+        // previous report looked empty: video and trace were off for green runs.
+        video: 'on',
+        trace: 'on',
+        screenshot: 'on',
     },
     projects: [
         {

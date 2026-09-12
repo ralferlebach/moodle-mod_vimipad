@@ -59,3 +59,11 @@ tests/load/jmeter.log
 tests/load/itemids.csv
 tests/load/.load-env
 tests/load/.load-seed.out
+
+# Playwright run artefacts (the suite itself is versioned; its output is not).
+tests/playwright/node_modules/
+tests/playwright/test-results/
+tests/playwright/playwright-report/
+tests/playwright/.env
+tests/playwright/.env.sh
+tests/playwright/blob-report/

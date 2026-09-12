@@ -11,6 +11,16 @@
 First release candidate. Maturity raised to MATURITY_RC; the whole ViMi family
 moves to 1.0.0-RC1 together.
 
+
+### Added
+- Role-based Playwright user stories (Admin, Teacher, Student) alongside the
+  existing collaboration specs; see tests/playwright and ViMi_User_Stories.md.
+
+### Fixed
+- The Playwright report was empty on a green run: video and trace were only
+  produced on a retry, which a passing run never triggers. The config now sets
+  video: 'on' and trace: 'on' unconditionally, so every run - success included -
+  leaves a video and the HTML report embeds it. Verified against a real run.
 ### Changed
 - Development and release CI now cover Moodle 5.1 as well, so the declared
   support range [405, 502] (4.5, 5.0, 5.1, 5.2) is fully qualified.

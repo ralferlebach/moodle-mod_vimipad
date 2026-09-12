@@ -114,8 +114,20 @@ $moduleinfo = (object) [
     'aienabled' => 0,
 ];
 $created = add_moduleinfo($moduleinfo, $course);
-
 $activitypath = '/mod/vimipad/view.php?id=' . $created->coursemodule;
+
+// An individual-mode activity, so a single student owns their own workspace
+// (the "build and save" story) without another client touching it.
+$individualinfo = clone $moduleinfo;
+$individualinfo->name = 'My map';
+$individualinfo->intro = 'Individual fixture';
+$individualinfo->collaborationmode = 0;
+$individualcreated = add_moduleinfo($individualinfo, $course);
+$individualpath = '/mod/vimipad/view.php?id=' . $individualcreated->coursemodule;
+
+// The site administrator, for the admin stories (AI gate, plugin overview).
+$admin = get_admin();
+$adminuser = $admin ? $admin->username : 'admin';
 
 // Print shell exports for the Playwright run. The base URL is derived from the
 // site's own wwwroot, so `eval "$(php seed.php)"` sets everything the run needs
@@ -132,3 +144,11 @@ echo "export VIMIPAD_NAME_B='Ben Builder'\n";
 echo "export VIMIPAD_TEACHER='{$teacher->username}'\n";
 echo "export VIMIPAD_TEACHER_PASS='Vimi!pad_T1'\n";
 echo "export VIMIPAD_TEACHER_NAME='Tay Teacher'\n";
+echo "export VIMIPAD_INDIVIDUAL_PATH='{$individualpath}'\n";
+echo "export VIMIPAD_COURSE_ID='{$course->id}'\n";
+echo "export VIMIPAD_COURSE_NAME='{$course->fullname}'\n";
+echo "export VIMIPAD_ADMIN='{$adminuser}'\n";
+// The admin password is whatever the site was installed with; the CI workflow
+// sets it explicitly and exports VIMIPAD_ADMIN_PASS itself. Left blank here so a
+// local run fails loudly rather than guessing.
+echo "export VIMIPAD_ADMIN_PASS='" . getenv('VIMIPAD_ADMIN_PASS') . "'\n";

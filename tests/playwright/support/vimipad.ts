@@ -169,3 +169,30 @@ export async function expectNodeLockedForOther(page: Page): Promise<void> {
     await expect(page.locator('.vimipad-canvas-node-locked').first())
         .toBeVisible({timeout: 30_000});
 }
+
+/**
+ * Save the current map explicitly (the editor also autosaves, but the stories
+ * assert an explicit save so the video shows the action). Falls back silently
+ * if no Save control is present on a given build.
+ *
+ * @param page The browser page.
+ */
+export async function saveMap(page: Page): Promise<void> {
+    const save = page.getByRole('button', {name: /^Save$/});
+    if (await save.count() > 0) {
+        await save.first().click();
+    }
+    // Give the debounced save/poll a moment to flush to the server.
+    await page.waitForTimeout(2_000);
+}
+
+/**
+ * Navigate to a course page as the current user.
+ *
+ * @param page The browser page.
+ * @param baseURL The site base URL.
+ * @param courseId The course id.
+ */
+export async function openCourse(page: Page, baseURL: string, courseId: string): Promise<void> {
+    await page.goto(`${baseURL}/course/view.php?id=${courseId}&lang=en`);
+}

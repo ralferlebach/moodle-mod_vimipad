@@ -103,6 +103,10 @@ jobs:
       # prefix and the surrounding quotes — otherwise every variable is lost and
       # support/env.ts throws on the first required one.
       - name: Seed collaboration fixture
+        env:
+          # Matches --adminpass in the install step above, so seed.php can hand
+          # the admin credentials to the admin user stories.
+          VIMIPAD_ADMIN_PASS: 'Admin!23'
         run: |
           cd moodle
           php mod/vimipad/tests/playwright/seed.php > /tmp/vimipad-seed.env
