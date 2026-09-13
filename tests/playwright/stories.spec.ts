@@ -30,18 +30,34 @@ const env = readEnv();
 test.describe('mod_vimipad - Admin stories', () => {
     test.skip(!env.admin.password, 'Set VIMIPAD_ADMIN_PASS to run the admin stories.');
 
-    // A1: the AI feedback feature is off until an admin turns it on.
-    test('A1 - the AI feedback feature is gated off by default', async ({page}) => {
+    // A1: the admin controls the AI feedback feature site-wide and the switch
+    // actually takes effect. The plugin ships with it enabled
+    // (settings.php default 1), so the story verifies that an admin can turn it
+    // OFF and that the choice persists - which is the decision that matters for
+    // a site that must not contact an external service.
+    test('A1 - an admin can switch the AI feedback feature off', async ({page}) => {
         await login(page, env.baseURL, env.admin);
         await page.goto(`${env.baseURL}/admin/settings.php?section=modsettingvimipad&lang=en`);
 
         // Moodle renders an admin checkbox as two inputs sharing the name: a
         // hidden "0" fallback plus the visible checkbox. Target the checkbox by
         // type, or the first match is the hidden input and never becomes visible.
-        const aiToggle = page.locator('input[type="checkbox"][name="s_mod_vimipad_enableai"], #id_s_mod_vimipad_enableai');
-        await expect(aiToggle.first()).toBeVisible({timeout: 15_000});
-        // The checkbox is unchecked on a fresh site: AI stays off until chosen.
-        await expect(aiToggle.first()).not.toBeChecked();
+        const aiToggle = page.locator('input[type="checkbox"][name="s_mod_vimipad_enableai"], #id_s_mod_vimipad_enableai').first();
+        await expect(aiToggle).toBeVisible({timeout: 15_000});
+
+        // Turn it off and save.
+        if (await aiToggle.isChecked()) {
+            await aiToggle.uncheck();
+        }
+        await page.getByRole('button', {name: /Save changes/i}).first().click();
+
+        // Reload the settings page: the feature must still be off.
+        await page.goto(`${env.baseURL}/admin/settings.php?section=modsettingvimipad&lang=en`);
+        await expect(aiToggle).not.toBeChecked({timeout: 15_000});
+
+        // Restore the shipped default so later stories see a normal site.
+        await aiToggle.check();
+        await page.getByRole('button', {name: /Save changes/i}).first().click();
     });
 
     // A2: the plugin shows as installed and enabled in the activity overview.
