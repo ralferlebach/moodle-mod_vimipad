@@ -35,7 +35,10 @@ test.describe('mod_vimipad - Admin stories', () => {
         await login(page, env.baseURL, env.admin);
         await page.goto(`${env.baseURL}/admin/settings.php?section=modsettingvimipad&lang=en`);
 
-        const aiToggle = page.locator('#id_s_mod_vimipad_enableai, [name="s_mod_vimipad_enableai"]');
+        // Moodle renders an admin checkbox as two inputs sharing the name: a
+        // hidden "0" fallback plus the visible checkbox. Target the checkbox by
+        // type, or the first match is the hidden input and never becomes visible.
+        const aiToggle = page.locator('input[type="checkbox"][name="s_mod_vimipad_enableai"], #id_s_mod_vimipad_enableai');
         await expect(aiToggle.first()).toBeVisible({timeout: 15_000});
         // The checkbox is unchecked on a fresh site: AI stays off until chosen.
         await expect(aiToggle.first()).not.toBeChecked();

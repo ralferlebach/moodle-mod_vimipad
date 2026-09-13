@@ -53,4 +53,6 @@ lang/pt     export-ignore
 lang/uk     export-ignore
 lang/ja     export-ignore
 lang/zh_cn  export-ignore
+lang/zh_tw  export-ignore
+lang/ko     export-ignore
 lang/ar     export-ignore
