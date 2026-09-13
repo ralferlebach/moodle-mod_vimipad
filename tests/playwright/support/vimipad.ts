@@ -38,24 +38,35 @@ export async function login(page: Page, baseURL: string, user: TestUser): Promis
     // editor is forced later on the activity URL, not here — putting ?lang=en on
     // the login page can trigger a language redirect that staleness the login
     // token and makes the sign-in silently fail.
-    for (let attempt = 1; attempt <= 2; attempt++) {
-        await page.goto(`${baseURL}/login/index.php`);
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        await page.goto(`${baseURL}/login/index.php`, {waitUntil: 'domcontentloaded'});
+
+        // Already signed in from a previous attempt? Moodle redirects away from
+        // the login page on its own, so bail out early.
+        if (!/\/login\//.test(page.url())) {
+            return;
+        }
+
         await page.locator('#username').fill(user.username);
         await page.locator('#password').fill(user.password);
-        await page.locator('#loginbtn').click();
+
+        // Submit and wait for the resulting navigation in one step, so a slow
+        // first sign-in (cold session, cache warm-up) does not race the URL
+        // check. That race was the cause of the first-attempt flakiness.
         try {
-            // Signed in once we have navigated away from the login area (Moodle
-            // redirects to the dashboard). This is robust: it does not depend on
-            // element presence (a logged-in page can still contain a #loginbtn,
-            // and re-visiting the login URL while already signed in renders one),
-            // and it does not falsely match login/index.php the way an /index/
-            // URL check would.
-            await expect(page).not.toHaveURL(/\/login\//, {timeout: 20_000});
+            await Promise.all([
+                page.waitForURL((url) => !/\/login\//.test(url.pathname), {timeout: 30_000}),
+                page.locator('#loginbtn').click(),
+            ]);
             return;
         } catch (error) {
-            if (attempt === 2) {
+            // A wrong-credentials page stays on /login with an error notice; a
+            // slow redirect is just slow. Retry either way, up to three times,
+            // and surface the last error if it never settles.
+            if (attempt === 3) {
                 throw error;
             }
+            await page.waitForTimeout(1_000 * attempt);
         }
     }
 }

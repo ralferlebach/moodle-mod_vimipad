@@ -35,7 +35,7 @@ test.describe('mod_vimipad - Admin stories', () => {
         await login(page, env.baseURL, env.admin);
         await page.goto(`${env.baseURL}/admin/settings.php?section=modsettingvimipad&lang=en`);
 
-        const aiToggle = page.locator('#id_s_mod_vimipad_aienabled, [name="s_mod_vimipad_aienabled"]');
+        const aiToggle = page.locator('#id_s_mod_vimipad_enableai, [name="s_mod_vimipad_enableai"]');
         await expect(aiToggle.first()).toBeVisible({timeout: 15_000});
         // The checkbox is unchecked on a fresh site: AI stays off until chosen.
         await expect(aiToggle.first()).not.toBeChecked();
@@ -90,6 +90,12 @@ test.describe('mod_vimipad - Student stories', () => {
         // Reload the activity from scratch; the concept must still be there.
         await openEditor(page, env.baseURL, env.individualPath);
         await openListView(page);
-        await expect(page.getByText(label, {exact: false}).first()).toBeVisible({timeout: 30_000});
+        // The list view renders each node's label, which can land inside a
+        // control (e.g. an <option> of a relation editor's node picker) that is
+        // present but not "visible" in Playwright's sense. Persistence is proven
+        // by the label existing in the reloaded DOM, so assert on attachment,
+        // not visibility.
+        await expect(page.getByText(label, {exact: false}).first())
+            .toBeAttached({timeout: 30_000});
     });
 });

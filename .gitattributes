@@ -38,3 +38,19 @@
 # Everything not listed above ships — in particular amd/src and js/src, so the
 # checked-in build artefacts (amd/build/*.min.js and their source maps) can be
 # reviewed and reproduced from the package itself.
+
+# Non-English language packs are starter translations for functional and
+# RTL/CJK testing, maintained via AMOS. Only English ships in the release ZIP.
+lang/de     export-ignore
+lang/nl     export-ignore
+lang/fr     export-ignore
+lang/da     export-ignore
+lang/no     export-ignore
+lang/sv     export-ignore
+lang/it     export-ignore
+lang/es     export-ignore
+lang/pt     export-ignore
+lang/uk     export-ignore
+lang/ja     export-ignore
+lang/zh_cn  export-ignore
+lang/ar     export-ignore
