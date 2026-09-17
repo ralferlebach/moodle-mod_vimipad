@@ -30,15 +30,19 @@ use mod_vimipad\local\service\workspace_service;
 /**
  * Shared helpers for collaboration external functions.
  *
- * Keeps the repeated cmid → context → workspace → edit-access dance, the shared
+ * Keeps the repeated cmid -> context -> workspace -> edit-access dance, the shared
  * element-lock parameter definition and the settings lookups in one place, so
  * each external function stays small and the behaviour is consistent.
+ *
+ * Extends external_api because consensus_context() uses its validate_parameters()
+ * and validate_context(); without the parent every consensus web-service call
+ * dies with "Call to undefined method".
  *
  * @package    mod_vimipad
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class helper {
+class helper extends external_api {
     /**
      * The parameter definition shared by all element-lock functions.
      *

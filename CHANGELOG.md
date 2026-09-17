@@ -12,7 +12,24 @@ First release candidate. Maturity raised to MATURITY_RC; the whole ViMi family
 moves to 1.0.0-RC1 together.
 
 
+
+
 ### Added
+- PHPUnit tests (tests/subplugin_contract_test.php) that walk every installed
+  vimipadform and vimipadassess subplugin instead of a hard-coded list. The
+  existing registry test only covered the five MVP profiles, so the eight
+  profiles added since and three of the six scorers were never validated. A
+  profile or scorer added later is now covered as soon as it ships.
+### Fixed
+- Every consensus web-service call died with "Call to undefined method
+  mod_vimipad\external\helper::validate_parameters()". The shared helper class
+  used external_api's static validators without extending it, so group-consensus
+  submission was unusable from the editor. helper now extends external_api.
+
+### Added
+- PHPUnit tests (tests/external_returns_test.php) that execute the external
+  functions no other test invoked and validate each payload against its
+  execute_returns() declaration, the way Moodle does on a real web-service call.
 - Role-based Playwright user stories (Admin, Teacher, Student) alongside the
   existing collaboration specs; see tests/playwright and ViMi_User_Stories.md.
 
