@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * English language strings for the Stock-and-Flow diagram form.
+ * English language strings for the System dynamics diagram form.
  *
  * @package    vimipadform_stockflow
  * @copyright  2026 Ralf Erlebach
@@ -24,5 +24,5 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['pluginname'] = 'Stock and flow';
-$string['privacy:metadata'] = 'The Stock and flow diagram form stores no personal data. It only describes how a stock-and-flow map is drawn and arranged.';
+$string['pluginname'] = 'System dynamics';
+$string['privacy:metadata'] = 'The System dynamics diagram form stores no personal data. It only describes how a stock-and-flow map is drawn and arranged.';

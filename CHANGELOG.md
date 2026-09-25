@@ -19,6 +19,19 @@ moves to 1.0.0-RC1 together.
 
 
 
+
+
+### Fixed
+- The shape picker drew a plain box for every shape it did not know, so all the
+  flowchart and stock-and-flow symbols looked alike and an author could not tell
+  a decision from a stock. The picker now draws the real node geometry, scaled
+  down, so a glyph can never drift from what the canvas shows.
+- Fishbone category bones met the spine straight below the category, so their
+  arrowheads pointed back along the spine, away from the effect they feed. A
+  bone now meets the spine ahead of its category, in the direction of the
+  effect, and the connector leaves the node aiming at that station rather than
+  at the effect. The routing test had pinned the old vertical geometry, which
+  is why this was not caught.
 ### Added
 - Playwright stories for the three specialised diagram forms
   (tests/playwright/representations.spec.ts), with a seeded fixture per form:

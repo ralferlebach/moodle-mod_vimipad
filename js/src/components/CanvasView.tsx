@@ -1335,12 +1335,16 @@ export function CanvasView(props: Props): React.ReactElement {
                 // a decision connector must end on the diamond's edge.
                 const fromShape = shapeOfNode(srcNode);
                 const toShape = shapeOfNode(tgtNode);
-                const baseFrom = isTree
-                    ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
-                    : edgePointForShape(fromC, fromSize, toC, fromShape);
                 // A main category bone ends on the spine at its own station; the
                 // run from there to the effect is the shared backbone.
                 const station = boneStation(rel.stableid);
+                // Leave the node toward wherever the line actually ends. Aiming
+                // at the effect while stopping at the station would exit on the
+                // wrong side and point the arrowhead back down the spine.
+                const aim = station ?? toC;
+                const baseFrom = isTree
+                    ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
+                    : edgePointForShape(fromC, fromSize, aim, fromShape);
                 const baseTo = station
                     ? station
                     : (isTree
@@ -1437,12 +1441,16 @@ export function CanvasView(props: Props): React.ReactElement {
                 // a decision connector must end on the diamond's edge.
                 const fromShape = shapeOfNode(srcNode);
                 const toShape = shapeOfNode(tgtNode);
-                const baseFrom = isTree
-                    ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
-                    : edgePointForShape(fromC, fromSize, toC, fromShape);
                 // A main category bone ends on the spine at its own station; the
                 // run from there to the effect is the shared backbone.
                 const station = boneStation(rel.stableid);
+                // Leave the node toward wherever the line actually ends. Aiming
+                // at the effect while stopping at the station would exit on the
+                // wrong side and point the arrowhead back down the spine.
+                const aim = station ?? toC;
+                const baseFrom = isTree
+                    ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
+                    : edgePointForShape(fromC, fromSize, aim, fromShape);
                 const baseTo = station
                     ? station
                     : (isTree

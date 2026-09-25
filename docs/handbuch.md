@@ -188,6 +188,7 @@ Bifurkation und ihr Layout-Verhalten (Richtung/Ordnung) selbst.
 | **Causal / system map** (Wirkungsdiagramm) | gerichtetes Netz mit Rückkopplungen | frei, gerichtete Relationen, geschwungen |
 | **Venn / Mengen** | Elemente in (überlappenden) Mengen | Mengen = Container, Cluster-Kohäsion, Schnittmengen |
 | **Ontologie** (Wissensnetz) | typisierte Wissensrelationen | is-a gerichtet, part-of eng gebunden, assoziiert neutral |
+| **System dynamics** (Bestands-Fluss-Diagramm) | Bestände, Raten und Einflüsse nach Meadows | Flüsse eng gekoppelt →, Einflüsse locker, Rollen-Palette |
 
 **Typisierte Relationen:** Mehrere Formen bieten feste Relationstypen: Argumentkarte *Stütze*/*Angriff*,
 Wirkungskarte *positiv (+)*/*negativ (−)*, Ontologie und semantisches Netz

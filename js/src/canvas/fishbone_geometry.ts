@@ -33,8 +33,12 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import {BONE_LEAN} from '../graph/fishbone_layout';
 import {FishboneTopology} from '../graph/fishbone_topology';
 import {LayoutMap, Point, VimiRelation} from '../types';
+
+/** Gap kept between the last station and the effect. */
+const HEAD_CLEARANCE = 40;
 
 /** The shared backbone, drawn once per diagram. */
 export interface Spine {
@@ -84,14 +88,21 @@ export function fishboneRouting(
     const headPos = layout[topology.head];
     const spineYPos = headPos?.y ?? 0;
 
-    // Each category meets the spine directly below or above itself, so the bone
-    // is a single straight segment and the station order follows the layout.
+    // A category meets the spine ahead of itself, in the direction of the
+    // effect, so the bone slants the way the causality runs and its arrowhead
+    // points toward the effect. Meeting the spine straight below the node would
+    // draw a vertical bone whose arrow points back down the spine.
     const stations: Record<string, Point> = {};
     for (const category of topology.categories) {
         const pos = layout[category.id];
-        if (pos) {
-            stations[category.id] = {x: pos.x, y: spineYPos};
+        if (!pos) {
+            continue;
         }
+        const rise = Math.abs(pos.y - spineYPos);
+        const ahead = pos.x + rise * BONE_LEAN;
+        // Never past the effect itself: the last bone must still land on spine.
+        const limit = (headPos?.x ?? ahead) - HEAD_CLEARANCE;
+        stations[category.id] = {x: Math.min(ahead, limit), y: spineYPos};
     }
 
     // The backbone spans from the leftmost station to the effect, so every bone

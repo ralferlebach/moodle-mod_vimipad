@@ -101,6 +101,45 @@ describe('fishbone routing: the shared spine', () => {
     });
 });
 
+describe('fishbone routing: bone direction', () => {
+    test('a bone runs toward the effect, never away from it', () => {
+        const {routing, layout} = routed();
+        for (const bone of routing.routes.filter(r => r.kind === 'bone')) {
+            const [start, end] = bone.points;
+            // The arrowhead sits at the spine end, so that end must be nearer
+            // the effect than the start is. A bone drawn the other way points
+            // the arrow back down the spine, away from the cause it feeds.
+            expect(end.x).toBeGreaterThan(start.x);
+            expect(layout.effect.x).toBeGreaterThan(end.x);
+        }
+    });
+
+    test('bones on both sides of the spine lean the same way', () => {
+        const {routing, layout} = routed();
+        const spineY = routing.spine.from.y;
+        const above: number[] = [];
+        const below: number[] = [];
+        for (const bone of routing.routes.filter(r => r.kind === 'bone')) {
+            const [start, end] = bone.points;
+            (start.y < spineY ? above : below).push(end.x - start.x);
+        }
+        expect(above.length).toBeGreaterThan(0);
+        expect(below.length).toBeGreaterThan(0);
+        // Every bone leans toward the effect regardless of its side.
+        for (const lean of [...above, ...below]) {
+            expect(lean).toBeGreaterThan(0);
+        }
+        expect(layout.effect.x).toBeGreaterThan(0);
+    });
+
+    test('a station never lands past the effect', () => {
+        const {routing, layout} = routed();
+        for (const station of Object.values(routing.stations)) {
+            expect(station.x).toBeLessThan(layout.effect.x);
+        }
+    });
+});
+
 describe('fishbone routing: stations', () => {
     test('every main category gets its own station', () => {
         const {routing, topology} = routed();
@@ -120,10 +159,11 @@ describe('fishbone routing: stations', () => {
         const bone = routing.routes.find(r => r.kind === 'bone');
         expect(bone).toBeDefined();
         const [start, end] = bone!.points;
-        // It starts at a category node and ends on the spine.
+        // It starts at a category node and ends on the spine, ahead of the
+        // category in the direction of the effect rather than straight below it.
         expect(start.y).not.toBe(routing.spine.from.y);
         expect(end.y).toBe(routing.spine.from.y);
-        expect(end.x).toBe(start.x);
+        expect(end.x).toBeGreaterThan(start.x);
         expect(layout.effect.x).toBeGreaterThan(end.x);
     });
 });

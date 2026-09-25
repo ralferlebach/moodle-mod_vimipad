@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Version details for the Stock-and-Flow diagram form.
+ * Version details for the System dynamics diagram form.
  *
  * @package    vimipadform_stockflow
  * @copyright  2026 Ralf Erlebach
@@ -25,7 +25,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'vimipadform_stockflow';
-$plugin->version   = 2026091600;
+$plugin->version   = 2026091601;
 $plugin->requires  = 2024100700;
 $plugin->maturity  = MATURITY_BETA;
 $plugin->release   = '1.0.0';

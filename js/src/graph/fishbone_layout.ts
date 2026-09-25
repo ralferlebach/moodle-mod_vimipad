@@ -54,6 +54,15 @@ const BONE_RISE = 190;
 /** How far a bone leans against the spine direction, per level. */
 const BONE_RUN = 150;
 
+/**
+ * How far a bone leans along the spine per unit of height.
+ *
+ * A category sits this much to the LEFT of the station it meets, so the bone
+ * runs toward the effect. Routing uses the same ratio, otherwise the drawn bone
+ * would not match the placed node.
+ */
+export const BONE_LEAN = BONE_RUN / BONE_RISE;
+
 /** Distance each deeper level adds along the bone. */
 const DEPTH_STEP = 210;
 
