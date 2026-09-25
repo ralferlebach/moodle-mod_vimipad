@@ -74,6 +74,15 @@ class node_style {
                 throw new \invalid_parameter_exception('Invalid node shape');
             }
         }
+        if (array_key_exists('systemtype', $decoded)) {
+            // System Dynamics role. Validated so a typo cannot silently turn a
+            // valve into an unlabelled generic node on import.
+            $types = \mod_vimipad\local\form\base::SYSTEM_TYPES;
+            if (!is_string($decoded['systemtype']) || !in_array($decoded['systemtype'], $types, true)) {
+                throw new \invalid_parameter_exception('Invalid node system type');
+            }
+        }
+
         if (array_key_exists('fill', $decoded)) {
             self::assert_color($decoded['fill'], 'fill');
         }

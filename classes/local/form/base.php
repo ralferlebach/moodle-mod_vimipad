@@ -48,6 +48,21 @@ abstract class base {
         'roundrect', 'rect', 'ellipse',
         // Flowchart symbols: start/end, decision, input/output.
         'terminator', 'diamond', 'parallelogram',
+        // Stock-and-flow symbols: accumulation, system boundary, rate, delay,
+        // and a constant distinguishable from a plain auxiliary.
+        'stock', 'cloud', 'valve', 'delay', 'parameter',
+    ];
+
+    /**
+     * The System Dynamics roles a node may carry.
+     *
+     * Kept separate from the shape so the semantic role survives even when a
+     * map is re-styled: a stock stays a stock regardless of how it is drawn.
+     *
+     * @var string[]
+     */
+    public const SYSTEM_TYPES = [
+        'element', 'stock', 'source', 'sink', 'valve', 'delay', 'auxiliary', 'parameter',
     ];
 
     /** @var string[] The connector line styles a subplugin may choose. */

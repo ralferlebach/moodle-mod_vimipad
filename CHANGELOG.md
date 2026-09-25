@@ -16,7 +16,17 @@ moves to 1.0.0-RC1 together.
 
 
 
+
 ### Added
+- Stock-and-Flow / System Dynamics profile (issue #16, backend foundation):
+  a new vimipadform_stockflow subplugin offering the stock, cloud, valve, delay,
+  auxiliary and parameter symbols and the flow/influence/relation types. A
+  node's System Dynamics role lives in its own "systemtype" metadata rather than
+  being inferred from its shape, so re-styling a map never changes its meaning,
+  and a mistyped role is rejected instead of silently downgrading a valve to a
+  generic node. Inflow and outflow stay implicit in flow direction; no polarity
+  property and no loop analysis are introduced. The causal profile is unchanged.
+  Frontend geometry, palette and layout follow.
 - Canonical Ishikawa structure for the fishbone profile (issue #15, in progress):
   a topology resolver (js/src/graph/fishbone_topology.ts) that derives the
   effect, the main category bones and their causes from the semantic graph, and
@@ -28,7 +38,9 @@ moves to 1.0.0-RC1 together.
   (js/src/canvas/fishbone_geometry.ts) draws one shared backbone and stops each
   category bone at its own station, so the spine is never overpainted once per
   relation; the virtual junctions are presentation-only and no extra nodes are
-  persisted. Canvas and SVG export still need wiring to this routing.
+  persisted. The canvas draws that backbone once and stops each category
+  connector at its station, and the SVG/PNG/PDF export inherits the same routing
+  because it clones the live canvas.
 - Flowchart-specific node shapes (issue #14). The flow profile now offers
   Process, Start/End, Decision and Input/Output instead of generic boxes, drawn
   as native SVG (capsule, diamond, sheared polygon) so scaling and vector export

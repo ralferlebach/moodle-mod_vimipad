@@ -15,25 +15,14 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Plugin version definition for mod_vimipad (ViMi Pad - Visual Mind Pad).
+ * English language strings for the Stock-and-Flow diagram form.
  *
- * @package    mod_vimipad
+ * @package    vimipadform_stockflow
  * @copyright  2026 Ralf Erlebach
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component    = 'mod_vimipad';
-$plugin->version      = 2026091108;
-$plugin->requires     = 2024100700;   // Moodle 4.5.0 — hard minimum, per Lastenheft.
-// Target range: Moodle 4.5 LTS up to 5.3. From 5.3 the React runtime ships in
-// core (react_autoinit); 4.5-5.2 use the bundled editor asset shipped here.
-$plugin->supported    = [405, 502];
-$plugin->maturity     = MATURITY_RC;
-$plugin->release      = '1.0.0-RC1';
-
-// No plugin dependencies. AI feedback uses the core AI subsystem (Moodle >= 4.5),
-// detected and gated at runtime — deliberately NOT declared as a dependency so the
-// activity installs and runs on instances without any AI provider configured.
-$plugin->dependencies = [];
+$string['pluginname'] = 'Stock and flow';
+$string['privacy:metadata'] = 'The Stock and flow diagram form stores no personal data. It only describes how a stock-and-flow map is drawn and arranged.';

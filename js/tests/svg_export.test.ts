@@ -143,3 +143,16 @@ describe('SVG map-data round-trip', () => {
         expect(extractMapData('not svg at all')).toBeNull();
     });
 });
+
+describe('fishbone spine in exports', () => {
+    test('the shared backbone is not stripped from the export', async () => {
+        // The export clones the live canvas, so the spine only survives as long
+        // as its class is absent from the list of interaction-only overlays that
+        // get removed. Pin that, or a future selector could silently drop the
+        // backbone from SVG/PNG/PDF while the canvas still shows it.
+        const source = await import('fs').then(fs =>
+            fs.readFileSync('js/src/canvas/svg_export.ts', 'utf8'));
+        const strip = /querySelectorAll\(([\s\S]*?)\)\s*\.forEach/.exec(source)?.[1] ?? '';
+        expect(strip).not.toContain('vimipad-fishbone-spine');
+    });
+});

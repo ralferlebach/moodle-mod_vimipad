@@ -40,6 +40,8 @@ import {NodeShape} from '../canvas/shape_catalog';
 import {relationTypeStyle} from '../relation_types';
 import {formClampShape, formLine, formShared, LineStyle} from '../canvas/form_config';
 import {edgePointForShape} from '../canvas/node_geometry';
+import {fishboneRouting} from '../canvas/fishbone_geometry';
+import {fishboneTopology} from '../graph/fishbone_topology';
 import {
     clampSize, clampView, nodeHeight, nodeWidth, profileLine, relLinePath, treeBusPath,
 } from '../canvas/node_geometry';
@@ -451,6 +453,39 @@ export function CanvasView(props: Props): React.ReactElement {
         const rect = svg.getBoundingClientRect();
         return screenToViewBox({x: clientX, y: clientY}, rect, viewRef.current);
     }, []);
+
+    // A fishbone is routed rather than drawn edge by edge: every main category
+    // meets one shared backbone at its own station. Resolving this once per
+    // render keeps the spine a single element instead of one overpainted
+    // segment per category relation.
+    const fishbone = useMemo(() => {
+        if (profile !== 'fishbone') {
+            return null;
+        }
+        const positions: LayoutMap = {};
+        for (const node of state.nodes) {
+            positions[node.stableid] = positionOf(node.stableid);
+        }
+        const topology = fishboneTopology(state.nodes, state.relations, positions);
+        if (topology.head === '') {
+            return null;
+        }
+        return fishboneRouting(topology, positions, state.relations);
+    }, [profile, state.nodes, state.relations, positionOf]);
+
+    /**
+     * The station a category relation should stop at, if it is one.
+     *
+     * @param relationid The relation's stable id.
+     * @returns The station point, or null when the relation is drawn normally.
+     */
+    const boneStation = useCallback((relationid: string): Point | null => {
+        const route = fishbone?.routes.find(r => r.relationid === relationid);
+        if (!route || route.kind !== 'bone' || route.points.length < 2) {
+            return null;
+        }
+        return route.points[route.points.length - 1];
+    }, [fishbone]);
 
     // Relations sharing a node pair are drawn as parallel lines rather than on
     // top of each other; this maps each relation to its slot in its group.
@@ -1268,6 +1303,23 @@ export function CanvasView(props: Props): React.ReactElement {
                 );
             })}
 
+            {/* The shared Ishikawa backbone, drawn once. Drawing it per category
+              * relation would overpaint the same segment and give several
+              * relations the same selection target. */}
+            {fishbone && (
+                <line
+                    className="vimipad-fishbone-spine"
+                    x1={fishbone.spine.from.x}
+                    y1={fishbone.spine.from.y}
+                    x2={fishbone.spine.to.x}
+                    y2={fishbone.spine.to.y}
+                    stroke="var(--vimipad-relation-stroke, #475569)"
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                    pointerEvents="none"
+                />
+            )}
+
             {/* Layer 1 (bottom): connector lines and their hit targets. */}
             {state.relations.map(rel => {
                 const srcNode = state.nodes.find(n => n.stableid === rel.sourceid);
@@ -1286,9 +1338,14 @@ export function CanvasView(props: Props): React.ReactElement {
                 const baseFrom = isTree
                     ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
                     : edgePointForShape(fromC, fromSize, toC, fromShape);
-                const baseTo = isTree
-                    ? {x: toC.x, y: toC.y - toSize.h / 2}
-                    : edgePointForShape(toC, toSize, fromC, toShape);
+                // A main category bone ends on the spine at its own station; the
+                // run from there to the effect is the shared backbone.
+                const station = boneStation(rel.stableid);
+                const baseTo = station
+                    ? station
+                    : (isTree
+                        ? {x: toC.x, y: toC.y - toSize.h / 2}
+                        : edgePointForShape(toC, toSize, fromC, toShape));
                 // Multiple relations between the same pair are shifted symmetrically
                 // perpendicular to the direct line, so they run parallel.
                 const shifted = isTree ? {from: baseFrom, to: baseTo} : offsetAnchors(baseFrom, baseTo, slotOffset);
@@ -1381,9 +1438,14 @@ export function CanvasView(props: Props): React.ReactElement {
                 const baseFrom = isTree
                     ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
                     : edgePointForShape(fromC, fromSize, toC, fromShape);
-                const baseTo = isTree
-                    ? {x: toC.x, y: toC.y - toSize.h / 2}
-                    : edgePointForShape(toC, toSize, fromC, toShape);
+                // A main category bone ends on the spine at its own station; the
+                // run from there to the effect is the shared backbone.
+                const station = boneStation(rel.stableid);
+                const baseTo = station
+                    ? station
+                    : (isTree
+                        ? {x: toC.x, y: toC.y - toSize.h / 2}
+                        : edgePointForShape(toC, toSize, fromC, toShape));
                 const anchors = isTree ? {from: baseFrom, to: baseTo} : offsetAnchors(baseFrom, baseTo, slotOffset);
                 // The label sits at the curve peak: the midpoint lifted perpendicular
                 // by the sibling offset, matching freeConnectorPath's own bulge.
