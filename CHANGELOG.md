@@ -33,8 +33,16 @@ moves to 1.0.0-RC1 together.
   flow-weighted Arrange still follow. Flow and influence relations are visually
   distinct: a material transfer is drawn heavier than an informational
   influence, expressed as a stroke weight in the shared relation-type style map.
+  Picking a symbol in a stock-and-flow map records the matching role, so the
+  meaning is stored explicitly instead of being inferred from geometry later.
+  (Source and sink share the cloud symbol; choosing sink still needs a role
+  control of its own.)
 
 ### Fixed
+- Editing a node's colour or text discarded any metadata the style layer did not
+  know about, so a stock-and-flow node lost its systemtype on the next style
+  change. The role now survives the round trip, including values a newer version
+  may introduce.
 - Typed relation labels showed their raw string key ("editor:reltype_isa")
   instead of their text in the relation menu and the list view. The labels were
   defined in lang/en but never requested by the editor bootstrap, so every typed

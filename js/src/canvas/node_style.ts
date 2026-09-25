@@ -60,6 +60,13 @@ export interface NodeStyle {
     /** Node fill colour as #rrggbb, or undefined for the theme default. */
     fill?: string;
     text?: TextStyle;
+    /**
+     * The node's System Dynamics role, for stock-and-flow maps.
+     *
+     * Deliberately separate from the shape: re-styling a map must not change
+     * what its nodes mean, and a stock stays a stock however it is drawn.
+     */
+    systemtype?: string;
 }
 
 /** The smallest and largest font size step accepted. */
@@ -160,6 +167,12 @@ export function parseNodeStyle(metadatajson: string | undefined): NodeStyle {
     if (fill) {
         style.fill = fill;
     }
+    if (typeof obj.systemtype === 'string' && obj.systemtype !== '') {
+        // Kept verbatim: the server validates the vocabulary, and dropping an
+        // unrecognised role here would silently downgrade a node on the next
+        // style change.
+        style.systemtype = obj.systemtype;
+    }
 
     if (obj.text && typeof obj.text === 'object') {
         const t = obj.text as Record<string, unknown>;
@@ -213,6 +226,9 @@ export function withNodeStyle(metadatajson: string | undefined, change: NodeStyl
     if ('fill' in change) {
         merged.fill = change.fill;
     }
+    if ('systemtype' in change) {
+        merged.systemtype = change.systemtype;
+    }
     if ('text' in change) {
         merged.text = {...merged.text, ...change.text};
     }
@@ -232,6 +248,9 @@ export function serialiseNodeStyle(style: NodeStyle): string {
     }
     if (style.fill) {
         out.fill = style.fill;
+    }
+    if (style.systemtype) {
+        out.systemtype = style.systemtype;
     }
     if (style.text) {
         const t: Record<string, unknown> = {};

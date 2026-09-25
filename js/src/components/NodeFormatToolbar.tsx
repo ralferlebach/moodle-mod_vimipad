@@ -73,6 +73,23 @@ type Panel = 'none' | 'shape' | 'fill' | 'text' | 'lock';
 /** Default colours shown in the pickers before the user sets one. */
 const DEFAULT_FILL = '#eef2ff';
 
+/**
+ * The System Dynamics role each stock-and-flow symbol stands for.
+ *
+ * Picking a symbol in a stock-and-flow map records the role as well, so the
+ * meaning is stored explicitly rather than inferred from the geometry later.
+ * Shapes absent here carry no role.
+ */
+const SHAPE_SYSTEM_TYPE: Partial<Record<NodeShape, string>> = {
+    stock: 'stock',
+    cloud: 'source',
+    valve: 'valve',
+    delay: 'delay',
+    ellipse: 'auxiliary',
+    parameter: 'parameter',
+    roundrect: 'element',
+};
+
 /** Title string per shape, for the picker buttons. */
 const SHAPE_LABEL: Record<NodeShape, string> = {
     roundrect: 'editor:fmt_roundrect',
@@ -207,7 +224,11 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                             disabled={disabled}
                             title={t(SHAPE_LABEL[shape])}
                             aria-label={t(SHAPE_LABEL[shape])}
-                            onClick={() => apply({shape})}
+                            onClick={() => apply(
+                                profile === 'stockflow' && SHAPE_SYSTEM_TYPE[shape]
+                                    ? {shape, systemtype: SHAPE_SYSTEM_TYPE[shape]}
+                                    : {shape}
+                            )}
                         ><ShapeGlyph shape={shape} /></button>
                     ))}
                 </div>
