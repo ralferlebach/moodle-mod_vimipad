@@ -38,7 +38,11 @@ moves to 1.0.0-RC1 together.
   In a stock-and-flow map the picker offers the eight roles rather than shapes,
   because a source and a sink share the cloud symbol but mean opposite things -
   a shape-only picker could not express a sink at all. The list view spells the
-  role out ("[Stock] Inventory"), where the symbols are not visible.
+  role out ("[Stock] Inventory"), where the symbols are not visible. Arrange
+  treats the material chain as the backbone: flow relations sit tight and hold
+  source, valve, stock and sink in sequence, while influence relations are
+  longer and undirected so auxiliaries and parameters settle beside the chain
+  instead of collapsing it. No loop detection or classification is performed.
 
 ### Fixed
 - Editing a node's colour or text discarded any metadata the style layer did not

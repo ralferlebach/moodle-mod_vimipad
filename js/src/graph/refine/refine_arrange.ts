@@ -108,6 +108,19 @@ export function refineOptionsForProfile(profile: string): ProfileRefine {
             // Fishbone: a horizontal spine toward the head (+x); bones get
             // alternating diagonal directions per branch (assigned per edge).
             return {preferredDir: {x: 1, y: 0}, directed: true, orderAxis: null, cyclicOrder: false, lineAxis: null, attackRepel: false, rankLayered: false, clustered: false, fishbone: true, relationLayout: []};
+        case 'stockflow':
+            // Stock and flow: the material chain runs left to right and is the
+            // structural backbone, so flow edges sit tight and hold source,
+            // valve, stock and sink in sequence. Influence edges are longer and
+            // undirected, which keeps auxiliaries and parameters off the chain
+            // instead of collapsing it, and lets them settle to the side.
+            return {preferredDir: {x: 1, y: 0}, directed: true, orderAxis: {x: 1, y: 0}, cyclicOrder: false,
+                lineAxis: null, attackRepel: false, rankLayered: false, clustered: false, fishbone: false,
+                relationLayout: [
+                    {type: 'flow', directed: true, restscale: 0.7},
+                    {type: 'influence', directed: false, restscale: 1.6},
+                    {type: 'relation', directed: false},
+                ]};
         case 'ontology':
             // Ontology: is-a forms an upward taxonomy (directed), part-of binds
             // parts tightly (shorter rest); associated is neutral.
