@@ -35,8 +35,10 @@ moves to 1.0.0-RC1 together.
   influence, expressed as a stroke weight in the shared relation-type style map.
   Picking a symbol in a stock-and-flow map records the matching role, so the
   meaning is stored explicitly instead of being inferred from geometry later.
-  (Source and sink share the cloud symbol; choosing sink still needs a role
-  control of its own.)
+  In a stock-and-flow map the picker offers the eight roles rather than shapes,
+  because a source and a sink share the cloud symbol but mean opposite things -
+  a shape-only picker could not express a sink at all. The list view spells the
+  role out ("[Stock] Inventory"), where the symbols are not visible.
 
 ### Fixed
 - Editing a node's colour or text discarded any metadata the style layer did not

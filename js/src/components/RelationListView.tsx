@@ -31,7 +31,8 @@
 
 import React, {useState} from 'react';
 import {EditorState, labelFor} from '../store/reducer';
-import {VimiRelation} from '../types';
+import {VimiNode, VimiRelation} from '../types';
+import {parseNodeStyle} from '../canvas/node_style';
 import {FA, Icon} from '../canvas/icons';
 import {isGroupLocked, isAnyLocked} from '../canvas/element_lock';
 
@@ -62,6 +63,21 @@ const DND_MIME = 'application/x-vimipad-node';
  * @param props Component props.
  * @returns The rendered list view.
  */
+/**
+ * The role marker shown before a node's name in the list.
+ *
+ * A stock-and-flow map is read as much from the list as from the canvas, where
+ * the symbols are not visible, so the role is spelled out: "[Stock] Inventory".
+ * Nodes without a role render unchanged.
+ *
+ * @param node The node to label.
+ * @returns The prefix, or an empty string.
+ */
+function nodeRolePrefix(node: VimiNode): string {
+    const role = parseNodeStyle(node.metadatajson).systemtype;
+    return role ? `[${role.charAt(0).toUpperCase()}${role.slice(1)}] ` : '';
+}
+
 export function RelationListView(props: Props): React.ReactElement {
     const {state, disabled, enforced, onDeleteRelation, onRetarget, onRenameRelation,
         relationTypes, onChangeType, t} = props;
@@ -115,7 +131,7 @@ export function RelationListView(props: Props): React.ReactElement {
                             draggable={!disabled}
                             onDragStart={e => e.dataTransfer.setData(DND_MIME, n.stableid)}
                         >
-                            {n.label}
+                            {nodeRolePrefix(n)}{n.label}
                         </li>
                     ))}
                 </ul>

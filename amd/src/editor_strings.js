@@ -60,6 +60,10 @@ export const STRING_KEYS = [
     'editor:fmt_stock', 'editor:fmt_terminator', 'editor:fmt_valve',
     'editor:fmt_shape', 'editor:fmt_smaller', 'editor:fmt_text', 'editor:fmt_textcolor',
     'editor:fmt_toolbar',
+    // Stock-and-flow role palette labels.
+    'editor:sys_auxiliary', 'editor:sys_delay', 'editor:sys_element',
+    'editor:sys_parameter', 'editor:sys_sink', 'editor:sys_source',
+    'editor:sys_stock', 'editor:sys_valve',
     // Typed relation labels. The relation menu and list view resolve these
     // as editor:reltype_<key>; without them the UI falls back to showing
     // the raw key instead of the label.

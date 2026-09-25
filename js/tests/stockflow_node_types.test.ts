@@ -21,6 +21,8 @@
 
 import {parseNodeStyle, serialiseNodeStyle, withNodeStyle} from '../src/canvas/node_style';
 import {relationTypeStyle} from '../src/relation_types';
+import {STOCKFLOW_PALETTE} from '../src/components/NodeFormatToolbar';
+import {ALL_SHAPES} from '../src/canvas/shape_catalog';
 
 describe('stockflow node role', () => {
     test('a role survives parse and serialise', () => {
@@ -99,5 +101,39 @@ describe('stockflow relation styling', () => {
 
     test('a neutral relation has no special styling', () => {
         expect(relationTypeStyle('relation')).toBeNull();
+    });
+});
+
+describe('stockflow role palette', () => {
+    test('the palette offers exactly the eight roles the notation defines', () => {
+        expect(STOCKFLOW_PALETTE.map(e => e.role)).toEqual([
+            'element', 'stock', 'source', 'sink', 'valve', 'delay', 'auxiliary', 'parameter',
+        ]);
+    });
+
+    test('source and sink share a symbol but stay distinct roles', () => {
+        const source = STOCKFLOW_PALETTE.find(e => e.role === 'source');
+        const sink = STOCKFLOW_PALETTE.find(e => e.role === 'sink');
+        expect(source?.shape).toBe('cloud');
+        expect(sink?.shape).toBe('cloud');
+        expect(source?.role).not.toBe(sink?.role);
+        // A shape-only picker could not express both, which is why the palette
+        // is keyed by role.
+        expect(source?.label).not.toBe(sink?.label);
+    });
+
+    test('every palette entry maps to a real shape and its own label', () => {
+        const labels = STOCKFLOW_PALETTE.map(e => e.label);
+        expect(new Set(labels).size).toBe(STOCKFLOW_PALETTE.length);
+        for (const entry of STOCKFLOW_PALETTE) {
+            expect(ALL_SHAPES).toContain(entry.shape);
+            expect(entry.label.startsWith('editor:sys_')).toBe(true);
+        }
+    });
+
+    test('picking a palette entry records both the geometry and the role', () => {
+        const entry = STOCKFLOW_PALETTE.find(e => e.role === 'sink')!;
+        const json = withNodeStyle(undefined, {shape: entry.shape, systemtype: entry.role});
+        expect(JSON.parse(json)).toMatchObject({shape: 'cloud', systemtype: 'sink'});
     });
 });

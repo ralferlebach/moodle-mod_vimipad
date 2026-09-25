@@ -74,21 +74,23 @@ type Panel = 'none' | 'shape' | 'fill' | 'text' | 'lock';
 const DEFAULT_FILL = '#eef2ff';
 
 /**
- * The System Dynamics role each stock-and-flow symbol stands for.
+ * The Add Node palette for stock-and-flow maps.
  *
- * Picking a symbol in a stock-and-flow map records the role as well, so the
- * meaning is stored explicitly rather than inferred from the geometry later.
- * Shapes absent here carry no role.
+ * The picker offers roles rather than shapes here, because the role is what a
+ * modeller chooses and several roles share a geometry: a source and a sink are
+ * both drawn as a cloud but mean opposite things, so a shape-only picker could
+ * never express a sink at all.
  */
-const SHAPE_SYSTEM_TYPE: Partial<Record<NodeShape, string>> = {
-    stock: 'stock',
-    cloud: 'source',
-    valve: 'valve',
-    delay: 'delay',
-    ellipse: 'auxiliary',
-    parameter: 'parameter',
-    roundrect: 'element',
-};
+export const STOCKFLOW_PALETTE: ReadonlyArray<{role: string; shape: NodeShape; label: string}> = [
+    {role: 'element', shape: 'roundrect', label: 'editor:sys_element'},
+    {role: 'stock', shape: 'stock', label: 'editor:sys_stock'},
+    {role: 'source', shape: 'cloud', label: 'editor:sys_source'},
+    {role: 'sink', shape: 'cloud', label: 'editor:sys_sink'},
+    {role: 'valve', shape: 'valve', label: 'editor:sys_valve'},
+    {role: 'delay', shape: 'delay', label: 'editor:sys_delay'},
+    {role: 'auxiliary', shape: 'ellipse', label: 'editor:sys_auxiliary'},
+    {role: 'parameter', shape: 'parameter', label: 'editor:sys_parameter'},
+];
 
 /** Title string per shape, for the picker buttons. */
 const SHAPE_LABEL: Record<NodeShape, string> = {
@@ -120,6 +122,9 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
     const [panel, setPanel] = useState<Panel>(defaultPanel ?? 'none');
     const style = parseNodeStyle(target.metadatajson);
     const activeShape = formClampShape(formconfig, profile, style.shape);
+    // In a stock-and-flow map the palette shows roles, so the highlighted entry
+    // follows the node's role rather than its geometry.
+    const activeRole = style.systemtype;
     const groupLocks = readGroupLocks(target.metadatajson);
     const canLock = Boolean(onToggleLockGroup && lockGroups && lockGroups.length > 0);
     const anyLocked = groupLocks.move || groupLocks.color || groupLocks.text;
@@ -215,7 +220,18 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
 
             {isNode && panel === 'shape' && (
                 <div className="vimipad-node-dock-panel" role="group" aria-label={t('editor:fmt_shape')}>
-                    {formShapes(formconfig, profile).map(shape => (
+                    {profile === 'stockflow' ? STOCKFLOW_PALETTE.map(entry => (
+                        <button
+                            key={entry.role}
+                            type="button"
+                            className={`vimipad-dock-btn${activeRole === entry.role ? ' active' : ''}`}
+                            aria-pressed={activeRole === entry.role}
+                            disabled={disabled}
+                            title={t(entry.label)}
+                            aria-label={t(entry.label)}
+                            onClick={() => apply({shape: entry.shape, systemtype: entry.role})}
+                        ><ShapeGlyph shape={entry.shape} /></button>
+                    )) : formShapes(formconfig, profile).map(shape => (
                         <button
                             key={shape}
                             type="button"
@@ -224,11 +240,7 @@ export function NodeFormatToolbar(props: Props): React.ReactElement {
                             disabled={disabled}
                             title={t(SHAPE_LABEL[shape])}
                             aria-label={t(SHAPE_LABEL[shape])}
-                            onClick={() => apply(
-                                profile === 'stockflow' && SHAPE_SYSTEM_TYPE[shape]
-                                    ? {shape, systemtype: SHAPE_SYSTEM_TYPE[shape]}
-                                    : {shape}
-                            )}
+                            onClick={() => apply({shape})}
                         ><ShapeGlyph shape={shape} /></button>
                     ))}
                 </div>
