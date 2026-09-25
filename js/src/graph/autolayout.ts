@@ -26,6 +26,7 @@
  */
 
 import {LayoutMap, Point, VimiNode, VimiRelation} from '../types';
+import {fishboneLayout} from './fishbone_layout';
 import {centerInBox, ContainerBox} from '../canvas/container_geometry';
 
 export const CANVAS_WIDTH = 2400;
@@ -59,8 +60,10 @@ export function computeLayout(
     relations: VimiRelation[] = [],
     profile: string = ''
 ): LayoutMap {
-    if (profile === 'tree') {
-        const auto = treeLayout(nodes, relations);
+    if (profile === 'tree' || profile === 'fishbone') {
+        const auto = profile === 'fishbone'
+            ? fishboneLayout(nodes, relations, stored)
+            : treeLayout(nodes, relations);
         const result: LayoutMap = {};
         for (const node of nodes) {
             result[node.stableid] = stored[node.stableid] ?? auto[node.stableid];
@@ -507,6 +510,11 @@ function arrangePlain(
         case 'mindmap':
         case 'bubblemap':
             return radialArrange(nodes, relations);
+        case 'fishbone':
+            // An Ishikawa diagram has explicit combinatorial geometry: a spine,
+            // ordered stations and alternating ribs. A force solver cannot
+            // discover that, so fishbone gets its own constructor.
+            return fishboneLayout(nodes, relations);
         case 'semanticnetwork':
         default:
             return forceArrange(nodes, relations);

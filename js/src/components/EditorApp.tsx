@@ -30,6 +30,7 @@ import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} fr
 import {ApiClient} from '../api/service';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas, computeLayout} from '../graph/autolayout';
 import {refineArrangement} from '../graph/refine/refine_arrange';
+import {fishboneLayout} from '../graph/fishbone_layout';
 import {
     ContainerBox, parseGeometry, serializeGeometry, isNodePinnedForRearrange,
 } from '../canvas/container_geometry';
@@ -823,9 +824,25 @@ export function EditorApp(props: Props): React.ReactElement {
         // from the current geometry and kept by the interior/exterior potentials.
         // Boxes may grow to keep their members enclosed (never shrink, so the
         // human's chosen size is preserved); move-locked boxes are left untouched.
+        // A fishbone has explicit combinatorial geometry (spine, stations,
+        // alternating ribs) that a force solver cannot discover, so Arrange
+        // builds the canonical Ishikawa placement first and then lets the
+        // refiner do bounded collision correction on top of it. Pinned nodes
+        // keep their authored position either way.
+        let seed = stored;
+        if (state.profile === 'fishbone') {
+            const canonical = fishboneLayout(state.nodes, state.relations, stored);
+            seed = {...canonical};
+            for (const n of state.nodes) {
+                if (pinned.has(n.stableid) && stored[n.stableid]) {
+                    seed[n.stableid] = stored[n.stableid];
+                }
+            }
+        }
+
         const arranged = refineArrangement({
             nodes: state.nodes, relations: state.relations, containers,
-            profile: state.profile, positions: stored, sizes, pinned, lockedContainers,
+            profile: state.profile, positions: seed, sizes, pinned, lockedContainers,
             maxIterations: arrangeIterations, formconfig: state.formconfig,
             shrinkContainers: arrangeShrink,
         });

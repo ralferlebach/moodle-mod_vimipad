@@ -23,7 +23,12 @@ moves to 1.0.0-RC1 together.
   a deterministic layout (js/src/graph/fishbone_layout.ts) that places them on a
   horizontal spine with alternating ribs and non-overlapping branches. Existing
   node positions decide the spine order, so an authored arrangement survives
-  Arrange. Routing and the Arrange pipeline switch follow.
+  Arrange. Arrange now builds this canonical placement first and uses the generic
+  refiner only for bounded collision correction. Routing geometry
+  (js/src/canvas/fishbone_geometry.ts) draws one shared backbone and stops each
+  category bone at its own station, so the spine is never overpainted once per
+  relation; the virtual junctions are presentation-only and no extra nodes are
+  persisted. Canvas and SVG export still need wiring to this routing.
 - Flowchart-specific node shapes (issue #14). The flow profile now offers
   Process, Start/End, Decision and Input/Output instead of generic boxes, drawn
   as native SVG (capsule, diamond, sheared polygon) so scaling and vector export
