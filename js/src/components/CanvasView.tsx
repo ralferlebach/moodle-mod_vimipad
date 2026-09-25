@@ -1364,7 +1364,9 @@ export function CanvasView(props: Props): React.ReactElement {
                         ? freeConnectorPath(from, to, ARROW_STUB)
                         : relLinePath(from, to, relLine));
                 const stroke = selected ? selColor : typeColor;
-                const strokeWidth = selected ? 2.5 : 1.5;
+                // A typed relation may ask for more or less weight than the
+                // default, which is how a flow reads stronger than an influence.
+                const strokeWidth = (selected ? 2.5 : 1.5) * (relStyle?.weight ?? 1);
                 const markerStart = d === -1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
                 const markerEnd = d === 1 || d === 2 ? 'url(#vimipad-arrow)' : undefined;
                 return (

@@ -32,6 +32,37 @@ final class amd_string_keys_test extends \advanced_testcase {
      *
      * @return void
      */
+    /**
+     * Every typed relation label the UI can ask for is actually requested.
+     *
+     * The relation menu and list view resolve labels as editor:reltype_<key>
+     * from the strings the editor bootstrap loaded. A label defined in lang but
+     * missing from STRING_KEYS is never fetched, so the UI silently shows the
+     * raw key instead of the label - which is what happened to every typed
+     * relation until this test existed.
+     *
+     * @return void
+     */
+    public function test_every_relation_label_is_requested(): void {
+        global $CFG;
+        $this->resetAfterTest();
+
+        $lang = file_get_contents($CFG->dirroot . '/mod/vimipad/lang/en/vimipad.php');
+        $amd = file_get_contents($CFG->dirroot . '/mod/vimipad/amd/src/editor_strings.js');
+
+        preg_match_all("/editor:reltype_[a-z]+/", $lang, $defined);
+        $defined = array_unique($defined[0]);
+        $this->assertNotEmpty($defined, 'The plugin must define relation type labels.');
+
+        foreach ($defined as $key) {
+            $this->assertStringContainsString(
+                "'{$key}'",
+                $amd,
+                "The label {$key} is defined but never requested, so the UI would show the raw key."
+            );
+        }
+    }
+
     public function test_amd_string_keys_exist_in_lang(): void {
         global $CFG;
 

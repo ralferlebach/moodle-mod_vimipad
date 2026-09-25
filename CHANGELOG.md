@@ -30,7 +30,16 @@ moves to 1.0.0-RC1 together.
   arc-built cloud for the model boundary, a bow tie for a rate, an hourglass for
   a delay and a marked ellipse for a constant — and anchors connectors on those
   outlines rather than on the bounding box. Palette, list view and the
-  flow-weighted Arrange still follow.
+  flow-weighted Arrange still follow. Flow and influence relations are visually
+  distinct: a material transfer is drawn heavier than an informational
+  influence, expressed as a stroke weight in the shared relation-type style map.
+
+### Fixed
+- Typed relation labels showed their raw string key ("editor:reltype_isa")
+  instead of their text in the relation menu and the list view. The labels were
+  defined in lang/en but never requested by the editor bootstrap, so every typed
+  relation was affected, not just the new ones. All of them are now loaded, and
+  a test fails if a label is ever defined without being requested.
 - Canonical Ishikawa structure for the fishbone profile (issue #15, in progress):
   a topology resolver (js/src/graph/fishbone_topology.ts) that derives the
   effect, the main category bones and their causes from the semantic graph, and

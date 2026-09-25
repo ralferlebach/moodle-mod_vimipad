@@ -36,6 +36,14 @@ export interface RelationTypeStyle {
     color: string;
     /** Optional stroke dash pattern; omitted for a solid line. */
     dash?: string;
+    /**
+     * Optional stroke width multiplier, 1 being the ordinary connector.
+     *
+     * Stock-and-flow diagrams need material transfers to read more strongly
+     * than informational influences, which is a weight difference rather than a
+     * colour one. Omitted for every other type, so nothing else changes.
+     */
+    weight?: number;
 }
 
 /** The style for each known relation type key. Unlisted types render plain. */
@@ -56,6 +64,11 @@ export const RELATION_TYPE_STYLES: Record<string, RelationTypeStyle> = {
     // Flow chart (decision branches); 'sequence' is the neutral default (no style).
     yes: {color: 'var(--vimipad-relation-yes, #2e7d32)'},
     no: {color: 'var(--vimipad-relation-no, #c0392b)', dash: '6 4'},
+    // Stock and flow: a material transfer carries more structural weight than
+    // an informational influence, so the two differ in stroke width. The
+    // meaning of an influence stays in its label, not in a polarity property.
+    flow: {color: 'var(--vimipad-relation-flow, #1565c0)', weight: 2},
+    influence: {color: 'var(--vimipad-relation-influence, #607d8b)', weight: 0.7, dash: '5 4'},
 };
 
 /**

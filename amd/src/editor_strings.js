@@ -60,6 +60,14 @@ export const STRING_KEYS = [
     'editor:fmt_stock', 'editor:fmt_terminator', 'editor:fmt_valve',
     'editor:fmt_shape', 'editor:fmt_smaller', 'editor:fmt_text', 'editor:fmt_textcolor',
     'editor:fmt_toolbar',
+    // Typed relation labels. The relation menu and list view resolve these
+    // as editor:reltype_<key>; without them the UI falls back to showing
+    // the raw key instead of the label.
+    'editor:reltype_associated', 'editor:reltype_attack', 'editor:reltype_flow',
+    'editor:reltype_hasproperty', 'editor:reltype_influence', 'editor:reltype_instanceof',
+    'editor:reltype_isa', 'editor:reltype_negative', 'editor:reltype_no',
+    'editor:reltype_partof', 'editor:reltype_positive', 'editor:reltype_relation',
+    'editor:reltype_sequence', 'editor:reltype_support', 'editor:reltype_yes',
 ];
 
 /**
