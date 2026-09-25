@@ -50,8 +50,11 @@ jobs:
           # version.php must be directly inside that root, or the validator
           # cannot identify the component.
           unzip -Z1 vimipad.zip | grep -qx 'vimipad/version.php'
-          # A published plugin ships only English; other languages go through AMOS.
-          langs=$(unzip -Z1 vimipad.zip | sed -n 's|^vimipad/lang/\([^/]*\)/.*|\1|p' | sort -u)
+          # A published plugin ships only English; other languages go through
+          # AMOS. Check every lang directory, not just the plugin's own: the
+          # form and assess subplugins carry their own packs, and an anchored
+          # .gitattributes pattern does not reach them.
+          langs=$(unzip -Z1 vimipad.zip | sed -n 's|.*/lang/\([^/]*\)/.*|\1|p' | sort -u)
           if [ "$langs" != "en" ]; then
             echo "Archive contains languages other than English: $langs"
             exit 1

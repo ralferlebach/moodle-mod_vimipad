@@ -41,18 +41,38 @@
 
 # Non-English language packs are starter translations for functional and
 # RTL/CJK testing, maintained via AMOS. Only English ships in the release ZIP.
+#
+# Each language needs two patterns. A pattern containing a slash is anchored to
+# this file's directory, so "lang/de" excludes only the plugin's own pack; the
+# subplugins under form/ and assess/ keep their own lang directories and need
+# the "**/lang/de" form as well.
 lang/de     export-ignore
+**/lang/de  export-ignore
 lang/nl     export-ignore
+**/lang/nl  export-ignore
 lang/fr     export-ignore
+**/lang/fr  export-ignore
 lang/da     export-ignore
+**/lang/da  export-ignore
 lang/no     export-ignore
+**/lang/no  export-ignore
 lang/sv     export-ignore
+**/lang/sv  export-ignore
 lang/it     export-ignore
+**/lang/it  export-ignore
 lang/es     export-ignore
+**/lang/es  export-ignore
 lang/pt     export-ignore
+**/lang/pt  export-ignore
 lang/uk     export-ignore
+**/lang/uk  export-ignore
 lang/ja     export-ignore
+**/lang/ja  export-ignore
 lang/zh_cn  export-ignore
+**/lang/zh_cn  export-ignore
 lang/zh_tw  export-ignore
+**/lang/zh_tw  export-ignore
 lang/ko     export-ignore
+**/lang/ko  export-ignore
 lang/ar     export-ignore
+**/lang/ar  export-ignore

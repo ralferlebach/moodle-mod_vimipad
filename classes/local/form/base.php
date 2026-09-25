@@ -50,7 +50,9 @@ abstract class base {
         'terminator', 'diamond', 'parallelogram',
         // Stock-and-flow symbols: accumulation, system boundary, rate, delay,
         // and a constant distinguishable from a plain auxiliary.
-        'stock', 'cloud', 'valve', 'delay', 'parameter',
+        // Two clouds: the source keeps a flat base so the flow gathers inside
+        // it, the sink a flat top so the flow rains out of it downwards.
+        'stock', 'cloud', 'cloudsink', 'valve', 'delay', 'parameter',
     ];
 
     /**

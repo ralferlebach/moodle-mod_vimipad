@@ -39,7 +39,7 @@ import {LayoutMap, Point, Size, SizeMap, FormConfig, VimiNode} from '../types';
 import {NodeShape} from '../canvas/shape_catalog';
 import {relationTypeStyle} from '../relation_types';
 import {formClampShape, formLine, formShared, LineStyle} from '../canvas/form_config';
-import {edgePointForShape} from '../canvas/node_geometry';
+import {edgePointForShape, orthogonalRoute} from '../canvas/node_geometry';
 import {fishboneRouting} from '../canvas/fishbone_geometry';
 import {fishboneTopology} from '../graph/fishbone_topology';
 import {
@@ -1352,7 +1352,16 @@ export function CanvasView(props: Props): React.ReactElement {
                         : edgePointForShape(toC, toSize, fromC, toShape));
                 // Multiple relations between the same pair are shifted symmetrically
                 // perpendicular to the direct line, so they run parallel.
-                const shifted = isTree ? {from: baseFrom, to: baseTo} : offsetAnchors(baseFrom, baseTo, slotOffset);
+                // Right-angled connectors pick their axis first and anchor on
+                // the edge they actually meet, so the last segment arrives
+                // perpendicular to that edge and the arrowhead points into the
+                // node rather than along its side.
+                const ortho = (!isTree && relLine === 'orthogonal' && !station)
+                    ? orthogonalRoute(fromC, fromSize, fromShape, toC, toSize, toShape)
+                    : null;
+                const shifted = isTree || ortho
+                    ? {from: ortho ? ortho.from : baseFrom, to: ortho ? ortho.to : baseTo}
+                    : offsetAnchors(baseFrom, baseTo, slotOffset);
                 const from = shifted.from;
                 const to = shifted.to;
                 const selected = isSelected(interaction, 'relation', rel.stableid);
@@ -1364,9 +1373,11 @@ export function CanvasView(props: Props): React.ReactElement {
                 const relDash = relStyle?.dash;
                 const path = isTree
                     ? treeBusPath(fromC, fromSize, toC, toSize)
-                    : (relLine === 'curved'
-                        ? freeConnectorPath(from, to, ARROW_STUB)
-                        : relLinePath(from, to, relLine));
+                    : (ortho
+                        ? ortho.d
+                        : (relLine === 'curved'
+                            ? freeConnectorPath(from, to, ARROW_STUB)
+                            : relLinePath(from, to, relLine)));
                 const stroke = selected ? selColor : typeColor;
                 // A typed relation may ask for more or less weight than the
                 // default, which is how a flow reads stronger than an influence.

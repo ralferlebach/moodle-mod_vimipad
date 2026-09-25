@@ -21,6 +21,36 @@ moves to 1.0.0-RC1 together.
 
 
 
+
+
+
+### Fixed
+- Right-angled connectors ended on the wrong side of a node and their arrowheads
+  pointed along its edge instead of into it. The path always left and arrived
+  horizontally while the anchors came from the straight centre-to-centre
+  direction; for two boxes stacked exactly above each other the horizontal
+  segments collapsed, which is why it looked right there and wrong as soon as a
+  flowchart branched sideways. The route now picks its axis first and derives
+  both anchors from it, so the last segment meets the edge at a right angle.
+### Changed
+- Source and sink no longer share one cloud symbol. Both are the same cloud,
+  one flipped: the source keeps a flat base, as though the flow gathered inside
+  it, and the sink a flat roof, as though the flow rained out of it downwards.
+  The two roles mean opposite things, so the diagram now shows which is which
+  without reading the label.
+### Fixed
+- The subplugins' German language packs shipped inside the release archive. The
+  .gitattributes pattern "lang/de" is anchored to the plugin root, so it never
+  reached form/*/lang/de or assess/*/lang/de, and the packaging check only
+  inspected the plugin's own lang directory. Both now cover every subplugin, so
+  the release again contains English only while the repository keeps all
+  translations.
+
+### Added
+- The new strings of this release translated into all 15 non-English packs
+  (flowchart and system dynamics symbols, the role palette, the flow and
+  influence relation types, the grade item name and the push endpoint privacy
+  entries), plus a German pack for the System dynamics form.
 ### Fixed
 - The shape picker drew a plain box for every shape it did not know, so all the
   flowchart and stock-and-flow symbols looked alike and an author could not tell

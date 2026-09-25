@@ -112,14 +112,14 @@ describe('stockflow role palette', () => {
         ]);
     });
 
-    test('source and sink share a symbol but stay distinct roles', () => {
+    test('source and sink are opposites and look it', () => {
         const source = STOCKFLOW_PALETTE.find(e => e.role === 'source');
         const sink = STOCKFLOW_PALETTE.find(e => e.role === 'sink');
         expect(source?.shape).toBe('cloud');
-        expect(sink?.shape).toBe('cloud');
-        expect(source?.role).not.toBe(sink?.role);
-        // A shape-only picker could not express both, which is why the palette
-        // is keyed by role.
+        expect(sink?.shape).toBe('cloudsink');
+        // They mean opposite things, so they must not be drawn alike: the
+        // source keeps a flat base, the sink a flat roof.
+        expect(source?.shape).not.toBe(sink?.shape);
         expect(source?.label).not.toBe(sink?.label);
     });
 
@@ -135,7 +135,7 @@ describe('stockflow role palette', () => {
     test('picking a palette entry records both the geometry and the role', () => {
         const entry = STOCKFLOW_PALETTE.find(e => e.role === 'sink')!;
         const json = withNodeStyle(undefined, {shape: entry.shape, systemtype: entry.role});
-        expect(JSON.parse(json)).toMatchObject({shape: 'cloud', systemtype: 'sink'});
+        expect(JSON.parse(json)).toMatchObject({shape: 'cloudsink', systemtype: 'sink'});
     });
 });
 
@@ -172,9 +172,8 @@ describe('palette glyphs are distinguishable', () => {
 
     test('every stockflow palette entry draws its own glyph', () => {
         const drawn = STOCKFLOW_PALETTE.map(e => glyph(e.shape));
-        // Source and sink deliberately share the cloud, so they share a glyph;
-        // every other role must look different.
-        const distinct = new Set(drawn);
-        expect(distinct.size).toBe(STOCKFLOW_PALETTE.length - 1);
+        // Every role in the palette now draws its own symbol, source and sink
+        // included.
+        expect(new Set(drawn).size).toBe(STOCKFLOW_PALETTE.length);
     });
 });

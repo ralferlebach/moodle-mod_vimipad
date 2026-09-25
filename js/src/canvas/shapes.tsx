@@ -126,17 +126,22 @@ export function shapeElement(
         return <rect x={-hw} y={-hh} width={w} height={h} rx={2} strokeWidth={3} {...extra} />;
     }
 
-    if (shape === 'cloud') {
-        // Source and sink sit outside the model boundary. The cloud is built
-        // from arcs on the top edge so it scales with the node.
+    if (shape === 'cloud' || shape === 'cloudsink') {
+        // Source and sink both sit outside the model boundary, but they are
+        // opposites, so they must not look alike. Both are the same cloud, one
+        // flipped: the source keeps a flat base and its lobes on top, as though
+        // the flow gathered inside it, while the sink has a flat roof and its
+        // lobes below, as though the flow rained out of it.
+        const flip = shape === 'cloudsink' ? -1 : 1;
         const r = hh * 0.75;
+        const y = (v: number): number => flip * v;
         const d = [
-            `M ${-hw},${hh}`,
-            `L ${-hw + r * 0.3},${hh}`,
-            `A ${r},${r} 0 0 1 ${-hw * 0.35},${-hh * 0.1}`,
-            `A ${r},${r} 0 0 1 ${hw * 0.15},${-hh * 0.55}`,
-            `A ${r},${r} 0 0 1 ${hw * 0.8},${hh * 0.1}`,
-            `A ${r * 0.8},${r * 0.8} 0 0 1 ${hw},${hh}`,
+            `M ${-hw},${y(hh)}`,
+            `L ${-hw + r * 0.3},${y(hh)}`,
+            `A ${r},${r} 0 0 ${flip > 0 ? 1 : 0} ${-hw * 0.35},${y(-hh * 0.1)}`,
+            `A ${r},${r} 0 0 ${flip > 0 ? 1 : 0} ${hw * 0.15},${y(-hh * 0.55)}`,
+            `A ${r},${r} 0 0 ${flip > 0 ? 1 : 0} ${hw * 0.8},${y(hh * 0.1)}`,
+            `A ${r * 0.8},${r * 0.8} 0 0 ${flip > 0 ? 1 : 0} ${hw},${y(hh)}`,
             'Z',
         ].join(' ');
         return <path d={d} {...extra} />;

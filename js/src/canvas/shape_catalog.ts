@@ -45,6 +45,7 @@ export type NodeShape =
     | 'parallelogram'
     | 'stock'
     | 'cloud'
+    | 'cloudsink'
     | 'valve'
     | 'delay'
     | 'parameter';
@@ -57,7 +58,7 @@ export type NodeShape =
 export const ALL_SHAPES: readonly NodeShape[] = [
     'roundrect', 'rect', 'ellipse',
     'terminator', 'diamond', 'parallelogram',
-    'stock', 'cloud', 'valve', 'delay', 'parameter',
+    'stock', 'cloud', 'cloudsink', 'valve', 'delay', 'parameter',
 ];
 
 /**
@@ -91,7 +92,7 @@ const PROFILE_SHAPES: Record<string, ProfileShapes> = {
     // Stock-and-flow: each symbol stands for a system role. The default stays
     // generic so adding a node never asserts a role the author did not choose.
     stockflow: {
-        allowed: ['stock', 'cloud', 'valve', 'delay', 'ellipse', 'parameter', 'roundrect'],
+        allowed: ['stock', 'cloud', 'cloudsink', 'valve', 'delay', 'ellipse', 'parameter', 'roundrect'],
         default: 'roundrect',
     },
 };

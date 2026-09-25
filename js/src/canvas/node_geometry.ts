@@ -288,7 +288,7 @@ export function edgePointForShape(
         return at(t);
     }
 
-    if (shape === 'cloud') {
+    if (shape === 'cloud' || shape === 'cloudsink') {
         // The cloud is lumpy; an inscribed ellipse tracks it closely enough that
         // an arrow always lands on ink rather than in the gap beside a lobe.
         const t = 1 / Math.hypot(dx / (hw * 0.95), dy / (hh * 0.9));
@@ -298,4 +298,69 @@ export function edgePointForShape(
     // Rectangle, rounded rectangle and stock: the bounding box is the outline.
     const t = 1 / Math.max(Math.abs(dx) / hw, Math.abs(dy) / hh);
     return at(t);
+}
+
+/** An orthogonal connector: where it starts, where it ends, and its path. */
+export interface OrthogonalRoute {
+    from: Point;
+    to: Point;
+    d: string;
+}
+
+/**
+ * Route a connector in right angles, anchored on the edges it actually meets.
+ *
+ * relLinePath() always leaves and arrives horizontally, while the anchors are
+ * taken from the straight centre-to-centre direction. For two boxes stacked
+ * vertically the horizontal segments collapse to nothing, so it looks right;
+ * as soon as the boxes are offset, the connector arrives sideways onto a
+ * top or bottom edge and its arrowhead points along the edge instead of into
+ * the node. Choosing the axis first and deriving both anchors from it keeps the
+ * final segment perpendicular to the edge it lands on.
+ *
+ * @param fromC The source centre.
+ * @param fromSize The source size.
+ * @param fromShape The source shape.
+ * @param toC The target centre.
+ * @param toSize The target size.
+ * @param toShape The target shape.
+ * @returns The anchors and the path between them.
+ */
+export function orthogonalRoute(
+    fromC: Point,
+    fromSize: Size,
+    fromShape: NodeShape,
+    toC: Point,
+    toSize: Size,
+    toShape: NodeShape
+): OrthogonalRoute {
+    const dx = toC.x - fromC.x;
+    const dy = toC.y - fromC.y;
+    // Far enough to be outside any node, so the edge point is the intersection
+    // with the side facing that direction.
+    const reach = 10000;
+
+    if (Math.abs(dy) >= Math.abs(dx)) {
+        // Mostly vertical: leave and arrive through the top or bottom edge.
+        const sign = dy >= 0 ? 1 : -1;
+        const from = edgePointForShape(fromC, fromSize, {x: fromC.x, y: fromC.y + sign * reach}, fromShape);
+        const to = edgePointForShape(toC, toSize, {x: toC.x, y: toC.y - sign * reach}, toShape);
+        const my = (from.y + to.y) / 2;
+        return {
+            from,
+            to,
+            d: `M ${from.x} ${from.y} L ${from.x} ${my} L ${to.x} ${my} L ${to.x} ${to.y}`,
+        };
+    }
+
+    // Mostly horizontal: leave and arrive through the left or right edge.
+    const sign = dx >= 0 ? 1 : -1;
+    const from = edgePointForShape(fromC, fromSize, {x: fromC.x + sign * reach, y: fromC.y}, fromShape);
+    const to = edgePointForShape(toC, toSize, {x: toC.x - sign * reach, y: toC.y}, toShape);
+    const mx = (from.x + to.x) / 2;
+    return {
+        from,
+        to,
+        d: `M ${from.x} ${from.y} L ${mx} ${from.y} L ${mx} ${to.y} L ${to.x} ${to.y}`,
+    };
 }

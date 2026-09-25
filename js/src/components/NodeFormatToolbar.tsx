@@ -85,7 +85,7 @@ export const STOCKFLOW_PALETTE: ReadonlyArray<{role: string; shape: NodeShape; l
     {role: 'element', shape: 'roundrect', label: 'editor:sys_element'},
     {role: 'stock', shape: 'stock', label: 'editor:sys_stock'},
     {role: 'source', shape: 'cloud', label: 'editor:sys_source'},
-    {role: 'sink', shape: 'cloud', label: 'editor:sys_sink'},
+    {role: 'sink', shape: 'cloudsink', label: 'editor:sys_sink'},
     {role: 'valve', shape: 'valve', label: 'editor:sys_valve'},
     {role: 'delay', shape: 'delay', label: 'editor:sys_delay'},
     {role: 'auxiliary', shape: 'ellipse', label: 'editor:sys_auxiliary'},
@@ -104,6 +104,7 @@ const SHAPE_LABEL: Record<NodeShape, string> = {
     // Stock-and-flow symbols are labelled by their system role.
     stock: 'editor:fmt_stock',
     cloud: 'editor:fmt_cloud',
+    cloudsink: 'editor:fmt_cloudsink',
     valve: 'editor:fmt_valve',
     delay: 'editor:fmt_delay',
     parameter: 'editor:fmt_parameter',

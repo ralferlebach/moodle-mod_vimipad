@@ -55,7 +55,7 @@ class form extends \mod_vimipad\local\form\base {
      * @return string[]
      */
     public function get_allowed_shapes(): array {
-        return ['stock', 'cloud', 'valve', 'delay', 'ellipse', 'parameter', 'roundrect'];
+        return ['stock', 'cloud', 'cloudsink', 'valve', 'delay', 'ellipse', 'parameter', 'roundrect'];
     }
 
     /**

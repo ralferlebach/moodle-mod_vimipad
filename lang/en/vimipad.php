@@ -152,6 +152,7 @@ $string['editor:exportxml'] = 'Export XML';
 $string['editor:fmt_bigger'] = 'Larger text';
 $string['editor:fmt_bold'] = 'Bold';
 $string['editor:fmt_cloud'] = 'System boundary';
+$string['editor:fmt_cloudsink'] = 'System boundary (sink)';
 $string['editor:fmt_delay'] = 'Delay';
 $string['editor:fmt_delete'] = 'Delete node';
 $string['editor:fmt_diamond'] = 'Decision';

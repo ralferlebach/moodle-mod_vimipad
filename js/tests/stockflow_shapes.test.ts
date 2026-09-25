@@ -27,7 +27,7 @@ import {
 import {formShapes} from '../src/canvas/form_config';
 
 /** The symbols a stock-and-flow map uses. */
-const SYSTEM_SHAPES = ['stock', 'cloud', 'valve', 'delay', 'parameter'] as const;
+const SYSTEM_SHAPES = ['stock', 'cloud', 'cloudsink', 'valve', 'delay', 'parameter'] as const;
 
 describe('stockflow vocabulary', () => {
     test('the catalogue knows every system symbol', () => {
@@ -94,6 +94,20 @@ describe('stockflow SVG geometry', () => {
         expect(cloud.props.d.trim().endsWith('Z')).toBe(true);
     });
 
+    test('the sink cloud is the source cloud flipped', () => {
+        const source = el('cloud').props.d as string;
+        const sink = el('cloudsink').props.d as string;
+        expect(sink).not.toBe(source);
+
+        // The source keeps a flat base: its first segment runs along the bottom
+        // edge. The sink keeps a flat roof, so that segment sits on top.
+        const firstY = (d: string): number => Number(/^M [^,]+,(-?[\d.]+)/.exec(d)![1]);
+        expect(firstY(source)).toBeGreaterThan(0);
+        expect(firstY(sink)).toBeLessThan(0);
+        // Mirroring keeps the same number of arcs, so both read as clouds.
+        expect((sink.match(/A /g) ?? []).length).toBe((source.match(/A /g) ?? []).length);
+    });
+
     test('a valve is a closed bow tie', () => {
         const valve = el('valve');
         expect(valve.type).toBe('path');
@@ -142,7 +156,9 @@ describe('stockflow connector anchoring', () => {
         expect(Math.hypot(valve.x, valve.y)).toBeLessThanOrEqual(Math.hypot(box.x, box.y));
     });
 
-    test('a cloud anchors on an ellipse-like outline', () => {
+    test('both clouds anchor on an ellipse-like outline', () => {
+        const sinkPoint = edgePointForShape(center, size, {x: 300, y: 300}, 'cloudsink');
+        expect(Number.isFinite(sinkPoint.x)).toBe(true);
         const p = edgePointForShape(center, size, {x: 300, y: 300}, 'cloud');
         const hw = (size.w / 2 + 2) * 0.95;
         const hh = (size.h / 2 + 2) * 0.9;
