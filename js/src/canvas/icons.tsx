@@ -30,6 +30,7 @@
 
 import React from 'react';
 import {NodeShape} from './shape_catalog';
+import {shapeElement} from './shapes';
 
 /** Font Awesome 6 Free classes for the editor's menu and toolbar actions. */
 export const FA = {
@@ -159,12 +160,24 @@ export function SvgLockBadge(
     );
 }
 export function ShapeGlyph({shape, size = 20}: {shape: NodeShape; size?: number}): React.ReactElement {
-    const common = {fill: 'none', stroke: 'currentColor', strokeWidth: 1.6};
+    // Draw the real node geometry rather than a second, simplified set of
+    // glyphs. A picker that falls back to a plain box for every shape it does
+    // not know leaves the author guessing which button is a decision and which
+    // is a stock — and a separate glyph set would drift from the canvas as soon
+    // as a shape is added.
+    // Draw at a realistic node size and scale down, rather than drawing tiny.
+    // Shapes with a fixed corner radius (roundrect uses 10) would otherwise be
+    // clamped to half the height and come out as a capsule, making a rounded
+    // box indistinguishable from a start/end symbol.
+    const w = 108;
+    const h = 72;
+    const scale = 20 / w;
+    const common = {fill: 'none', stroke: 'currentColor', strokeWidth: 1.6 / scale};
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            {shape === 'ellipse'
-                ? <ellipse cx={12} cy={12} rx={9} ry={6.5} {...common} />
-                : <rect x={3} y={5.5} width={18} height={13} rx={shape === 'roundrect' ? 4 : 0} {...common} />}
+            <g transform={`translate(12 12) scale(${scale})`}>
+                {shapeElement(shape, w, h, common)}
+            </g>
         </svg>
     );
 }

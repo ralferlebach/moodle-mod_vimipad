@@ -22,7 +22,8 @@
 import {parseNodeStyle, serialiseNodeStyle, withNodeStyle} from '../src/canvas/node_style';
 import {relationTypeStyle} from '../src/relation_types';
 import {STOCKFLOW_PALETTE} from '../src/components/NodeFormatToolbar';
-import {ALL_SHAPES} from '../src/canvas/shape_catalog';
+import {ALL_SHAPES, NodeShape} from '../src/canvas/shape_catalog';
+import {shapeElement} from '../src/canvas/shapes';
 
 describe('stockflow node role', () => {
     test('a role survives parse and serialise', () => {
@@ -135,5 +136,45 @@ describe('stockflow role palette', () => {
         const entry = STOCKFLOW_PALETTE.find(e => e.role === 'sink')!;
         const json = withNodeStyle(undefined, {shape: entry.shape, systemtype: entry.role});
         expect(JSON.parse(json)).toMatchObject({shape: 'cloud', systemtype: 'sink'});
+    });
+});
+
+describe('palette glyphs are distinguishable', () => {
+    /**
+     * The drawn geometry of a picker glyph, as a comparable string.
+     *
+     * @param shape The shape to render.
+     * @returns Element type plus its defining geometry.
+     */
+    function glyph(shape: NodeShape): string {
+        const el = shapeElement(shape, 108, 72, {});
+        const p = el.props as Record<string, unknown>;
+        return JSON.stringify([el.type, p.d, p.points, p.rx, p.ry, p.strokeWidth]);
+    }
+
+    test('no two shapes draw the same glyph', () => {
+        // A picker that falls back to a plain box for unknown shapes leaves the
+        // author guessing which button is a decision and which is a stock.
+        const seen = new Map<string, NodeShape>();
+        for (const shape of ALL_SHAPES) {
+            const key = glyph(shape);
+            expect(seen.has(key)).toBe(false);
+            seen.set(key, shape);
+        }
+        expect(seen.size).toBe(ALL_SHAPES.length);
+    });
+
+    test('a rounded box does not collapse into a capsule', () => {
+        // Both use a corner radius; at glyph size a clamped radius would make
+        // them identical, so they must stay apart at the drawn size.
+        expect(glyph('roundrect')).not.toBe(glyph('terminator'));
+    });
+
+    test('every stockflow palette entry draws its own glyph', () => {
+        const drawn = STOCKFLOW_PALETTE.map(e => glyph(e.shape));
+        // Source and sink deliberately share the cloud, so they share a glyph;
+        // every other role must look different.
+        const distinct = new Set(drawn);
+        expect(distinct.size).toBe(STOCKFLOW_PALETTE.length - 1);
     });
 });
