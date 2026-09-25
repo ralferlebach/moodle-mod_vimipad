@@ -82,6 +82,12 @@ const SHAPE_LABEL: Record<NodeShape, string> = {
     terminator: 'editor:fmt_terminator',
     diamond: 'editor:fmt_diamond',
     parallelogram: 'editor:fmt_parallelogram',
+    // Stock-and-flow symbols are labelled by their system role.
+    stock: 'editor:fmt_stock',
+    cloud: 'editor:fmt_cloud',
+    valve: 'editor:fmt_valve',
+    delay: 'editor:fmt_delay',
+    parameter: 'editor:fmt_parameter',
 };
 
 /**

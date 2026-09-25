@@ -26,7 +26,11 @@ moves to 1.0.0-RC1 together.
   and a mistyped role is rejected instead of silently downgrading a valve to a
   generic node. Inflow and outflow stay implicit in flow direction; no polarity
   property and no loop analysis are introduced. The causal profile is unchanged.
-  Frontend geometry, palette and layout follow.
+  The editor draws each symbol as native SVG — a heavier box for a stock, an
+  arc-built cloud for the model boundary, a bow tie for a rate, an hourglass for
+  a delay and a marked ellipse for a constant — and anchors connectors on those
+  outlines rather than on the bounding box. Palette, list view and the
+  flow-weighted Arrange still follow.
 - Canonical Ishikawa structure for the fishbone profile (issue #15, in progress):
   a topology resolver (js/src/graph/fishbone_topology.ts) that derives the
   effect, the main category bones and their causes from the semantic graph, and

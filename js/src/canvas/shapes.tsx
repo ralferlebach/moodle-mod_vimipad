@@ -86,7 +86,7 @@ export function shapeElement(
     shape: NodeShape,
     w: number,
     h: number,
-    extra: React.SVGProps<SVGRectElement & SVGEllipseElement & SVGPolygonElement>
+    extra: React.SVGProps<SVGRectElement & SVGEllipseElement & SVGPolygonElement & SVGPathElement>
 ): React.ReactElement {
     const hw = w / 2;
     const hh = h / 2;
@@ -118,6 +118,60 @@ export function shapeElement(
         // Start / end: a capsule, i.e. a rectangle whose corner radius is half
         // its height, so the short sides are exact semicircles.
         return <rect x={-hw} y={-hh} width={w} height={h} rx={hh} ry={hh} {...extra} />;
+    }
+
+    if (shape === 'stock') {
+        // An accumulation is drawn as a plain box with a heavier outline, so it
+        // reads as a container rather than as a step in a process.
+        return <rect x={-hw} y={-hh} width={w} height={h} rx={2} strokeWidth={3} {...extra} />;
+    }
+
+    if (shape === 'cloud') {
+        // Source and sink sit outside the model boundary. The cloud is built
+        // from arcs on the top edge so it scales with the node.
+        const r = hh * 0.75;
+        const d = [
+            `M ${-hw},${hh}`,
+            `L ${-hw + r * 0.3},${hh}`,
+            `A ${r},${r} 0 0 1 ${-hw * 0.35},${-hh * 0.1}`,
+            `A ${r},${r} 0 0 1 ${hw * 0.15},${-hh * 0.55}`,
+            `A ${r},${r} 0 0 1 ${hw * 0.8},${hh * 0.1}`,
+            `A ${r * 0.8},${r * 0.8} 0 0 1 ${hw},${hh}`,
+            'Z',
+        ].join(' ');
+        return <path d={d} {...extra} />;
+    }
+
+    if (shape === 'valve') {
+        // A rate is the classic bow tie: two triangles meeting at the axis.
+        const vw = hw * 0.8;
+        const points = [
+            `${-vw},${-hh}`, `${-vw},${hh}`, `${vw},${-hh}`, `${vw},${hh}`,
+        ];
+        const d = `M ${points[0]} L ${points[1]} L ${points[2]} L ${points[3]} Z`;
+        return <path d={d} {...extra} />;
+    }
+
+    if (shape === 'delay') {
+        // A delay is an hourglass: the bow tie turned onto its side, which is
+        // how a lag reads next to a rate.
+        const dh = hh * 0.9;
+        const d = `M ${-hw},${-dh} L ${hw},${-dh} L ${-hw},${dh} L ${hw},${dh} Z`;
+        return <path d={d} {...extra} />;
+    }
+
+    if (shape === 'parameter') {
+        // A constant is an auxiliary with a marker: the ellipse plus a bar, so
+        // it stays distinguishable from a derived variable at a glance.
+        const d = [
+            `M ${hw},0`,
+            `A ${hw},${hh} 0 1 1 ${-hw},0`,
+            `A ${hw},${hh} 0 1 1 ${hw},0`,
+            'Z',
+            `M ${-hw * 0.45},${hh * 0.55}`,
+            `L ${hw * 0.45},${hh * 0.55}`,
+        ].join(' ');
+        return <path d={d} {...extra} />;
     }
 
     return <rect x={-hw} y={-hh} width={w} height={h} rx={shape === 'roundrect' ? 10 : 0} {...extra} />;

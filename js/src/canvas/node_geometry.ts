@@ -272,7 +272,30 @@ export function edgePointForShape(
         return at(t);
     }
 
-    // Rectangle and rounded rectangle: the bounding box is the outline.
+    if (shape === 'parameter') {
+        // Drawn as an ellipse with a marker bar, so it anchors like an ellipse.
+        const t = 1 / Math.hypot(dx / hw, dy / hh);
+        return at(t);
+    }
+
+    if (shape === 'valve' || shape === 'delay') {
+        // Both are bow ties: the outline pinches to the centre, so anchoring on
+        // the bounding box would leave arrows floating beside the symbol. The
+        // enclosing triangle on the approach side is a close, stable fit.
+        const nx = shape === 'valve' ? Math.abs(dx) / (hw * 0.8) : Math.abs(dx) / hw;
+        const ny = shape === 'valve' ? Math.abs(dy) / hh : Math.abs(dy) / (hh * 0.9);
+        const t = 1 / Math.max(nx, ny);
+        return at(t);
+    }
+
+    if (shape === 'cloud') {
+        // The cloud is lumpy; an inscribed ellipse tracks it closely enough that
+        // an arrow always lands on ink rather than in the gap beside a lobe.
+        const t = 1 / Math.hypot(dx / (hw * 0.95), dy / (hh * 0.9));
+        return at(t);
+    }
+
+    // Rectangle, rounded rectangle and stock: the bounding box is the outline.
     const t = 1 / Math.max(Math.abs(dx) / hw, Math.abs(dy) / hh);
     return at(t);
 }

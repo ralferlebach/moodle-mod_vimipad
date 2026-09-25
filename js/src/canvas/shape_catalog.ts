@@ -42,7 +42,12 @@ export type NodeShape =
     | 'ellipse'
     | 'terminator'
     | 'diamond'
-    | 'parallelogram';
+    | 'parallelogram'
+    | 'stock'
+    | 'cloud'
+    | 'valve'
+    | 'delay'
+    | 'parameter';
 
 /**
  * Every known shape, in picker order.
@@ -50,7 +55,9 @@ export type NodeShape =
  * Generic shapes first, then the representation-specific flowchart symbols.
  */
 export const ALL_SHAPES: readonly NodeShape[] = [
-    'roundrect', 'rect', 'ellipse', 'terminator', 'diamond', 'parallelogram',
+    'roundrect', 'rect', 'ellipse',
+    'terminator', 'diamond', 'parallelogram',
+    'stock', 'cloud', 'valve', 'delay', 'parameter',
 ];
 
 /**
@@ -81,6 +88,12 @@ const PROFILE_SHAPES: Record<string, ProfileShapes> = {
     bubblemap: {allowed: GENERIC_SHAPES, default: 'ellipse'},
     // A flowchart carries meaning in its symbols rather than in generic boxes.
     flow: {allowed: ['rect', 'terminator', 'diamond', 'parallelogram'], default: 'rect'},
+    // Stock-and-flow: each symbol stands for a system role. The default stays
+    // generic so adding a node never asserts a role the author did not choose.
+    stockflow: {
+        allowed: ['stock', 'cloud', 'valve', 'delay', 'ellipse', 'parameter', 'roundrect'],
+        default: 'roundrect',
+    },
 };
 
 /** The fallback used for an unknown profile. */
