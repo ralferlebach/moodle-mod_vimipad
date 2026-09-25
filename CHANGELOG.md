@@ -15,7 +15,15 @@ moves to 1.0.0-RC1 together.
 
 
 
+
 ### Added
+- Canonical Ishikawa structure for the fishbone profile (issue #15, in progress):
+  a topology resolver (js/src/graph/fishbone_topology.ts) that derives the
+  effect, the main category bones and their causes from the semantic graph, and
+  a deterministic layout (js/src/graph/fishbone_layout.ts) that places them on a
+  horizontal spine with alternating ribs and non-overlapping branches. Existing
+  node positions decide the spine order, so an authored arrangement survives
+  Arrange. Routing and the Arrange pipeline switch follow.
 - Flowchart-specific node shapes (issue #14). The flow profile now offers
   Process, Start/End, Decision and Input/Output instead of generic boxes, drawn
   as native SVG (capsule, diamond, sheared polygon) so scaling and vector export
