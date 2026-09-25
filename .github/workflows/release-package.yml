@@ -1,0 +1,74 @@
+##############################################################################
+# Build the installable plugin ZIP for a release.
+#
+# Moodle installs a plugin from a ZIP whose single root directory is exactly the
+# plugin name — "vimipad". A GitHub branch or tag download is named after the
+# repository instead ("moodle-mod_vimipad-main"), so core\update\validator
+# rejects it with "rootdirinvalid" and "Install plugin from ZIP file" refuses
+# the package. That is why the archive is built here rather than taken from the
+# repository download links.
+#
+# Runs on a version tag and attaches the archive to the GitHub release, and can
+# be started by hand to check the packaging without cutting a release.
+##############################################################################
+
+name: Build release package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@v4
+
+      - name: Build vimipad.zip with the root directory Moodle expects
+        run: |
+          set -euo pipefail
+          # --prefix puts every file under "vimipad/", and git archive honours
+          # the export-ignore rules in .gitattributes, so development-only
+          # material (CI config, Playwright, non-English languages) stays out.
+          git archive --format=zip --prefix=vimipad/ -o vimipad.zip HEAD
+
+      - name: Verify the archive is installable
+        run: |
+          set -euo pipefail
+          roots=$(unzip -Z1 vimipad.zip | cut -d/ -f1 | sort -u)
+          if [ "$roots" != "vimipad" ]; then
+            echo "Root directory is '$roots', but Moodle requires exactly 'vimipad'."
+            exit 1
+          fi
+          # version.php must be directly inside that root, or the validator
+          # cannot identify the component.
+          unzip -Z1 vimipad.zip | grep -qx 'vimipad/version.php'
+          # A published plugin ships only English; other languages go through AMOS.
+          langs=$(unzip -Z1 vimipad.zip | sed -n 's|^vimipad/lang/\([^/]*\)/.*|\1|p' | sort -u)
+          if [ "$langs" != "en" ]; then
+            echo "Archive contains languages other than English: $langs"
+            exit 1
+          fi
+          # The runtime bundles are built artefacts and must be present.
+          unzip -Z1 vimipad.zip | grep -qx 'vimipad/amd/build/init.min.js'
+          unzip -Z1 vimipad.zip | grep -qx 'vimipad/amd/build/editor_lazy.min.js'
+          echo "Archive is installable: root 'vimipad', English only, bundles present."
+
+      - name: Keep the archive with the workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: vimipad-zip
+          path: vimipad.zip
+
+      - name: Attach the archive to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: vimipad.zip

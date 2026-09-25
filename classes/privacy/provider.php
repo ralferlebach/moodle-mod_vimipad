@@ -136,6 +136,20 @@ class provider implements
             'privacy:metadata:core_ai'
         );
 
+        // When an administrator configures a push endpoint, the server tells
+        // that hub which workspace changed and to which revision. The payload
+        // carries no names and no map content, but a workspace topic identifies
+        // one learner's or group's map and the timing of the traffic shows when
+        // they were working, so the site's privacy registry must list it.
+        $collection->add_external_location_link(
+            'vimipad_push_endpoint',
+            [
+                'topic' => 'privacy:metadata:push:topic',
+                'revision' => 'privacy:metadata:push:revision',
+            ],
+            'privacy:metadata:push'
+        );
+
         return $collection;
     }
 

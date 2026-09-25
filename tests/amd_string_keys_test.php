@@ -33,6 +33,29 @@ final class amd_string_keys_test extends \advanced_testcase {
      * @return void
      */
     /**
+     * The grade item name Moodle asks for is defined.
+     *
+     * core_grades builds the string key from the item name returned by
+     * gradeitems::get_itemname_mapping_for_component(), so a mismatch shows the
+     * raw key in the gradebook rather than the activity's name.
+     *
+     * @return void
+     */
+    public function test_grade_item_names_are_defined(): void {
+        $this->resetAfterTest();
+
+        foreach (\mod_vimipad\grades\gradeitems::get_itemname_mapping_for_component() as $itemname) {
+            if ($itemname === '') {
+                continue;
+            }
+            $this->assertTrue(
+                get_string_manager()->string_exists("grade_{$itemname}_name", 'mod_vimipad'),
+                "core_grades expects grade_{$itemname}_name to be defined."
+            );
+        }
+    }
+
+    /**
      * Every typed relation label the UI can ask for is actually requested.
      *
      * The relation menu and list view resolve labels as editor:reltype_<key>

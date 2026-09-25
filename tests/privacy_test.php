@@ -42,6 +42,46 @@ final class privacy_test extends \core_privacy\tests\provider_testcase {
     }
 
     /**
+     * The push endpoint is declared as an external location.
+     *
+     * When an administrator configures push notifications, the site tells an
+     * external hub which workspace changed and when. That is a transmission of
+     * personal data even though no names travel with it, so the site privacy
+     * registry has to list it (issue #13).
+     *
+     * @return void
+     */
+    public function test_push_endpoint_is_declared_as_external_location(): void {
+        $collection = new \core_privacy\local\metadata\collection('mod_vimipad');
+        $collection = provider::get_metadata($collection);
+
+        $external = [];
+        foreach ($collection->get_collection() as $item) {
+            if ($item instanceof \core_privacy\local\metadata\types\external_location) {
+                $external[$item->get_name()] = $item;
+            }
+        }
+
+        $this->assertArrayHasKey(
+            'vimipad_push_endpoint',
+            $external,
+            'The push endpoint sends workspace activity to an external hub and must be declared.'
+        );
+
+        $fields = $external['vimipad_push_endpoint']->get_privacy_fields();
+        $this->assertArrayHasKey('topic', $fields);
+        $this->assertArrayHasKey('revision', $fields);
+
+        // Every string the declaration points at must exist, or the privacy
+        // registry renders a raw key.
+        $manager = get_string_manager();
+        $this->assertTrue($manager->string_exists($external['vimipad_push_endpoint']->get_summary(), 'mod_vimipad'));
+        foreach ($fields as $key) {
+            $this->assertTrue($manager->string_exists($key, 'mod_vimipad'), "Missing string {$key}.");
+        }
+    }
+
+    /**
      * A user's workspace makes its module context appear in the context list,
      * export produces data, and deletion removes it.
      *

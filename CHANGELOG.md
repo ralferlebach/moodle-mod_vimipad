@@ -17,7 +17,24 @@ moves to 1.0.0-RC1 together.
 
 
 
+
+### Fixed
+- The gradebook showed a raw string key instead of the activity's grade item
+  name: core_grades derives it from the item name as grade_submissions_name,
+  which was never defined (issue #9).
+- The privacy registry did not mention the push notification endpoint. When an
+  administrator configures one, the site tells that external hub which workspace
+  changed and when; no names or map content travel with it, but the workspace
+  topic identifies one map and the timing shows when someone was working, so it
+  is now declared as an external location (issue #13).
+
 ### Added
+- A release packaging workflow that builds vimipad.zip with "vimipad" as its
+  single root directory, which is what Moodle requires to install a plugin from
+  a ZIP. A GitHub branch download is named after the repository instead, so
+  core\update\validator rejected it with "rootdirinvalid" (issue #11). The
+  workflow also asserts the archive ships English only and carries the built
+  runtime bundles.
 - Stock-and-Flow / System Dynamics profile (issue #16, backend foundation):
   a new vimipadform_stockflow subplugin offering the stock, cloud, valve, delay,
   auxiliary and parameter symbols and the flow/influence/relation types. A
@@ -81,7 +98,6 @@ moves to 1.0.0-RC1 together.
   existing registry test only covered the five MVP profiles, so the eight
   profiles added since and three of the six scorers were never validated. A
   profile or scorer added later is now covered as soon as it ships.
-### Fixed
 - Every consensus web-service call died with "Call to undefined method
   mod_vimipad\external\helper::validate_parameters()". The shared helper class
   used external_api's static validators without extending it, so group-consensus
