@@ -23,7 +23,7 @@
  * @module mod_vimipad/tests/orthogonal_route
  */
 
-import {orthogonalRoute} from '../src/canvas/node_geometry';
+import {orthogonalRoute, orthogonalSides} from '../src/canvas/node_geometry';
 import {Point, Size} from '../src/types';
 
 /** A typical process box. */
@@ -242,5 +242,49 @@ describe('parallel connectors keep their distance', () => {
         for (const offset of [-18, 0, 18]) {
             expect(arrival(at(offset).d)).toEqual({x: 0, y: 1});
         }
+    });
+});
+
+describe('connectors sharing one node edge', () => {
+    test('the side used is reported for grouping', () => {
+        // Grouping by node and side is what lets separate relations that happen
+        // to meet the same edge be spread along it.
+        expect(orthogonalSides({x: 0, y: 0}, {x: 0, y: 100})).toEqual({from: 'bottom', to: 'top'});
+        expect(orthogonalSides({x: 0, y: 0}, {x: 0, y: -100})).toEqual({from: 'top', to: 'bottom'});
+        expect(orthogonalSides({x: 0, y: 0}, {x: 100, y: 5})).toEqual({from: 'right', to: 'left'});
+        expect(orthogonalSides({x: 0, y: 0}, {x: -100, y: 5})).toEqual({from: 'left', to: 'right'});
+    });
+
+    test('the two ends can be offset independently', () => {
+        // The screenshot case: one relation arrives at a node's right edge and
+        // another leaves from it. They belong to different pairs, so each end
+        // gets its own slot rather than one shared offset.
+        const shared = {x: 100, y: 200};
+        const arriving = orthogonalRoute(
+            {x: 500, y: 205}, BOX, 'rect', shared, BOX, 'rect', 0, -14
+        );
+        const leaving = orthogonalRoute(
+            shared, BOX, 'rect', {x: 500, y: 60}, BOX, 'rect', 14, 0
+        );
+        // Both touch the same edge of the shared node, at different heights.
+        expect(arriving.to.x).toBeCloseTo(leaving.from.x, 0);
+        expect(arriving.to.y).not.toBeCloseTo(leaving.from.y, 1);
+    });
+
+    test('an unoffset end still sits on the edge centre', () => {
+        const route = orthogonalRoute(
+            {x: 100, y: 200}, BOX, 'rect', {x: 600, y: 205}, BOX, 'rect', 0, 0
+        );
+        expect(route.from.y).toBeCloseTo(200, 5);
+        expect(route.to.y).toBeCloseTo(205, 5);
+    });
+
+    test('offsetting one end does not disturb the other', () => {
+        const plain = orthogonalRoute({x: 300, y: 100}, BOX, 'rect', {x: 300, y: 400}, BOX, 'rect');
+        const shifted = orthogonalRoute(
+            {x: 300, y: 100}, BOX, 'rect', {x: 300, y: 400}, BOX, 'rect', 0, 16
+        );
+        expect(shifted.from).toEqual(plain.from);
+        expect(shifted.to.x).not.toBeCloseTo(plain.to.x, 1);
     });
 });

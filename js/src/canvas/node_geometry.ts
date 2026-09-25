@@ -315,6 +315,29 @@ function clampShift(offset: number, extent: number): number {
     return Math.max(-limit, Math.min(limit, offset));
 }
 
+/** Which side of a node an orthogonal connector uses. */
+export type NodeSide = 'top' | 'bottom' | 'left' | 'right';
+
+/**
+ * Which sides an orthogonal connector will leave from and arrive at.
+ *
+ * Exposed so callers can group the connectors that share one edge and spread
+ * them along it: two relations meeting the same side at its midpoint overlap
+ * even when they join different pairs of nodes.
+ *
+ * @param fromC The source centre.
+ * @param toC The target centre.
+ * @returns The side used at each end.
+ */
+export function orthogonalSides(fromC: Point, toC: Point): {from: NodeSide; to: NodeSide} {
+    const dx = toC.x - fromC.x;
+    const dy = toC.y - fromC.y;
+    if (Math.abs(dy) >= Math.abs(dx)) {
+        return dy >= 0 ? {from: 'bottom', to: 'top'} : {from: 'top', to: 'bottom'};
+    }
+    return dx >= 0 ? {from: 'right', to: 'left'} : {from: 'left', to: 'right'};
+}
+
 /** An orthogonal connector: where it starts, where it ends, and its path. */
 export interface OrthogonalRoute {
     from: Point;
@@ -348,7 +371,8 @@ export function orthogonalRoute(
     toC: Point,
     toSize: Size,
     toShape: NodeShape,
-    offset = 0
+    offset = 0,
+    toOffset = offset
 ): OrthogonalRoute {
     const dx = toC.x - fromC.x;
     const dy = toC.y - fromC.y;
@@ -364,7 +388,7 @@ export function orthogonalRoute(
         // Siblings step sideways so parallel runs stay apart, but must not slide
         // off the edge they leave from.
         const fromShift = clampShift(offset, fromSize.w);
-        const toShift = clampShift(offset, toSize.w);
+        const toShift = clampShift(toOffset, toSize.w);
         const from = {x: base.x + fromShift, y: base.y};
         const to = {x: baseTo.x + toShift, y: baseTo.y};
         // The shared horizontal run is stepped too, or siblings would overlap
@@ -382,7 +406,7 @@ export function orthogonalRoute(
     const base = edgePointForShape(fromC, fromSize, {x: fromC.x + sign * reach, y: fromC.y}, fromShape);
     const baseTo = edgePointForShape(toC, toSize, {x: toC.x - sign * reach, y: toC.y}, toShape);
     const from = {x: base.x, y: base.y + clampShift(offset, fromSize.h)};
-    const to = {x: baseTo.x, y: baseTo.y + clampShift(offset, toSize.h)};
+    const to = {x: baseTo.x, y: baseTo.y + clampShift(toOffset, toSize.h)};
     const mx = (from.x + to.x) / 2 + offset;
     return {
         from,

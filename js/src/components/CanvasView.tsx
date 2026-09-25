@@ -39,7 +39,7 @@ import {LayoutMap, Point, Size, SizeMap, FormConfig, VimiNode} from '../types';
 import {NodeShape} from '../canvas/shape_catalog';
 import {relationTypeStyle} from '../relation_types';
 import {formClampShape, formLine, formShared, LineStyle} from '../canvas/form_config';
-import {edgePointForShape, orthogonalRoute} from '../canvas/node_geometry';
+import {edgePointForShape, orthogonalRoute, orthogonalSides} from '../canvas/node_geometry';
 import {fishboneRouting} from '../canvas/fishbone_geometry';
 import {fishboneTopology} from '../graph/fishbone_topology';
 import {
@@ -453,6 +453,39 @@ export function CanvasView(props: Props): React.ReactElement {
         const rect = svg.getBoundingClientRect();
         return screenToViewBox({x: clientX, y: clientY}, rect, viewRef.current);
     }, []);
+
+    // Connectors that meet the same side of the same node would all attach at
+    // its midpoint, so two relations joining different pairs still run on top of
+    // each other. Spread every endpoint along the edge it uses. Only right-angled
+    // routing needs this; the other styles fan out from the centre already.
+    const edgeSlots = useMemo(() => {
+        const slots = new Map<string, number>();
+        if (relLine !== 'orthogonal') {
+            return slots;
+        }
+        const groups = new Map<string, string[]>();
+        for (const rel of state.relations) {
+            const fromC = positionOf(rel.sourceid);
+            const toC = positionOf(rel.targetid);
+            const sides = orthogonalSides(fromC, toC);
+            for (const [end, side, nodeid] of [
+                ['s', sides.from, rel.sourceid] as const,
+                ['t', sides.to, rel.targetid] as const,
+            ]) {
+                const key = `${nodeid}\u0000${side}`;
+                const list = groups.get(key) ?? [];
+                list.push(`${rel.stableid}\u0000${end}`);
+                groups.set(key, list);
+            }
+        }
+        groups.forEach(ends => {
+            // Keep the order stable so the layout does not jitter between renders.
+            const sorted = [...ends].sort();
+            const offsets = siblingOffsets(sorted.length, SIBLING_SPACING);
+            sorted.forEach((id, i) => slots.set(id, offsets[i] ?? 0));
+        });
+        return slots;
+    }, [relLine, state.relations, positionOf]);
 
     // A fishbone is routed rather than drawn edge by edge: every main category
     // meets one shared backbone at its own station. Resolving this once per
@@ -1357,7 +1390,11 @@ export function CanvasView(props: Props): React.ReactElement {
                 // perpendicular to that edge and the arrowhead points into the
                 // node rather than along its side.
                 const ortho = (!isTree && relLine === 'orthogonal' && !station)
-                    ? orthogonalRoute(fromC, fromSize, fromShape, toC, toSize, toShape, slotOffset)
+                    ? orthogonalRoute(
+                        fromC, fromSize, fromShape, toC, toSize, toShape,
+                        edgeSlots.get(`${rel.stableid}\u0000s`) ?? slotOffset,
+                        edgeSlots.get(`${rel.stableid}\u0000t`) ?? slotOffset
+                    )
                     : null;
                 const shifted = isTree || ortho
                     ? {from: ortho ? ortho.from : baseFrom, to: ortho ? ortho.to : baseTo}
