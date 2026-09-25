@@ -129,11 +129,174 @@ $individualpath = '/mod/vimipad/view.php?id=' . $individualcreated->coursemodule
 $admin = get_admin();
 $adminuser = $admin ? $admin->username : 'admin';
 
+/**
+ * Create a ViMi Pad activity holding a ready-made map.
+ *
+ * The representation stories check how a finished map is laid out and drawn, so
+ * the fixture is built directly rather than by driving the editor: that keeps
+ * the story about the representation instead of about node creation, which the
+ * other stories already cover.
+ *
+ * @param stdClass $course The course.
+ * @param stdClass $module The vimipad module record.
+ * @param string $name The activity name.
+ * @param string $profile The diagram profile.
+ * @param array $nodes Each [stableid, label, metadata array].
+ * @param array $relations Each [stableid, sourceid, targetid, type, label].
+ * @return string The activity view path.
+ */
+function vimipad_seed_map(
+    stdClass $course,
+    stdClass $module,
+    string $name,
+    string $profile,
+    array $nodes,
+    array $relations
+): string {
+    global $DB;
+
+    $info = (object) [
+        'modulename' => 'vimipad',
+        'module' => $module->id,
+        'course' => $course->id,
+        'section' => 1,
+        'visible' => 1,
+        'name' => $name,
+        'intro' => $profile . ' fixture',
+        'introformat' => FORMAT_HTML,
+        'cmidnumber' => '',
+        'defaultprofile' => $profile,
+        'collaborationmode' => 2,
+        'gradingmode' => 0,
+        'aienabled' => 0,
+    ];
+    $created = add_moduleinfo($info, $course);
+
+    $now = time();
+    $workspaceid = $DB->insert_record('vimipad_workspace', (object) [
+        'vimipadid' => $created->instance,
+        'userid' => null,
+        'groupid' => 0,
+        'currentrevision' => 1,
+        'locked' => 0,
+        'timecreated' => $now,
+        'timemodified' => $now,
+    ]);
+
+    foreach ($nodes as [$stableid, $label, $metadata]) {
+        $DB->insert_record('vimipad_node', (object) [
+            'workspaceid' => $workspaceid,
+            'stableid' => $stableid,
+            'type' => 'concept',
+            'label' => $label,
+            'content' => '',
+            'contentformat' => FORMAT_HTML,
+            'metadatajson' => json_encode($metadata),
+            'createdby' => 2,
+            'modifiedby' => 2,
+            'timecreated' => $now,
+            'timemodified' => $now,
+        ]);
+    }
+
+    foreach ($relations as [$stableid, $source, $target, $type, $label]) {
+        $DB->insert_record('vimipad_relation', (object) [
+            'workspaceid' => $workspaceid,
+            'stableid' => $stableid,
+            'sourceid' => $source,
+            'targetid' => $target,
+            'type' => $type,
+            'label' => $label,
+            'direction' => 1,
+            'metadatajson' => json_encode([]),
+            'createdby' => 2,
+            'modifiedby' => 2,
+            'timecreated' => $now,
+            'timemodified' => $now,
+        ]);
+    }
+
+    return '/mod/vimipad/view.php?id=' . $created->coursemodule;
+}
+
+/**
+ * Build a node id of the length the map value policy expects.
+ *
+ * @param string $seed A short mnemonic.
+ * @return string The padded stable id.
+ */
+function vimipad_seed_id(string $seed): string {
+    return 'node_' . substr(str_pad($seed, 12, 'a'), 0, 12);
+}
+
+// A flowchart using every process symbol (issue #14).
+$flownodes = [
+    [vimipad_seed_id('start'), 'Start', ['shape' => 'terminator']],
+    [vimipad_seed_id('check'), 'Stock available?', ['shape' => 'diamond']],
+    [vimipad_seed_id('pick'), 'Pick items', ['shape' => 'rect']],
+    [vimipad_seed_id('note'), 'Print note', ['shape' => 'parallelogram']],
+    [vimipad_seed_id('done'), 'End', ['shape' => 'terminator']],
+];
+$flowrels = [
+    ['rel_flowaaaaaaaa', vimipad_seed_id('start'), vimipad_seed_id('check'), 'sequence', ''],
+    ['rel_flowbbbbbbbb', vimipad_seed_id('check'), vimipad_seed_id('pick'), 'yes', 'yes'],
+    ['rel_flowcccccccc', vimipad_seed_id('pick'), vimipad_seed_id('note'), 'sequence', ''],
+    ['rel_flowdddddddd', vimipad_seed_id('note'), vimipad_seed_id('done'), 'sequence', ''],
+];
+$flowpath = vimipad_seed_map($course, $module, 'Order process', 'flow', $flownodes, $flowrels);
+
+// A fishbone with four categories, causes and a third-level sub-cause (#15).
+$fishnodes = [
+    [vimipad_seed_id('effect'), 'Late delivery', []],
+    [vimipad_seed_id('method'), 'Method', []],
+    [vimipad_seed_id('machine'), 'Machine', []],
+    [vimipad_seed_id('material'), 'Material', []],
+    [vimipad_seed_id('people'), 'People', []],
+    [vimipad_seed_id('cause1'), 'Unclear steps', []],
+    [vimipad_seed_id('cause2'), 'Old press', []],
+    [vimipad_seed_id('sub1'), 'No checklist', []],
+];
+$fishrels = [
+    ['rel_fishaaaaaaaa', vimipad_seed_id('method'), vimipad_seed_id('effect'), '', ''],
+    ['rel_fishbbbbbbbb', vimipad_seed_id('machine'), vimipad_seed_id('effect'), '', ''],
+    ['rel_fishcccccccc', vimipad_seed_id('material'), vimipad_seed_id('effect'), '', ''],
+    ['rel_fishdddddddd', vimipad_seed_id('people'), vimipad_seed_id('effect'), '', ''],
+    ['rel_fisheeeeeeee', vimipad_seed_id('cause1'), vimipad_seed_id('method'), '', ''],
+    ['rel_fishffffffff', vimipad_seed_id('cause2'), vimipad_seed_id('machine'), '', ''],
+    ['rel_fishgggggggg', vimipad_seed_id('sub1'), vimipad_seed_id('cause1'), '', ''],
+];
+$fishpath = vimipad_seed_map($course, $module, 'Delivery causes', 'fishbone', $fishnodes, $fishrels);
+
+// A stock-and-flow model with every system role and both relation types (#16).
+$sfnodes = [
+    [vimipad_seed_id('supply'), 'Raw material supply', ['systemtype' => 'source', 'shape' => 'cloud']],
+    [vimipad_seed_id('prod'), 'Production rate', ['systemtype' => 'valve', 'shape' => 'valve']],
+    [vimipad_seed_id('stock1'), 'Finished goods', ['systemtype' => 'stock', 'shape' => 'stock']],
+    [vimipad_seed_id('ship'), 'Shipment rate', ['systemtype' => 'valve', 'shape' => 'valve']],
+    [vimipad_seed_id('cust'), 'Customers', ['systemtype' => 'sink', 'shape' => 'cloud']],
+    [vimipad_seed_id('delay1'), 'Order delay', ['systemtype' => 'delay', 'shape' => 'delay']],
+    [vimipad_seed_id('demand'), 'Customer demand', ['systemtype' => 'auxiliary', 'shape' => 'ellipse']],
+    [vimipad_seed_id('cap'), 'Production capacity', ['systemtype' => 'parameter', 'shape' => 'parameter']],
+];
+$sfrels = [
+    ['rel_sfaaaaaaaaaa', vimipad_seed_id('supply'), vimipad_seed_id('prod'), 'flow', ''],
+    ['rel_sfbbbbbbbbbb', vimipad_seed_id('prod'), vimipad_seed_id('stock1'), 'flow', ''],
+    ['rel_sfcccccccccc', vimipad_seed_id('stock1'), vimipad_seed_id('ship'), 'flow', ''],
+    ['rel_sfdddddddddd', vimipad_seed_id('ship'), vimipad_seed_id('cust'), 'flow', ''],
+    ['rel_sfeeeeeeeeee', vimipad_seed_id('demand'), vimipad_seed_id('ship'), 'influence', 'increases'],
+    ['rel_sfffffffffff', vimipad_seed_id('cap'), vimipad_seed_id('prod'), 'influence', 'limits'],
+    ['rel_sfgggggggggg', vimipad_seed_id('delay1'), vimipad_seed_id('prod'), 'influence', 'delays'],
+];
+$stockflowpath = vimipad_seed_map($course, $module, 'Supply model', 'stockflow', $sfnodes, $sfrels);
+
 // Print shell exports for the Playwright run. The base URL is derived from the
 // site's own wwwroot, so `eval "$(php seed.php)"` sets everything the run needs
 // and works for any install location (root or subdirectory) without a manual
 // VIMIPAD_BASE_URL. The specs still allow overriding it via the environment.
 echo "export VIMIPAD_BASE_URL='{$CFG->wwwroot}'\n";
+echo "export VIMIPAD_FLOW_PATH='{$flowpath}'\n";
+echo "export VIMIPAD_FISHBONE_PATH='{$fishpath}'\n";
+echo "export VIMIPAD_STOCKFLOW_PATH='{$stockflowpath}'\n";
 echo "export VIMIPAD_ACTIVITY_PATH='{$activitypath}'\n";
 echo "export VIMIPAD_USER_A='{$usera->username}'\n";
 echo "export VIMIPAD_PASS_A='Vimi!pad_A1'\n";

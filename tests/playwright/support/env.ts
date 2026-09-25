@@ -40,6 +40,12 @@ export interface VimipadEnv {
     courseName: string;
     /** The site administrator, for the admin stories. */
     admin: TestUser;
+    /** Path to the flowchart fixture, if seeded. */
+    flowPath: string;
+    /** Path to the fishbone fixture, if seeded. */
+    fishbonePath: string;
+    /** Path to the stock-and-flow fixture, if seeded. */
+    stockflowPath: string;
 }
 
 /**
@@ -78,6 +84,12 @@ export function readEnv(): VimipadEnv {
             fullname: process.env.VIMIPAD_TEACHER_NAME ?? 'Tay Teacher',
         },
         individualPath: process.env.VIMIPAD_INDIVIDUAL_PATH ?? need('VIMIPAD_ACTIVITY_PATH'),
+        // Representation fixtures: one ready-made map per diagram form, so the
+        // stories check how a finished map is drawn rather than re-testing node
+        // creation.
+        flowPath: process.env.VIMIPAD_FLOW_PATH ?? '',
+        fishbonePath: process.env.VIMIPAD_FISHBONE_PATH ?? '',
+        stockflowPath: process.env.VIMIPAD_STOCKFLOW_PATH ?? '',
         courseId: process.env.VIMIPAD_COURSE_ID ?? '',
         courseName: process.env.VIMIPAD_COURSE_NAME ?? 'ViMi Pad collaboration',
         admin: {

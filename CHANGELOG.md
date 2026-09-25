@@ -18,6 +18,15 @@ moves to 1.0.0-RC1 together.
 
 
 
+
+### Added
+- Playwright stories for the three specialised diagram forms
+  (tests/playwright/representations.spec.ts), with a seeded fixture per form:
+  a flowchart using every process symbol, a fishbone with four categories and a
+  third-level sub-cause, and a stock-and-flow model with every system role. The
+  stories assert visible structure — which SVG shapes exist, that exactly one
+  spine is drawn, where the effect sits after Arrange, that the list view names
+  each role — rather than pixel snapshots.
 ### Fixed
 - The gradebook showed a raw string key instead of the activity's grade item
   name: core_grades derives it from the item name as grade_submissions_name,
@@ -35,7 +44,7 @@ moves to 1.0.0-RC1 together.
   core\update\validator rejected it with "rootdirinvalid" (issue #11). The
   workflow also asserts the archive ships English only and carries the built
   runtime bundles.
-- Stock-and-Flow / System Dynamics profile (issue #16, backend foundation):
+- System dynamics profile (issue #16):
   a new vimipadform_stockflow subplugin offering the stock, cloud, valve, delay,
   auxiliary and parameter symbols and the flow/influence/relation types. A
   node's System Dynamics role lives in its own "systemtype" metadata rather than
