@@ -78,6 +78,10 @@ const SHAPE_LABEL: Record<NodeShape, string> = {
     roundrect: 'editor:fmt_roundrect',
     rect: 'editor:fmt_rect',
     ellipse: 'editor:fmt_ellipse',
+    // Flowchart symbols are labelled by what they mean, not by their geometry.
+    terminator: 'editor:fmt_terminator',
+    diamond: 'editor:fmt_diamond',
+    parallelogram: 'editor:fmt_parallelogram',
 };
 
 /**

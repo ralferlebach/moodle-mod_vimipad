@@ -26,6 +26,7 @@
 import {CANVAS_HEIGHT, CANVAS_WIDTH} from '../graph/autolayout';
 import {Point, Size} from '../types';
 import {LineStyle} from './form_config';
+import {NodeShape} from './shape_catalog';
 
 /** Default node box height, in canvas units. */
 export const DEFAULT_NODE_HEIGHT = 40;
@@ -181,4 +182,97 @@ export function clampSize(w: number, h: number): Size {
         w: Math.max(MIN_W, Math.min(MAX_W, Math.round(w))),
         h: Math.max(MIN_H, Math.min(MAX_H, Math.round(h))),
     };
+}
+
+/**
+ * How far a parallelogram is sheared, as a share of half its height.
+ *
+ * Must match PARALLELOGRAM_SLANT in shapes.tsx, or connectors would attach to a
+ * boundary the renderer never draws.
+ */
+const PARALLELOGRAM_SLANT = 0.6;
+
+/** Clearance kept between a node's outline and a connector end. */
+const EDGE_PADDING = 2;
+
+/**
+ * The point where a connector meets a node's visible outline.
+ *
+ * edgePoint() intersects the axis-aligned bounding box, which is correct for
+ * rectangles but wrong for a diamond, a parallelogram or a capsule: the arrow
+ * would stop in empty space beside the symbol. This variant intersects the
+ * actual outline of the given shape.
+ *
+ * @param center The node centre.
+ * @param size The node size.
+ * @param towards The point the connector runs to.
+ * @param shape The node's shape.
+ * @returns The point on the node's outline.
+ */
+export function edgePointForShape(
+    center: Point,
+    size: Size,
+    towards: Point,
+    shape: NodeShape
+): Point {
+    const dx = towards.x - center.x;
+    const dy = towards.y - center.y;
+    if (dx === 0 && dy === 0) {
+        return center;
+    }
+
+    const hw = size.w / 2 + EDGE_PADDING;
+    const hh = size.h / 2 + EDGE_PADDING;
+    const at = (t: number): Point => ({x: center.x + dx * t, y: center.y + dy * t});
+
+    if (shape === 'ellipse') {
+        // (x/hw)^2 + (y/hh)^2 = 1
+        const t = 1 / Math.hypot(dx / hw, dy / hh);
+        return at(t);
+    }
+
+    if (shape === 'diamond') {
+        // |x|/hw + |y|/hh = 1
+        const t = 1 / (Math.abs(dx) / hw + Math.abs(dy) / hh);
+        return at(t);
+    }
+
+    if (shape === 'parallelogram') {
+        // The outline is a rectangle sheared along x. Shear the direction back,
+        // intersect the upright rectangle, and the parameter t carries over.
+        const slant = Math.min(hw / 2, hh * PARALLELOGRAM_SLANT);
+        const k = slant / (2 * hh);
+        const halfwidth = hw - slant / 2;
+        const du = dx + k * dy;
+        const t = 1 / Math.max(Math.abs(du) / halfwidth, Math.abs(dy) / hh);
+        return at(t);
+    }
+
+    if (shape === 'terminator') {
+        // A capsule: every boundary point sits at distance hh from the segment
+        // between the two centres of the end caps.
+        const r = Math.min(hh, hw);
+        const a = Math.max(hw - r, 0);
+        const x = Math.abs(dx);
+        const y = Math.abs(dy);
+
+        if (y > 0) {
+            // Does the ray leave through the straight top or bottom edge?
+            const t = r / y;
+            if (t * x <= a) {
+                return at(t);
+            }
+        }
+        // Otherwise it leaves through one of the semicircular caps.
+        const qa = x * x + y * y;
+        const qb = -2 * a * x;
+        const qc = a * a - r * r;
+        const disc = Math.max(qb * qb - 4 * qa * qc, 0);
+        const t = (-qb + Math.sqrt(disc)) / (2 * qa);
+        return at(t);
+    }
+
+    // Rectangle and rounded rectangle: the bounding box is the outline.
+    const t = 1 / Math.max(Math.abs(dx) / hw, Math.abs(dy) / hh);
+    return at(t);
 }

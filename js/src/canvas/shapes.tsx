@@ -74,14 +74,51 @@ export function labelBox(text: TextStyle | undefined): React.CSSProperties {
  * @param extra Extra SVG props (fill, stroke, class …).
  * @returns The shape element.
  */
+/**
+ * How far a parallelogram is sheared, as a share of half its height.
+ *
+ * Keeping the slant proportional to the height means the input/output symbol
+ * stays recognisable at any node size.
+ */
+export const PARALLELOGRAM_SLANT = 0.6;
+
 export function shapeElement(
     shape: NodeShape,
     w: number,
     h: number,
-    extra: React.SVGProps<SVGRectElement & SVGEllipseElement>
+    extra: React.SVGProps<SVGRectElement & SVGEllipseElement & SVGPolygonElement>
 ): React.ReactElement {
+    const hw = w / 2;
+    const hh = h / 2;
+
     if (shape === 'ellipse') {
-        return <ellipse cx={0} cy={0} rx={w / 2} ry={h / 2} {...extra} />;
+        return <ellipse cx={0} cy={0} rx={hw} ry={hh} {...extra} />;
     }
-    return <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={shape === 'roundrect' ? 10 : 0} {...extra} />;
+
+    if (shape === 'diamond') {
+        // Decision: a four-point rhombus touching the middle of each side.
+        const points = `0,${-hh} ${hw},0 0,${hh} ${-hw},0`;
+        return <polygon points={points} {...extra} />;
+    }
+
+    if (shape === 'parallelogram') {
+        // Input / output: a rectangle sheared horizontally. The slant is a share
+        // of the height so the symbol keeps its proportions as the node grows.
+        const slant = Math.min(hw / 2, hh * PARALLELOGRAM_SLANT);
+        const points = [
+            `${-hw + slant},${-hh}`,
+            `${hw},${-hh}`,
+            `${hw - slant},${hh}`,
+            `${-hw},${hh}`,
+        ].join(' ');
+        return <polygon points={points} {...extra} />;
+    }
+
+    if (shape === 'terminator') {
+        // Start / end: a capsule, i.e. a rectangle whose corner radius is half
+        // its height, so the short sides are exact semicircles.
+        return <rect x={-hw} y={-hh} width={w} height={h} rx={hh} ry={hh} {...extra} />;
+    }
+
+    return <rect x={-hw} y={-hh} width={w} height={h} rx={shape === 'roundrect' ? 10 : 0} {...extra} />;
 }

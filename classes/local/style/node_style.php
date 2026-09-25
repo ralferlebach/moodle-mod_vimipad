@@ -31,8 +31,16 @@ namespace mod_vimipad\local\style;
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class node_style {
-    /** @var string[] The universal node shapes. */
-    private const SHAPES = ['roundrect', 'rect', 'ellipse'];
+    /**
+     * The node shapes this validator accepts.
+     *
+     * Mirrors \mod_vimipad\local\form\base::SHAPES. Which subset a given map
+     * may actually use is decided by its profile; this validator only guards the
+     * overall vocabulary, so an unknown value is still rejected.
+     *
+     * @var string[]
+     */
+    private const SHAPES = \mod_vimipad\local\form\base::ALL_SHAPES;
 
     /** @var string[] The universal font families. */
     private const FONTS = ['sans', 'serif', 'mono'];

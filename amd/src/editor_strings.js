@@ -54,7 +54,9 @@ export const STRING_KEYS = [
     'editor:subject', 'editor:submit', 'editor:submitconfirm', 'editor:submitpending',
     'editor:fmt_bigger', 'editor:fmt_delete', 'editor:fmt_duplicate', 'editor:fmt_ellipse',
     'editor:fmt_fill', 'editor:fmt_font', 'editor:fmt_fontdefault', 'editor:fmt_highlight',
-    'editor:fmt_move', 'editor:fmt_rect', 'editor:fmt_reset', 'editor:fmt_roundrect',
+    'editor:fmt_diamond', 'editor:fmt_move', 'editor:fmt_parallelogram',
+    'editor:fmt_rect', 'editor:fmt_reset', 'editor:fmt_roundrect',
+    'editor:fmt_terminator',
     'editor:fmt_shape', 'editor:fmt_smaller', 'editor:fmt_text', 'editor:fmt_textcolor',
     'editor:fmt_toolbar',
 ];

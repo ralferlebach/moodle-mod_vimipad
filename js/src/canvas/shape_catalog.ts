@@ -29,11 +29,37 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-/** The universal node shapes. */
-export type NodeShape = 'roundrect' | 'rect' | 'ellipse';
+/**
+ * Every node shape the editor knows.
+ *
+ * Mirrors \mod_vimipad\local\form\base::ALL_SHAPES. This union also acts as
+ * the filter for shapes the server sends in the form config, so a shape missing
+ * here is silently dropped rather than rendered.
+ */
+export type NodeShape =
+    | 'roundrect'
+    | 'rect'
+    | 'ellipse'
+    | 'terminator'
+    | 'diamond'
+    | 'parallelogram';
 
-/** The universal default shapes, in picker order. */
-export const ALL_SHAPES: readonly NodeShape[] = ['roundrect', 'rect', 'ellipse'];
+/**
+ * Every known shape, in picker order.
+ *
+ * Generic shapes first, then the representation-specific flowchart symbols.
+ */
+export const ALL_SHAPES: readonly NodeShape[] = [
+    'roundrect', 'rect', 'ellipse', 'terminator', 'diamond', 'parallelogram',
+];
+
+/**
+ * The generic shapes a profile gets unless it declares its own set.
+ *
+ * Kept separate from ALL_SHAPES so a representation-specific symbol does not
+ * leak into every other diagram profile.
+ */
+export const GENERIC_SHAPES: readonly NodeShape[] = ['roundrect', 'rect', 'ellipse'];
 
 /** Per-profile allowed shapes and default. */
 interface ProfileShapes {
@@ -42,19 +68,23 @@ interface ProfileShapes {
 }
 
 /**
- * The client-side catalogue. Every current profile permits all three universal
- * the allowed set, at which point {@link clampShape} converts existing nodes.
+ * The client-side fallback catalogue, used when the server sends no form config.
+ * Generic profiles permit the three universal shapes; a representation-specific
+ * profile such as flow names its own set, at which point {@link clampShape}
+ * converts nodes that carry a shape the profile does not permit.
  */
 const PROFILE_SHAPES: Record<string, ProfileShapes> = {
-    conceptmap: {allowed: ALL_SHAPES, default: 'roundrect'},
-    mindmap: {allowed: ALL_SHAPES, default: 'ellipse'},
-    tree: {allowed: ALL_SHAPES, default: 'rect'},
-    semanticnetwork: {allowed: ALL_SHAPES, default: 'ellipse'},
-    bubblemap: {allowed: ALL_SHAPES, default: 'ellipse'},
+    conceptmap: {allowed: GENERIC_SHAPES, default: 'roundrect'},
+    mindmap: {allowed: GENERIC_SHAPES, default: 'ellipse'},
+    tree: {allowed: GENERIC_SHAPES, default: 'rect'},
+    semanticnetwork: {allowed: GENERIC_SHAPES, default: 'ellipse'},
+    bubblemap: {allowed: GENERIC_SHAPES, default: 'ellipse'},
+    // A flowchart carries meaning in its symbols rather than in generic boxes.
+    flow: {allowed: ['rect', 'terminator', 'diamond', 'parallelogram'], default: 'rect'},
 };
 
 /** The fallback used for an unknown profile. */
-const FALLBACK: ProfileShapes = {allowed: ALL_SHAPES, default: 'roundrect'};
+const FALLBACK: ProfileShapes = {allowed: GENERIC_SHAPES, default: 'roundrect'};
 
 /**
  * Resolve the shape entry for a profile, falling back for unknown profiles.

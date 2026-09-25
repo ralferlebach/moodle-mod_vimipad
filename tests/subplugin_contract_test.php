@@ -39,8 +39,13 @@ require_once($CFG->dirroot . '/mod/vimipad/lib.php');
  * @covers     \mod_vimipad\local\assess\registry
  */
 final class subplugin_contract_test extends \advanced_testcase {
-    /** The node shapes the map value policy accepts. */
-    private const VALID_SHAPES = ['roundrect', 'rect', 'ellipse'];
+    /**
+     * The node shapes the map value policy accepts.
+     *
+     * Read from the form base class rather than repeated here, so a shape added
+     * to the vocabulary does not have to be copied into this test as well.
+     */
+    private const VALID_SHAPES = \mod_vimipad\local\form\base::ALL_SHAPES;
 
     /** The connector styles a profile may declare. */
     private const VALID_LINE_STYLES = ['straight', 'curved', 'orthogonal'];

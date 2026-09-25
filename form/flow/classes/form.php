@@ -42,7 +42,10 @@ class form extends \mod_vimipad\local\form\base {
      * @return string[]
      */
     public function get_allowed_shapes(): array {
-        return self::SHAPES;
+        // A flowchart carries meaning in its symbols, so this profile offers the
+        // flowchart vocabulary instead of the generic shapes: process, start/end,
+        // decision and input/output.
+        return ['rect', 'terminator', 'diamond', 'parallelogram'];
     }
 
     /**

@@ -33,6 +33,23 @@ abstract class base {
     /** @var string[] The universal node shapes a subplugin may draw from. */
     public const SHAPES = ['roundrect', 'rect', 'ellipse'];
 
+    /**
+     * Every shape the node metadata validator accepts, across all profiles.
+     *
+     * SHAPES stays the generic set a profile gets by default, so adding a
+     * representation-specific symbol here does not silently hand it to every
+     * other diagram type. A profile opts in by returning it from
+     * get_allowed_shapes().
+     *
+     * @var string[]
+     */
+    public const ALL_SHAPES = [
+        // Generic shapes, available to every profile.
+        'roundrect', 'rect', 'ellipse',
+        // Flowchart symbols: start/end, decision, input/output.
+        'terminator', 'diamond', 'parallelogram',
+    ];
+
     /** @var string[] The connector line styles a subplugin may choose. */
     public const LINES = ['straight', 'curved', 'orthogonal'];
 

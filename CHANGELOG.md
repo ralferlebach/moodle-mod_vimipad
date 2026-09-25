@@ -14,7 +14,16 @@ moves to 1.0.0-RC1 together.
 
 
 
+
 ### Added
+- Flowchart-specific node shapes (issue #14). The flow profile now offers
+  Process, Start/End, Decision and Input/Output instead of generic boxes, drawn
+  as native SVG (capsule, diamond, sheared polygon) so scaling and vector export
+  stay lossless. Connectors anchor on the visible outline of each symbol rather
+  than on its bounding box, via the new edgePointForShape(). The shape
+  vocabulary is split: base::SHAPES stays the generic set a profile gets by
+  default, base::ALL_SHAPES is the full set the metadata validator accepts, so
+  no other diagram profile gains flowchart symbols.
 - PHPUnit tests (tests/subplugin_contract_test.php) that walk every installed
   vimipadform and vimipadassess subplugin instead of a hard-coded list. The
   existing registry test only covered the five MVP profiles, so the eight

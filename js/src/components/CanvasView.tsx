@@ -35,11 +35,13 @@
 import React, {useCallback, useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {CANVAS_HEIGHT, CANVAS_WIDTH, clampToCanvas} from '../graph/autolayout';
 import {EditorState} from '../store/reducer';
-import {LayoutMap, Point, Size, SizeMap, FormConfig} from '../types';
+import {LayoutMap, Point, Size, SizeMap, FormConfig, VimiNode} from '../types';
+import {NodeShape} from '../canvas/shape_catalog';
 import {relationTypeStyle} from '../relation_types';
 import {formClampShape, formLine, formShared, LineStyle} from '../canvas/form_config';
+import {edgePointForShape} from '../canvas/node_geometry';
 import {
-    clampSize, clampView, edgePoint, nodeHeight, nodeWidth, profileLine, relLinePath, treeBusPath,
+    clampSize, clampView, nodeHeight, nodeWidth, profileLine, relLinePath, treeBusPath,
 } from '../canvas/node_geometry';
 import {labelBox, shapeElement} from '../canvas/shapes';
 import {useDismiss} from '../hooks/use_dismiss';
@@ -395,6 +397,19 @@ export function CanvasView(props: Props): React.ReactElement {
         }
         return layout[stableid] ?? {x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2};
     }, [dragId, dragPos, layout]);
+
+    /**
+     * The shape a node is drawn with, clamped to what the profile permits.
+     *
+     * Connector anchoring needs the same shape the renderer uses, otherwise an
+     * arrow ends on a boundary that was never drawn.
+     *
+     * @param node The node, or undefined when a relation dangles.
+     * @returns The resolved node shape.
+     */
+    const shapeOfNode = useCallback((node: VimiNode | undefined): NodeShape =>
+        formClampShape(formconfig, profile, node ? parseNodeStyle(node.metadatajson).shape : undefined),
+    [formconfig, profile]);
 
     const sizeOf = useCallback((stableid: string, label: string): Size => {
         if (resizeId === stableid && resizeSize) {
@@ -1264,12 +1279,16 @@ export function CanvasView(props: Props): React.ReactElement {
                 const isTree = sharedBifurcation;
                 const slot = siblingSlots.get(rel.stableid) ?? {index: 0, count: 1};
                 const slotOffset = siblingOffsets(slot.count, SIBLING_SPACING)[slot.index] ?? 0;
+                // Anchor on each node's visible outline, not its bounding box:
+                // a decision connector must end on the diamond's edge.
+                const fromShape = shapeOfNode(srcNode);
+                const toShape = shapeOfNode(tgtNode);
                 const baseFrom = isTree
                     ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
-                    : edgePoint(fromC, fromSize, toC);
+                    : edgePointForShape(fromC, fromSize, toC, fromShape);
                 const baseTo = isTree
                     ? {x: toC.x, y: toC.y - toSize.h / 2}
-                    : edgePoint(toC, toSize, fromC);
+                    : edgePointForShape(toC, toSize, fromC, toShape);
                 // Multiple relations between the same pair are shifted symmetrically
                 // perpendicular to the direct line, so they run parallel.
                 const shifted = isTree ? {from: baseFrom, to: baseTo} : offsetAnchors(baseFrom, baseTo, slotOffset);
@@ -1355,12 +1374,16 @@ export function CanvasView(props: Props): React.ReactElement {
                 const isTree = sharedBifurcation;
                 const slot = siblingSlots.get(rel.stableid) ?? {index: 0, count: 1};
                 const slotOffset = siblingOffsets(slot.count, SIBLING_SPACING)[slot.index] ?? 0;
+                // Anchor on each node's visible outline, not its bounding box:
+                // a decision connector must end on the diamond's edge.
+                const fromShape = shapeOfNode(srcNode);
+                const toShape = shapeOfNode(tgtNode);
                 const baseFrom = isTree
                     ? {x: fromC.x, y: fromC.y + fromSize.h / 2}
-                    : edgePoint(fromC, fromSize, toC);
+                    : edgePointForShape(fromC, fromSize, toC, fromShape);
                 const baseTo = isTree
                     ? {x: toC.x, y: toC.y - toSize.h / 2}
-                    : edgePoint(toC, toSize, fromC);
+                    : edgePointForShape(toC, toSize, fromC, toShape);
                 const anchors = isTree ? {from: baseFrom, to: baseTo} : offsetAnchors(baseFrom, baseTo, slotOffset);
                 // The label sits at the curve peak: the midpoint lifted perpendicular
                 // by the sibling offset, matching freeConnectorPath's own bulge.
