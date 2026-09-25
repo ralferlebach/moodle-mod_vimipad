@@ -188,3 +188,59 @@ describe('orthogonal routing respects node shape', () => {
         expect(route.to.x).toBeCloseTo(300, 5);
     });
 });
+
+describe('parallel connectors keep their distance', () => {
+    const A = {x: 300, y: 100};
+    const B = {x: 300, y: 400};
+
+    /**
+     * Route the same pair at a given sibling slot.
+     *
+     * @param offset The sibling offset.
+     * @returns The route.
+     */
+    function at(offset: number) {
+        return orthogonalRoute(A, BOX, 'rect', B, BOX, 'rect', offset);
+    }
+
+    test('two connectors between the same pair do not overlap', () => {
+        const left = at(-18);
+        const right = at(18);
+        expect(left.from.x).not.toBeCloseTo(right.from.x, 1);
+        expect(left.to.x).not.toBeCloseTo(right.to.x, 1);
+        expect(left.d).not.toBe(right.d);
+    });
+
+    test('the shared run is stepped as well, not just the anchors', () => {
+        // Anchors apart but a common bend line would still overlap along it.
+        const bend = (d: string): number => points(d)[1].y;
+        expect(bend(at(-18).d)).not.toBeCloseTo(bend(at(18).d), 1);
+    });
+
+    test('a zero offset routes exactly as before', () => {
+        expect(at(0)).toEqual(orthogonalRoute(A, BOX, 'rect', B, BOX, 'rect'));
+    });
+
+    test('the step stays on the node edge, however many siblings', () => {
+        // A large offset must not start the connector beside the node.
+        const far = at(500);
+        expect(Math.abs(far.from.x - A.x)).toBeLessThanOrEqual(BOX.w / 2);
+        expect(Math.abs(far.to.x - B.x)).toBeLessThanOrEqual(BOX.w / 2);
+    });
+
+    test('sideways routes step perpendicular too', () => {
+        const C = {x: 700, y: 200};
+        const D = {x: 100, y: 205};
+        const up = orthogonalRoute(C, BOX, 'rect', D, BOX, 'rect', -14);
+        const down = orthogonalRoute(C, BOX, 'rect', D, BOX, 'rect', 14);
+        expect(up.from.y).not.toBeCloseTo(down.from.y, 1);
+        expect(up.to.y).not.toBeCloseTo(down.to.y, 1);
+    });
+
+    test('arrival stays perpendicular when siblings are offset', () => {
+        // The offset must not undo the fix that made arrows point into the node.
+        for (const offset of [-18, 0, 18]) {
+            expect(arrival(at(offset).d)).toEqual({x: 0, y: 1});
+        }
+    });
+});

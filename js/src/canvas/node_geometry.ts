@@ -300,6 +300,21 @@ export function edgePointForShape(
     return at(t);
 }
 
+/**
+ * Keep a sibling's sideways step inside the edge it leaves from.
+ *
+ * Without the clamp, the third or fourth connector between one pair of nodes
+ * would start beside the node rather than on it.
+ *
+ * @param offset The requested step.
+ * @param extent The node's width or height along that axis.
+ * @returns The step, limited to the usable part of the edge.
+ */
+function clampShift(offset: number, extent: number): number {
+    const limit = Math.max(extent / 2 - 8, 0);
+    return Math.max(-limit, Math.min(limit, offset));
+}
+
 /** An orthogonal connector: where it starts, where it ends, and its path. */
 export interface OrthogonalRoute {
     from: Point;
@@ -332,7 +347,8 @@ export function orthogonalRoute(
     fromShape: NodeShape,
     toC: Point,
     toSize: Size,
-    toShape: NodeShape
+    toShape: NodeShape,
+    offset = 0
 ): OrthogonalRoute {
     const dx = toC.x - fromC.x;
     const dy = toC.y - fromC.y;
@@ -343,9 +359,17 @@ export function orthogonalRoute(
     if (Math.abs(dy) >= Math.abs(dx)) {
         // Mostly vertical: leave and arrive through the top or bottom edge.
         const sign = dy >= 0 ? 1 : -1;
-        const from = edgePointForShape(fromC, fromSize, {x: fromC.x, y: fromC.y + sign * reach}, fromShape);
-        const to = edgePointForShape(toC, toSize, {x: toC.x, y: toC.y - sign * reach}, toShape);
-        const my = (from.y + to.y) / 2;
+        const base = edgePointForShape(fromC, fromSize, {x: fromC.x, y: fromC.y + sign * reach}, fromShape);
+        const baseTo = edgePointForShape(toC, toSize, {x: toC.x, y: toC.y - sign * reach}, toShape);
+        // Siblings step sideways so parallel runs stay apart, but must not slide
+        // off the edge they leave from.
+        const fromShift = clampShift(offset, fromSize.w);
+        const toShift = clampShift(offset, toSize.w);
+        const from = {x: base.x + fromShift, y: base.y};
+        const to = {x: baseTo.x + toShift, y: baseTo.y};
+        // The shared horizontal run is stepped too, or siblings would overlap
+        // on it even with their anchors apart.
+        const my = (from.y + to.y) / 2 + offset;
         return {
             from,
             to,
@@ -355,9 +379,11 @@ export function orthogonalRoute(
 
     // Mostly horizontal: leave and arrive through the left or right edge.
     const sign = dx >= 0 ? 1 : -1;
-    const from = edgePointForShape(fromC, fromSize, {x: fromC.x + sign * reach, y: fromC.y}, fromShape);
-    const to = edgePointForShape(toC, toSize, {x: toC.x - sign * reach, y: toC.y}, toShape);
-    const mx = (from.x + to.x) / 2;
+    const base = edgePointForShape(fromC, fromSize, {x: fromC.x + sign * reach, y: fromC.y}, fromShape);
+    const baseTo = edgePointForShape(toC, toSize, {x: toC.x - sign * reach, y: toC.y}, toShape);
+    const from = {x: base.x, y: base.y + clampShift(offset, fromSize.h)};
+    const to = {x: baseTo.x, y: baseTo.y + clampShift(offset, toSize.h)};
+    const mx = (from.x + to.x) / 2 + offset;
     return {
         from,
         to,

@@ -32,6 +32,9 @@ moves to 1.0.0-RC1 together.
   segments collapsed, which is why it looked right there and wrong as soon as a
   flowchart branched sideways. The route now picks its axis first and derives
   both anchors from it, so the last segment meets the edge at a right angle.
+  Parallel connectors between the same pair of nodes keep their spacing on that
+  route too: both anchors and the shared bend step sideways, so several
+  relations no longer collapse onto one line.
 ### Changed
 - Source and sink no longer share one cloud symbol. Both are the same cloud,
   one flipped: the source keeps a flat base, as though the flow gathered inside

@@ -1357,7 +1357,7 @@ export function CanvasView(props: Props): React.ReactElement {
                 // perpendicular to that edge and the arrowhead points into the
                 // node rather than along its side.
                 const ortho = (!isTree && relLine === 'orthogonal' && !station)
-                    ? orthogonalRoute(fromC, fromSize, fromShape, toC, toSize, toShape)
+                    ? orthogonalRoute(fromC, fromSize, fromShape, toC, toSize, toShape, slotOffset)
                     : null;
                 const shifted = isTree || ortho
                     ? {from: ortho ? ortho.from : baseFrom, to: ortho ? ortho.to : baseTo}
