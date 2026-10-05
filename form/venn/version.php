@@ -25,8 +25,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'vimipadform_venn';
-$plugin->version   = 2026080800;
+$plugin->version   = 2026100500;
 $plugin->requires  = 2024100700;
-$plugin->maturity  = MATURITY_BETA;
-$plugin->release   = '0.9.0';
-$plugin->dependencies = ['mod_vimipad' => 2026080800];
+$plugin->maturity  = MATURITY_STABLE;
+$plugin->release   = '1.0.0';
+$plugin->dependencies = ['mod_vimipad' => 2026100500];

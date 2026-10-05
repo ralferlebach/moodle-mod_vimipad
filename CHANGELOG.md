@@ -6,6 +6,19 @@
 > line; those entries are kept for historical reference only. The current
 > release is **0.9.15**.
 
+
+## 1.0.0 (2026-10-05)
+
+### Changed
+- First stable release: MATURITY_STABLE, release 1.0.0, build 2026100500. The
+  whole ViMi Pad family moves to stable together and carries the same build.
+- Declared and tested Moodle support extended to 5.3 ($plugin->supported =
+  [405, 503]). Moodle 5.3 is now part of every PHPUnit, Behat and release matrix,
+  excluded on PHP 8.1 and 8.2 because its composer.json requires PHP >= 8.3.
+- README rewritten along the plugin template, with the family overview, the
+  capabilities and scheduled tasks each plugin actually ships, and a badge
+  linking to the project site.
+
 ## 1.0.0-RC1 - 2026-09-11
 
 First release candidate. Maturity raised to MATURITY_RC; the whole ViMi family
