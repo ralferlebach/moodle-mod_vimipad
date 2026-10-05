@@ -92,7 +92,7 @@ test.describe('mod_vimipad - Teacher stories', () => {
         // grader. We assert the page loaded as the teacher rather than driving a
         // full grade cycle (which needs a prior submission fixture).
         await expect(page).not.toHaveURL(/\/login\//);
-        await expect(page.locator('.vimipad-canvas, #region-main')).toBeVisible({timeout: 30_000});
+        await expect(page.locator('.vimipad-canvas, #region-main').first()).toBeVisible({timeout: 30_000});
     });
 });
 

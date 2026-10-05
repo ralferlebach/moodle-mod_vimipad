@@ -39,40 +39,46 @@
 # checked-in build artefacts (amd/build/*.min.js and their source maps) can be
 # reviewed and reproduced from the package itself.
 
-# Non-English language packs are starter translations for functional and
-# RTL/CJK testing, maintained via AMOS. Only English ships in the release ZIP.
+# Ship English only, in the plugin and in every subplugin; the repository keeps
+# every language for testing and for AMOS.
 #
-# Each language needs two patterns. A pattern containing a slash is anchored to
-# this file's directory, so "lang/de" excludes only the plugin's own pack; the
-# subplugins under form/ and assess/ keep their own lang directories and need
-# the "**/lang/de" form as well.
-lang/de     export-ignore
-**/lang/de  export-ignore
-lang/nl     export-ignore
-**/lang/nl  export-ignore
-lang/fr     export-ignore
-**/lang/fr  export-ignore
+# Directory rules prune a whole language tree, so the release carries no empty
+# folders. They need the "**/" form as well: a pattern containing a slash is
+# anchored to this file, so "lang/de" alone never reached the subplugins' own
+# lang directories.
+lang/ar     export-ignore
+**/lang/ar     export-ignore
 lang/da     export-ignore
-**/lang/da  export-ignore
-lang/no     export-ignore
-**/lang/no  export-ignore
-lang/sv     export-ignore
-**/lang/sv  export-ignore
-lang/it     export-ignore
-**/lang/it  export-ignore
+**/lang/da     export-ignore
+lang/de     export-ignore
+**/lang/de     export-ignore
 lang/es     export-ignore
-**/lang/es  export-ignore
-lang/pt     export-ignore
-**/lang/pt  export-ignore
-lang/uk     export-ignore
-**/lang/uk  export-ignore
+**/lang/es     export-ignore
+lang/fr     export-ignore
+**/lang/fr     export-ignore
+lang/it     export-ignore
+**/lang/it     export-ignore
 lang/ja     export-ignore
-**/lang/ja  export-ignore
+**/lang/ja     export-ignore
+lang/ko     export-ignore
+**/lang/ko     export-ignore
+lang/nl     export-ignore
+**/lang/nl     export-ignore
+lang/no     export-ignore
+**/lang/no     export-ignore
+lang/pt     export-ignore
+**/lang/pt     export-ignore
+lang/sv     export-ignore
+**/lang/sv     export-ignore
+lang/uk     export-ignore
+**/lang/uk     export-ignore
 lang/zh_cn  export-ignore
 **/lang/zh_cn  export-ignore
 lang/zh_tw  export-ignore
 **/lang/zh_tw  export-ignore
-lang/ko     export-ignore
-**/lang/ko  export-ignore
-lang/ar     export-ignore
-**/lang/ar  export-ignore
+
+# Safety net for a language added later and not listed above: these match files,
+# so they cannot be pruned along with lang/en, and they keep its content out even
+# if someone forgets to extend the list. Later lines win, so English is restored.
+**/lang/*/*     export-ignore
+**/lang/en/*    -export-ignore

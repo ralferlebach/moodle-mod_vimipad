@@ -159,38 +159,69 @@ final class flow_shapes_test extends \advanced_testcase {
     }
 
     /**
-     * Flow shapes survive an export/import round trip unchanged.
+     * Flow shapes survive a real export and re-import, in both formats.
+     *
+     * Goes through export_service and import_service rather than encoding JSON
+     * by hand, so it proves the shipped exporters carry node metadata.
      *
      * @return void
      */
     public function test_flow_shapes_round_trip(): void {
+        global $DB;
         $this->resetAfterTest();
 
-        $nodes = [];
+        $course = $this->getDataGenerator()->create_course();
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $instance = $this->getDataGenerator()->create_module('vimipad', [
+            'course' => $course->id, 'defaultprofile' => 'flow',
+        ]);
+        $now = time();
+        $workspaceid = $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => $user->id, 'groupid' => null,
+            'currentrevision' => 1, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
         foreach (self::FLOW_SHAPES as $i => $shape) {
-            $nodes[] = [
+            $DB->insert_record('vimipad_node', (object) [
+                'workspaceid' => $workspaceid,
                 'stableid' => 'node_' . str_pad((string) $i, 12, 'a'),
-                'label' => ucfirst($shape),
-                'metadatajson' => json_encode(['shape' => $shape]),
-            ];
+                'type' => 'concept', 'label' => ucfirst($shape), 'content' => '',
+                'contentformat' => FORMAT_HTML, 'metadatajson' => json_encode(['shape' => $shape]),
+                'createdby' => $user->id, 'modifiedby' => $user->id,
+                'timecreated' => $now, 'timemodified' => $now,
+            ]);
         }
-        $envelope = [
-            'generator' => 'mod_vimipad',
-            'formatversion' => \mod_vimipad\local\service\export_service::FORMAT_VERSION,
-            'data' => ['profile' => 'flow', 'nodes' => $nodes, 'relations' => []],
+        $workspace = $DB->get_record('vimipad_workspace', ['id' => $workspaceid], '*', MUST_EXIST);
+        $export = new \mod_vimipad\local\service\export_service();
+        $import = new \mod_vimipad\local\service\import_service();
+
+        $documents = [
+            'json' => $export->export_json($instance, $workspace, 'flow'),
+            'xml' => $export->export_xml($instance, $workspace, 'flow'),
         ];
+        foreach ($documents as $format => $document) {
+            $target = $DB->insert_record('vimipad_workspace', (object) [
+                'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
+                'name' => 'import ' . $format, 'currentrevision' => 0, 'locked' => 0,
+                'timecreated' => $now, 'timemodified' => $now,
+            ]);
+            $targetws = $DB->get_record('vimipad_workspace', ['id' => $target], '*', MUST_EXIST);
+            $format === 'json'
+                ? $import->import_json($document, $targetws, (int) $user->id, 'replace')
+                : $import->import_xml($document, $targetws, (int) $user->id, 'replace');
 
-        $decoded = json_decode(json_encode($envelope), true);
-
-        $roundtripped = [];
-        foreach ($decoded['data']['nodes'] as $node) {
-            $roundtripped[] = json_decode($node['metadatajson'], true)['shape'];
+            $shapes = [];
+            foreach ($DB->get_records('vimipad_node', ['workspaceid' => $target], 'label ASC') as $node) {
+                $shapes[] = json_decode($node->metadatajson, true)['shape'] ?? null;
+            }
+            sort($shapes);
+            $expected = self::FLOW_SHAPES;
+            sort($expected);
+            $this->assertSame(
+                $expected,
+                $shapes,
+                "Exporting to {$format} and importing again must keep every flowchart symbol."
+            );
         }
-        $this->assertSame(
-            self::FLOW_SHAPES,
-            $roundtripped,
-            'Exporting and re-reading a flow map must not convert or drop its symbols.'
-        );
     }
 
     /**

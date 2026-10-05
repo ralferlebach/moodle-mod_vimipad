@@ -132,6 +132,22 @@ describe('fishbone routing: bone direction', () => {
         expect(layout.effect.x).toBeGreaterThan(0);
     });
 
+    test('every main bone runs at the same diagonal angle', () => {
+        // A fishbone reads as one fish only if its ribs are parallel: bones on
+        // the same side must share one slope, and the two sides must mirror.
+        const {routing} = routed();
+        const slopes = routing.routes
+            .filter(r => r.kind === 'bone')
+            .map(r => {
+                const [start, end] = r.points;
+                return Math.abs((end.y - start.y) / (end.x - start.x));
+            });
+        expect(slopes.length).toBeGreaterThan(1);
+        for (const slope of slopes) {
+            expect(slope).toBeCloseTo(slopes[0], 6);
+        }
+    });
+
     test('a station never lands past the effect', () => {
         const {routing, layout} = routed();
         for (const station of Object.values(routing.stations)) {

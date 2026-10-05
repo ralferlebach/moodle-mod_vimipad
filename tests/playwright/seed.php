@@ -173,10 +173,14 @@ function vimipad_seed_map(
     $created = add_moduleinfo($info, $course);
 
     $now = time();
+    // A course map is looked up with userid and groupid both NULL. Zero is not
+    // NULL in SQL, so a fixture written with groupid 0 is never found: the
+    // editor creates a fresh, empty workspace beside it and the story sees a
+    // blank canvas.
     $workspaceid = $DB->insert_record('vimipad_workspace', (object) [
         'vimipadid' => $created->instance,
         'userid' => null,
-        'groupid' => 0,
+        'groupid' => null,
         'currentrevision' => 1,
         'locked' => 0,
         'timecreated' => $now,

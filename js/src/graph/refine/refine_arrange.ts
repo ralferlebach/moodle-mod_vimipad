@@ -30,6 +30,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import {stockflowSeed} from '../stockflow_layout';
 import {VimiNode, VimiRelation, VimiContainer, LayoutMap, SizeMap, FormConfig} from '../../types';
 import {parseGeometry} from '../../canvas/container_geometry';
 import {parseNodeStyle} from '../../canvas/node_style';
@@ -293,7 +294,20 @@ function pointInBox(px: number, py: number, b: {x: number; y: number; w: number;
  * @returns The refined node positions and container geometries.
  */
 export function refineArrangement(input: ArrangeInput): ArrangeResult {
-    const {nodes, relations, containers, profile, positions, sizes, pinned, overrides} = input;
+    const {nodes, relations, containers, profile, sizes, pinned, overrides} = input;
+    // A system dynamics map is read along its flows, but the refiner preserves
+    // where nodes already are, so a chain drawn out of order would stay out of
+    // order. Order the flow chain first; pinned nodes keep their position.
+    let positions = input.positions;
+    if (profile === 'stockflow') {
+        const seeded = stockflowSeed(nodes, relations, positions);
+        for (const id of pinned ?? []) {
+            if (positions[id]) {
+                seeded[id] = positions[id];
+            }
+        }
+        positions = seeded;
+    }
     const lockedContainers = input.lockedContainers;
     const resizeContainers = input.resizeContainers ?? true;
     const shrinkContainers = input.shrinkContainers ?? true;

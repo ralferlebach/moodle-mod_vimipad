@@ -214,3 +214,56 @@ describe('stockflow arrange', () => {
         expect(Object.keys(result.positions)).toHaveLength(NODES.length);
     });
 });
+
+describe('stockflow arrange: chain order', () => {
+    /** A material chain that passes through a delay. */
+    const CHAIN: VimiNode[] = [
+        sysNode('in', 'source'),
+        sysNode('rate', 'valve'),
+        sysNode('lag', 'delay'),
+        sysNode('store', 'stock'),
+        sysNode('out', 'sink'),
+    ];
+    const FLOWS: VimiRelation[] = [
+        typedRel(0, 'in', 'rate', 'flow'),
+        typedRel(1, 'rate', 'lag', 'flow'),
+        typedRel(2, 'lag', 'store', 'flow'),
+        typedRel(3, 'store', 'out', 'flow'),
+    ];
+
+    /**
+     * Arrange the chain from a scattered start.
+     *
+     * @returns The arranged positions.
+     */
+    function arrangeChain(): LayoutMap {
+        const sizes: SizeMap = {};
+        const start: LayoutMap = {};
+        CHAIN.forEach((n, i) => {
+            sizes[n.stableid] = {w: 140, h: 60} as Size;
+            start[n.stableid] = {x: 900 + ((i * 211) % 500), y: 700 + ((i * 137) % 400)};
+        });
+        return refineArrangement({
+            nodes: CHAIN, relations: FLOWS, containers: [], profile: 'stockflow',
+            positions: start, sizes, pinned: new Set<string>(),
+            lockedContainers: new Set<string>(), maxIterations: 400,
+        }).positions;
+    }
+
+    test('a delay on a flow stays between its neighbours', () => {
+        const layout = arrangeChain();
+        // Along the chain's direction the delay sits after the rate and before
+        // the stock it feeds, so the sequence still reads in order.
+        expect(layout.lag.x).toBeGreaterThan(layout.rate.x);
+        expect(layout.lag.x).toBeLessThan(layout.store.x);
+    });
+
+    test('source and sink end up at the two ends of the chain', () => {
+        const layout = arrangeChain();
+        const xs = CHAIN.map(n => layout[n.stableid].x);
+        // The model boundary sits at the periphery: the source is the leftmost
+        // node of the chain, the sink the rightmost.
+        expect(layout.in.x).toBe(Math.min(...xs));
+        expect(layout.out.x).toBe(Math.max(...xs));
+    });
+});

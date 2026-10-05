@@ -194,39 +194,94 @@ final class stockflow_test extends \advanced_testcase {
     }
 
     /**
-     * The roles survive an export/import round trip.
+     * Roles, relation types and labels survive a real export and re-import.
+     *
+     * Goes through export_service and import_service in both formats, so it
+     * proves the shipped exporters carry what a system dynamics model needs:
+     * an import must not downgrade a valve to a generic node, nor drop the type
+     * or the name of a flow.
      *
      * @return void
      */
     public function test_system_types_round_trip(): void {
+        global $DB;
         $this->resetAfterTest();
 
-        $roles = ['stock', 'valve', 'delay', 'source', 'sink', 'auxiliary', 'parameter'];
-        $nodes = [];
+        $course = $this->getDataGenerator()->create_course();
+        $user = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $instance = $this->getDataGenerator()->create_module('vimipad', [
+            'course' => $course->id, 'defaultprofile' => 'stockflow',
+        ]);
+        $now = time();
+        $ws = $DB->insert_record('vimipad_workspace', (object) [
+            'vimipadid' => $instance->id, 'userid' => $user->id, 'groupid' => null,
+            'currentrevision' => 1, 'locked' => 0, 'timecreated' => $now, 'timemodified' => $now,
+        ]);
+        $roles = ['source', 'valve', 'stock', 'delay', 'sink', 'auxiliary', 'parameter'];
+        $ids = [];
         foreach ($roles as $i => $role) {
-            $nodes[] = [
-                'stableid' => 'node_' . str_pad((string) $i, 12, 'a'),
-                'label' => ucfirst($role),
+            $ids[$role] = 'node_' . str_pad((string) $i, 12, 'a');
+            $DB->insert_record('vimipad_node', (object) [
+                'workspaceid' => $ws, 'stableid' => $ids[$role], 'type' => 'concept',
+                'label' => ucfirst($role), 'content' => '', 'contentformat' => FORMAT_HTML,
                 'metadatajson' => json_encode(['systemtype' => $role]),
-            ];
+                'createdby' => $user->id, 'modifiedby' => $user->id,
+                'timecreated' => $now, 'timemodified' => $now,
+            ]);
         }
-        $envelope = [
-            'generator' => 'mod_vimipad',
-            'formatversion' => \mod_vimipad\local\service\export_service::FORMAT_VERSION,
-            'data' => ['profile' => 'stockflow', 'nodes' => $nodes, 'relations' => []],
+        $relations = [
+            ['rel_aaaaaaaaaaaaa', 'source', 'valve', 'flow', ''],
+            ['rel_bbbbbbbbbbbbb', 'valve', 'stock', 'flow', 'production'],
+            ['rel_ccccccccccccc', 'parameter', 'valve', 'influence', 'limits'],
         ];
-
-        $decoded = json_decode(json_encode($envelope), true);
-        $out = [];
-        foreach ($decoded['data']['nodes'] as $node) {
-            $out[] = json_decode($node['metadatajson'], true)['systemtype'];
+        foreach ($relations as [$sid, $from, $to, $type, $label]) {
+            $DB->insert_record('vimipad_relation', (object) [
+                'workspaceid' => $ws, 'stableid' => $sid, 'sourceid' => $ids[$from],
+                'targetid' => $ids[$to], 'type' => $type, 'label' => $label, 'direction' => 1,
+                'metadatajson' => '{}', 'createdby' => $user->id, 'modifiedby' => $user->id,
+                'timecreated' => $now, 'timemodified' => $now,
+            ]);
         }
+        $workspace = $DB->get_record('vimipad_workspace', ['id' => $ws], '*', MUST_EXIST);
+        $export = new \mod_vimipad\local\service\export_service();
+        $import = new \mod_vimipad\local\service\import_service();
 
-        $this->assertSame(
-            $roles,
-            $out,
-            'Import must not downgrade a valve, delay, source or sink to a generic element.'
-        );
+        foreach (['json', 'xml'] as $format) {
+            $document = $format === 'json'
+                ? $export->export_json($instance, $workspace, 'stockflow')
+                : $export->export_xml($instance, $workspace, 'stockflow');
+            $this->assertStringNotContainsString('polarity', $document, 'The format must carry no polarity field.');
+
+            $target = $DB->insert_record('vimipad_workspace', (object) [
+                'vimipadid' => $instance->id, 'userid' => null, 'groupid' => null,
+                'name' => 'import ' . $format, 'currentrevision' => 0, 'locked' => 0,
+                'timecreated' => $now, 'timemodified' => $now,
+            ]);
+            $targetws = $DB->get_record('vimipad_workspace', ['id' => $target], '*', MUST_EXIST);
+            $format === 'json'
+                ? $import->import_json($document, $targetws, (int) $user->id, 'replace')
+                : $import->import_xml($document, $targetws, (int) $user->id, 'replace');
+
+            $got = [];
+            foreach ($DB->get_records('vimipad_node', ['workspaceid' => $target]) as $node) {
+                $got[] = json_decode($node->metadatajson, true)['systemtype'] ?? null;
+            }
+            sort($got);
+            $want = $roles;
+            sort($want);
+            $this->assertSame($want, $got, "Every role must survive {$format} export and import.");
+
+            $rels = [];
+            foreach ($DB->get_records('vimipad_relation', ['workspaceid' => $target]) as $rel) {
+                $rels[] = $rel->type . ':' . $rel->label;
+            }
+            sort($rels);
+            $this->assertSame(
+                ['flow:', 'flow:production', 'influence:limits'],
+                $rels,
+                "Relation types and labels must survive {$format} export and import."
+            );
+        }
     }
 
     /**
