@@ -211,13 +211,32 @@ jobs:
       - name: PHPUnit
         run: moodle-plugin-ci phpunit --fail-on-warning
 
+      # moodle-plugin-ci sets no fail dump path, so without this line --dump
+      # prints nothing and no screenshots or HTML are kept. The directory is
+      # created as well: Moodle aborts the whole suite when the path is not
+      # writable, and a directory that does not exist is not writable.
+      - name: Record Behat failures to disk
+        run: moodle-plugin-ci add-config '$CFG->behat_faildump_path = $CFG->dataroot . "/behat_dump"; if (!is_dir($CFG->behat_faildump_path)) { @mkdir($CFG->behat_faildump_path, 0777, true); }'
+
       - name: Behat
         run: |
           moodle-plugin-ci behat \
+            --dump \
             --profile chrome \
             --tags "@mod_vimipad&&~@broken" \
             --start-servers
 
+
+      # A Behat failure in the browser leaves screenshots and the page HTML
+      # behind; without them a JavaScript hang shows only as a timeout.
+      - name: Keep the Behat fail dumps
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: behat-faildump-${{ strategy.job-index }}
+          path: ${{ github.workspace }}/**/behat_dump
+          if-no-files-found: ignore
+          retention-days: 7
   ci-complete:
     name: CI complete
     needs: [ci, bundle]

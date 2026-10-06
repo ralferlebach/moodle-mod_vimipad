@@ -25,11 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'vimipadform_flow';
-$plugin->version   = 2026100500;
+$plugin->version   = 2026100600;
 $plugin->requires  = 2024100700;   // Moodle 4.5.0.
 $plugin->maturity  = MATURITY_STABLE;
 $plugin->release   = '1.0.0';
 $plugin->dependencies = [
     // Ships with this core release (typed flow relations).
-    'mod_vimipad' => 2026100500,
+    'mod_vimipad' => 2026100600,
 ];

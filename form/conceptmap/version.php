@@ -25,11 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'vimipadform_conceptmap';
-$plugin->version   = 2026100500;
+$plugin->version   = 2026100600;
 $plugin->requires  = 2024100700;   // Moodle 4.5.0.
 $plugin->maturity  = MATURITY_STABLE;
 $plugin->release   = '1.0.0';
 $plugin->dependencies = [
     // The stable public profile API landed in mod_vimipad 0.7.27.
-    'mod_vimipad' => 2026100500,
+    'mod_vimipad' => 2026100600,
 ];

@@ -25,11 +25,11 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'vimipadform_ontology';
-$plugin->version   = 2026100500;
+$plugin->version   = 2026100600;
 $plugin->requires  = 2024100700;
 $plugin->maturity  = MATURITY_STABLE;
 $plugin->release   = '1.0.0';
 $plugin->dependencies = [
     // Requires the per-type relation-layout contract added in mod_vimipad 0.8.30.
-    'mod_vimipad' => 2026100500,
+    'mod_vimipad' => 2026100600,
 ];
