@@ -123,3 +123,55 @@ describe('value transport', () => {
         expect(ws.nodes).toEqual([]);
     });
 });
+
+describe('reading a submitted snapshot', () => {
+    /**
+     * A value in the shape snapshot_service writes: the layout as a decoded
+     * object under "layout", and every relation field straight from the
+     * database, so the direction is the string "1" rather than the number 1.
+     * This is exactly what the gallery hands to the editor.
+     */
+    const snapshot = JSON.stringify({
+        profile: 'conceptmap',
+        revision: 7,
+        nodes: [
+            {stableid: 'node_aaaaaaaaaaaa', type: 'concept', label: 'Free trade', metadatajson: '{}'},
+            {stableid: 'node_bbbbbbbbbbbb', type: 'concept', label: 'Tariffs', metadatajson: '{}'},
+        ],
+        relations: [{
+            stableid: 'rel_aaaaaaaaaaaaa', sourceid: 'node_aaaaaaaaaaaa', targetid: 'node_bbbbbbbbbbbb',
+            type: '', label: 'reduces', direction: '1', metadatajson: '{}',
+        }],
+        containers: [],
+        layout: {node_aaaaaaaaaaaa: {x: 860, y: 230}, node_bbbbbbbbbbbb: {x: 560, y: 325}},
+    });
+
+    test('the stored positions reach the editor', async () => {
+        // Without them the editor invents a fallback layout, which is why a map
+        // looked topologically different in the gallery than in the activity.
+        const {transport} = createValueTransport(snapshot);
+        const ws = await transport('mod_vimipad_get_workspace', {}) as {layoutjson: string};
+        expect(ws.layoutjson).not.toBe('');
+        const layout = JSON.parse(ws.layoutjson);
+        expect(layout.node_aaaaaaaaaaaa).toEqual({x: 860, y: 230});
+        expect(layout.node_bbbbbbbbbbbb).toEqual({x: 560, y: 325});
+    });
+
+    test('a relation direction from the database becomes a number', async () => {
+        // The canvas draws an arrowhead only for direction === 1 or 2. The
+        // string "1" from a snapshot failed that test and lost its arrow.
+        const {transport} = createValueTransport(snapshot);
+        const ws = await transport('mod_vimipad_get_workspace', {}) as {relations: {direction: unknown}[]};
+        expect(ws.relations[0].direction).toBe(1);
+    });
+
+    test('a value in the editor\'s own shape still reads as before', async () => {
+        const own = JSON.stringify({
+            profile: 'conceptmap', layoutjson: '{"node_aaaaaaaaaaaa":{"x":1,"y":2}}',
+            revision: 1, nodes: [], relations: [], containers: [],
+        });
+        const {transport} = createValueTransport(own);
+        const ws = await transport('mod_vimipad_get_workspace', {}) as {layoutjson: string};
+        expect(JSON.parse(ws.layoutjson)).toEqual({node_aaaaaaaaaaaa: {x: 1, y: 2}});
+    });
+});

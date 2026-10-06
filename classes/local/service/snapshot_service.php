@@ -104,10 +104,17 @@ class snapshot_service {
             'profile' => $profile,
             'revision' => (int) $workspace->currentrevision,
             'nodes' => $nodedata,
-            'relations' => $mapfields(
+            // The database returns every column as a string. Direction is cast
+            // back to an integer so the snapshot carries the same types as the
+            // live workspace: the editor draws an arrowhead only for direction
+            // === 1 or 2, and a reader comparing strictly would drop every arrow.
+            'relations' => array_map(static function (array $relation): array {
+                $relation['direction'] = (int) ($relation['direction'] ?? 0);
+                return $relation;
+            }, $mapfields(
                 $relations,
                 ['stableid', 'sourceid', 'targetid', 'type', 'label', 'direction', 'metadatajson']
-            ),
+            )),
             'containers' => $containerdata,
             'memberships' => $memberships,
             'layout' => is_array($layoutdata) ? $layoutdata : null,

@@ -103,12 +103,52 @@ function stateFromValue(valuejson: string, profile: string): WorkspaceState {
     return {
         ...base,
         profile: typeof data.profile === 'string' ? data.profile : profile,
-        layoutjson: typeof data.layoutjson === 'string' ? data.layoutjson : '',
+        layoutjson: layoutFromValue(data),
         revision: typeof data.revision === 'number' ? data.revision : 1,
         nodes: Array.isArray(data.nodes) ? data.nodes as WorkspaceState['nodes'] : [],
-        relations: Array.isArray(data.relations) ? data.relations as WorkspaceState['relations'] : [],
+        relations: Array.isArray(data.relations)
+            ? (data.relations as WorkspaceState['relations']).map(normaliseRelation)
+            : [],
         containers: Array.isArray(data.containers) ? data.containers as WorkspaceState['containers'] : [],
     };
+}
+
+/**
+ * Read the stored positions from either value shape.
+ *
+ * The editor's own values carry them as a JSON string under "layoutjson". A
+ * submitted snapshot carries them decoded, as an object under "layout" - that is
+ * how snapshot_service writes them. Reading only the first meant a snapshot
+ * shown through this transport, as the gallery does, arrived without positions,
+ * and the editor invented a fallback layout: the same map, drawn with a
+ * different shape.
+ *
+ * @param data The parsed value.
+ * @returns The layout as a JSON string, or '' when there is none.
+ */
+function layoutFromValue(data: Record<string, unknown>): string {
+    if (typeof data.layoutjson === 'string') {
+        return data.layoutjson;
+    }
+    if (data.layout && typeof data.layout === 'object') {
+        return JSON.stringify(data.layout);
+    }
+    return '';
+}
+
+/**
+ * Give a relation the numeric direction the canvas compares against.
+ *
+ * A snapshot stores relation fields as the database returned them, so the
+ * direction is the string "1". The canvas draws an arrowhead only for
+ * direction === 1 or 2, so a string silently dropped every arrow.
+ *
+ * @param relation The relation as stored.
+ * @returns The relation with a numeric direction.
+ */
+function normaliseRelation<T extends {direction?: unknown}>(relation: T): T {
+    const direction = Number(relation.direction ?? 0);
+    return {...relation, direction: Number.isFinite(direction) ? direction : 0};
 }
 
 /**

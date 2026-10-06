@@ -7,6 +7,19 @@
 > release is **0.9.15**.
 
 
+
+## Unreleased
+
+### Fixed
+- A map shown from a submitted snapshot - as the gallery does - was redrawn
+  with a different shape and without arrowheads. The snapshot stores the
+  positions as an object under "layout", but the editor's value transport only
+  read a "layoutjson" string, so the positions never arrived and the editor
+  invented a fallback layout. The snapshot also kept relation directions as the
+  database string "1", and the canvas draws an arrowhead only for the number.
+  The transport now reads both shapes and normalises the direction, which fixes
+  snapshots already stored; new snapshots store the direction as an integer.
+
 ## 1.0.0 (2026-10-05)
 
 ### Changed
