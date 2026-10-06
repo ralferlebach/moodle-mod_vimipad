@@ -10,7 +10,30 @@
 
 ## Unreleased
 
+### Added
+- js/tests/snapshot_display.test.ts mounts a map in exactly the shape a
+  submitted snapshot has - positions under "layout", directions as the string
+  "1" - through mountValue, the gallery's path, and checks that the nodes stand
+  where they were stored and every directed relation keeps its arrowhead.
+
 ### Fixed
+- Editing a map that lives in a value - a database field entry or a learner's
+  quiz answer - was broken in two ways. The value transport, which stands in for
+  the server there, did not mint stable ids for created elements: a new node
+  showed only as an optimistic preview with an empty id and never reached the
+  value, so the form saved an empty map, and a second node shared that empty id
+  and never appeared. It also answered every lock request with an empty object,
+  which the editor read as "refused", so every drag was dropped before the
+  pointer moved. The transport now mints ids in the server's format and grants
+  leases to the single author of an editable value.
+- Arrange pushed a map off the canvas when it had no stored positions - the
+  usual case for a map built through the form, as in a database field. Arrange
+  started from the stored layout alone, so every such node began at the canvas
+  origin and was spread into negative coordinates; the viewport stays on the
+  canvas, so the map vanished and could not be reached. Arrange now starts from
+  the positions on screen, and the refiner places an unpositioned node at the
+  canvas centre. Maps already damaged this way are shifted back onto the canvas
+  when they are drawn, keeping their arrangement; healthy maps are untouched.
 - A map shown from a submitted snapshot - as the gallery does - was redrawn
   with a different shape and without arrowheads. The snapshot stores the
   positions as an object under "layout", but the editor's value transport only

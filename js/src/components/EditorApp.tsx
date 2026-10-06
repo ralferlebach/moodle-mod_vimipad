@@ -829,9 +829,15 @@ export function EditorApp(props: Props): React.ReactElement {
         // builds the canonical Ishikawa placement first and then lets the
         // refiner do bounded collision correction on top of it. Pinned nodes
         // keep their authored position either way.
-        let seed = stored;
+        // Start from what is on screen, not from what happens to be stored. A
+        // map built through the form - the usual case in a database field - can
+        // have no stored positions at all; the canvas then shows positions it
+        // computed itself. Seeding from the stored layout alone started every
+        // such node at the canvas origin, and Arrange spread them around (0, 0),
+        // outside the canvas, where no view could reach them.
+        let seed: LayoutMap = {...layout};
         if (state.profile === 'fishbone') {
-            const canonical = fishboneLayout(state.nodes, state.relations, stored);
+            const canonical = fishboneLayout(state.nodes, state.relations, layout);
             seed = {...canonical};
             for (const n of state.nodes) {
                 if (pinned.has(n.stableid) && stored[n.stableid]) {
@@ -915,7 +921,7 @@ export function EditorApp(props: Props): React.ReactElement {
         }
     }, [api, state.workspaceid, state.nodes, state.relations, state.profile, state.containers,
         state.canmanage, lockMode, stored, sizes, pushHistory, announce, t, load, arrangeIterations,
-        arrangeShrink]);
+        arrangeShrink, layout]);
 
     const onNodeResized = useCallback(async (stableid: string, size: Size) => {
         const prevSizes = sizes;

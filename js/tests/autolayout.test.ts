@@ -49,8 +49,10 @@ describe('tree auto-layout', () => {
     });
 
     test('stored positions take precedence', () => {
-        const layout = computeLayout(nodes, {r: {x: 7, y: 9}}, relations, 'tree');
-        expect(layout.r).toEqual({x: 7, y: 9});
+        // A position on the canvas: one off the canvas is moved back onto it,
+        // which arrange_without_layout.test.ts covers.
+        const layout = computeLayout(nodes, {r: {x: 707, y: 409}}, relations, 'tree');
+        expect(layout.r).toEqual({x: 707, y: 409});
     });
 
     test('a disconnected node still receives a position', () => {

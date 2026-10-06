@@ -69,10 +69,53 @@ export function computeLayout(
         for (const node of nodes) {
             result[node.stableid] = stored[node.stableid] ?? auto[node.stableid];
         }
-        return result;
+        return keepOnCanvas(result);
     }
 
-    return circleLayout(nodes, stored);
+    return keepOnCanvas(circleLayout(nodes, stored));
+}
+
+/**
+ * Bring a layout that lies partly off the canvas back onto it.
+ *
+ * No view can reach a node outside the canvas: the viewport is kept on the
+ * canvas, so such a node is invisible and cannot be dragged back. Earlier
+ * builds could store exactly that - Arrange on a map without stored positions
+ * spread it around the origin, into negative coordinates. The whole layout is
+ * shifted as one, which keeps its arrangement; only a layout larger than the
+ * canvas is additionally clamped node by node.
+ *
+ * @param layout The positions to check.
+ * @returns The same layout, moved onto the canvas where needed.
+ */
+export function keepOnCanvas(layout: LayoutMap): LayoutMap {
+    const ids = Object.keys(layout).filter(id => {
+        const p = layout[id];
+        return p && Number.isFinite(p.x) && Number.isFinite(p.y);
+    });
+    if (ids.length === 0) {
+        return layout;
+    }
+    const xs = ids.map(id => layout[id].x);
+    const ys = ids.map(id => layout[id].y);
+    const minx = Math.min(...xs);
+    const maxx = Math.max(...xs);
+    const miny = Math.min(...ys);
+    const maxy = Math.max(...ys);
+    const inside = clampToCanvas({x: minx, y: miny});
+    const insideMax = clampToCanvas({x: maxx, y: maxy});
+    if (inside.x === minx && inside.y === miny && insideMax.x === maxx && insideMax.y === maxy) {
+        return layout;
+    }
+    // Shift towards the canvas: away from the near edge it crosses, or back
+    // from the far edge.
+    const dx = minx < inside.x ? inside.x - minx : (maxx > insideMax.x ? insideMax.x - maxx : 0);
+    const dy = miny < inside.y ? inside.y - miny : (maxy > insideMax.y ? insideMax.y - maxy : 0);
+    const moved: LayoutMap = {...layout};
+    for (const id of ids) {
+        moved[id] = clampToCanvas({x: layout[id].x + dx, y: layout[id].y + dy});
+    }
+    return moved;
 }
 
 /**

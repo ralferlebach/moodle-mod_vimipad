@@ -218,10 +218,15 @@ export function createValueTransport(
                 if (options.readonly) {
                     return {revision: state.revision, stableid};
                 }
+                const operationtype = String(args.operationtype ?? '');
                 const op: PolledOperation = {
                     revision: state.revision + 1,
-                    operationtype: String(args.operationtype ?? ''),
-                    payloadjson: String(args.payloadjson ?? '{}'),
+                    operationtype,
+                    // The server mints the stable id when a create arrives
+                    // without one - and the editor relies on that. Leaving it
+                    // out here dropped the element from the value and returned
+                    // an empty id, see withMintedStableId().
+                    payloadjson: withMintedStableId(operationtype, String(args.payloadjson ?? '{}')),
                     userid: 0,
                 };
                 const action = operationToAction(op);
@@ -241,9 +246,21 @@ export function createValueTransport(
                 emit();
                 return {};
             }
+            case 'mod_vimipad_acquire_lock':
+            case 'mod_vimipad_renew_lock':
+                // A value has a single author, so every lease is granted. The
+                // editor reads "acquired" before a drag or an inline edit; the
+                // empty reply this used to give read as "refused", and the drag
+                // was dropped before the pointer had even moved - a node in a
+                // database field or a quiz answer could never be dragged.
+                return {
+                    acquired: !options.readonly,
+                    userid: 0,
+                    timeexpires: Math.floor(Date.now() / 1000) + 3600,
+                };
             default:
-                // Locks, snapshots, presence and any other call are benign no-ops
-                // for a self-contained value with a single author.
+                // Snapshots, presence and any other call are benign no-ops for
+                // a self-contained value with a single author.
                 return {};
         }
     };
@@ -253,6 +270,66 @@ export function createValueTransport(
         getValue: (): string => serialise(state),
         getState: (): WorkspaceState => state,
     };
+}
+
+/** Stable id prefix per create operation, as the server's stable_id class uses. */
+const CREATE_PREFIX: Record<string, string> = {
+    node_create: 'node',
+    relation_create: 'rel',
+    container_create: 'cont',
+};
+
+/**
+ * Give a create operation the stable id the server would have minted.
+ *
+ * The editor creates nodes and relations without a stable id and takes the id
+ * the server returns. This transport stands in for the server in a database
+ * field or a quiz question, but it did not mint ids: operationToAction() could
+ * not build an element without one, so the value never changed and onChange
+ * never fired - the form saved an empty map - while the editor received an
+ * empty id. Every new element then shared that empty id, so a second node never
+ * appeared and the first could no longer be moved. The format matches
+ * \\mod_vimipad\\local\\id\\stable_id: a prefix and twelve hex characters.
+ *
+ * @param operationtype The operation type.
+ * @param payloadjson The operation payload.
+ * @returns The payload, with a stable id added where a create lacked one.
+ */
+export function withMintedStableId(operationtype: string, payloadjson: string): string {
+    const prefix = CREATE_PREFIX[operationtype];
+    if (!prefix) {
+        return payloadjson;
+    }
+    let payload: Record<string, unknown>;
+    try {
+        payload = JSON.parse(payloadjson) as Record<string, unknown>;
+    } catch {
+        return payloadjson;
+    }
+    if (typeof payload.stableid === 'string' && payload.stableid !== '') {
+        return payloadjson;
+    }
+    payload.stableid = prefix + '_' + randomHex(12);
+    return JSON.stringify(payload);
+}
+
+/**
+ * Random lowercase hex characters.
+ *
+ * @param length How many characters.
+ * @returns The hex string.
+ */
+function randomHex(length: number): string {
+    const bytes = new Uint8Array(Math.ceil(length / 2));
+    const cryptoapi = (globalThis as {crypto?: Crypto}).crypto;
+    if (cryptoapi && typeof cryptoapi.getRandomValues === 'function') {
+        cryptoapi.getRandomValues(bytes);
+    } else {
+        for (let i = 0; i < bytes.length; i++) {
+            bytes[i] = Math.floor(Math.random() * 256);
+        }
+    }
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').slice(0, length);
 }
 
 /**

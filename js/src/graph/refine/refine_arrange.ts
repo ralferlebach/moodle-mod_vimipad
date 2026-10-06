@@ -30,6 +30,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import {CANVAS_HEIGHT, CANVAS_WIDTH} from '../canvas_size';
 import {stockflowSeed} from '../stockflow_layout';
 import {VimiNode, VimiRelation, VimiContainer, LayoutMap, SizeMap, FormConfig} from '../../types';
 import {parseGeometry} from '../../canvas/container_geometry';
@@ -313,8 +314,11 @@ export function refineArrangement(input: ArrangeInput): ArrangeResult {
     const shrinkContainers = input.shrinkContainers ?? true;
     const prof = resolveProfileRefine(profile, input.formconfig);
 
+    // A node with no position starts at the centre of the canvas. Starting it
+    // at the origin placed it on the canvas edge, and the refiner then spread
+    // every such node into negative coordinates, outside any view.
     const posOf = (id: string): {x: number; y: number} =>
-        positions[id] ?? {x: 0, y: 0};
+        positions[id] ?? {x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2};
     const sizeOf = (nd: VimiNode): {w: number; h: number} => {
         const s = sizes[nd.stableid];
         if (s) {
