@@ -27,10 +27,11 @@
 
 import {LayoutMap, Point, VimiNode, VimiRelation} from '../types';
 import {fishboneLayout} from './fishbone_layout';
+import {CANVAS_HEIGHT, CANVAS_WIDTH} from './canvas_size';
+
+export {CANVAS_HEIGHT, CANVAS_WIDTH};
 import {centerInBox, ContainerBox} from '../canvas/container_geometry';
 
-export const CANVAS_WIDTH = 2400;
-export const CANVAS_HEIGHT = 1600;
 
 /** Vertical distance between tree levels. */
 const TREE_LEVEL_GAP = 110;

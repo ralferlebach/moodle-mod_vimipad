@@ -32,7 +32,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-import {CANVAS_HEIGHT, CANVAS_WIDTH} from './autolayout';
+import {CANVAS_HEIGHT, CANVAS_WIDTH} from './canvas_size';
 import {fishboneTopology, FishboneTopology} from './fishbone_topology';
 import {LayoutMap, VimiNode, VimiRelation} from '../types';
 
