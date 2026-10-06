@@ -19,6 +19,11 @@
   database string "1", and the canvas draws an arrowhead only for the number.
   The transport now reads both shapes and normalises the direction, which fixes
   snapshots already stored; new snapshots store the direction as an integer.
+- A read-only view - the gallery, or a teacher viewing a learner's map - still
+  rendered the add-concept and add-relation form below the canvas, greyed out.
+  The form is the keyboard route to building a map without drawing, so it stays
+  wherever editing exists, including on a locked map; where editing is never
+  possible it is no longer rendered.
 
 ## 1.0.0 (2026-10-05)
 

@@ -1104,10 +1104,18 @@ export function EditorApp(props: Props): React.ReactElement {
                         onToggleLockMode={() => setLockMode(v => !v)}
                         onSetElementLock={setElementLock}
                     />
-                    <div className="vimipad-controls-row">
-                        {addNodeControls}
-                        {addRelationControls}
-                    </div>
+                    {/* The form route for adding concepts and relations without
+                      * drawing - the keyboard alternative to drag-and-drop. A
+                      * locked map keeps it, greyed out, because editing exists
+                      * there and can be unlocked; a read-only view (the gallery,
+                      * a teacher viewing a learner's map) can never edit, so the
+                      * bar would only be dead controls. */}
+                    {!readonly && (
+                        <div className="vimipad-controls-row">
+                            {addNodeControls}
+                            {addRelationControls}
+                        </div>
+                    )}
                     {!embedded && (
                         <JournalPanel
                             api={api}
@@ -1120,10 +1128,18 @@ export function EditorApp(props: Props): React.ReactElement {
                 </>
             ) : (
                 <>
-                    <div className="vimipad-controls-row">
-                        {addNodeControls}
-                        {addRelationControls}
-                    </div>
+                    {/* The form route for adding concepts and relations without
+                      * drawing - the keyboard alternative to drag-and-drop. A
+                      * locked map keeps it, greyed out, because editing exists
+                      * there and can be unlocked; a read-only view (the gallery,
+                      * a teacher viewing a learner's map) can never edit, so the
+                      * bar would only be dead controls. */}
+                    {!readonly && (
+                        <div className="vimipad-controls-row">
+                            {addNodeControls}
+                            {addRelationControls}
+                        </div>
+                    )}
                     <RelationListView
                         state={state}
                         disabled={disabled}
